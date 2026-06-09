@@ -100,3 +100,49 @@ Presigned-upload flow shipped (mirrors the captain document flow). Verified live
 
 **Client follow-up:** wire this into the Profile tab so avatars persist to the
 backend instead of staying as a device-local `file://` URI.
+
+---
+
+# Captain App — Open Gaps
+
+## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ⏳ **OPEN (raised 2026-06-09)**
+
+**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Status:** awaiting backend confirmation/fix
+
+The documented captain onboarding flow appears to **deadlock** on auth. Verified live
+against `https://beeb.madebyhaithem.com` on 2026-06-09:
+
+- `POST /api/captains/register` is **public** and returns the `Captain` object only —
+  **no token** (confirmed with a real 201; body has `id`/`status:"pending"`, no `token` field).
+- `POST /api/captains/{id}/documents/upload-url` and `POST /api/captains/{id}/documents`
+  both require **`bearer_auth`** (openapi `security: [{bearer_auth:[]}]`; unauthenticated → 401).
+- `POST /api/auth/captain/otp/verify` per the contract returns a token **only if the captain
+  is registered AND admin-approved**; a pending captain → **403** (no token).
+- An admin **cannot approve** until **all 5 documents are uploaded**
+  (`POST /api/captains/{id}/approve` → 400 otherwise).
+
+⇒ register (no token) → can't upload docs (needs token) → can't get a token (not approved)
+→ can't be approved (docs missing). The PRD's onboarding flow assumes the captain is
+authenticated while uploading documents, but no documented path issues a credential to a
+**pending** captain.
+
+**Could not fully verify** which resolution is true because the staging **MockSms fixed OTP
+code is unknown to the client team** (common guesses `123456/000000/111111/654321` all → 401;
+not burning more of the 10/phone/10min OTP budget guessing).
+
+**What we need from backend — one of:**
+1. **`POST /api/auth/captain/otp/verify` returns a token for a `pending` captain too**
+   (reserve 403 for `rejected`/`blocked`), so the captain can upload docs and poll
+   `GET /api/captains/{id}` while pending. *(Preferred — smallest client impact; the client
+   is being built to this assumption.)*
+2. **`POST /api/captains/register` returns a short-lived onboarding token** in its 201 body
+   (e.g. `{ ...captain, token }`) scoped to the document + self-read endpoints.
+3. Make the document upload + `GET /api/captains/{id}` self-read endpoints accept the
+   captain `id` without a bearer (less ideal — weaker access control on ID images).
+
+Also please confirm the **staging MockSms fixed OTP code** (and the captain test phone behind
+plate `STG-1001`) so the client can E2E the verify → token → upload → status-poll path.
+
+**Client follow-up:** Captain App Area 1 is built assuming resolution (1). The presigned-upload
+service + status-poll are wired to use the captain token; if backend ships (2) instead, the
+change is to read the token from the `register` response instead of from `verify`.
