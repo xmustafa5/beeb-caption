@@ -146,3 +146,45 @@ plate `STG-1001`) so the client can E2E the verify → token → upload → stat
 **Client follow-up:** Captain App Area 1 is built assuming resolution (1). The presigned-upload
 service + status-poll are wired to use the captain token; if backend ships (2) instead, the
 change is to read the token from the `register` response instead of from `verify`.
+
+---
+
+### 📨 Message to send the backend team (copy-paste)
+
+> **Subject: Captain App onboarding — auth deadlock + need staging test creds**
+>
+> **1. Onboarding auth deadlock — need a decision.** Building the Captain App registration
+> flow, I hit what looks like a deadlock in the live contract (verified against
+> `https://beeb.madebyhaithem.com`, 2026-06-09):
+> - `POST /api/captains/register` is **public** and returns the Captain object with **no token**
+>   (status `pending`).
+> - `POST /api/captains/{id}/documents/upload-url` and `POST /api/captains/{id}/documents`
+>   both **require a Bearer token** (401 without one).
+> - `POST /api/auth/captain/otp/verify` returns a token **only for approved captains** — a
+>   pending captain gets **403, no token**.
+> - An admin **can't approve** until all 5 documents are uploaded.
+>
+> So: register (no token) → can't upload docs (needs token) → can't get a token (not approved)
+> → can't be approved (no docs). **How is a pending captain meant to upload their documents?**
+>
+> Preferred fix (smallest client impact): **`captain/otp/verify` returns a token for `pending`
+> captains too** (reserve 403 for `rejected`/`blocked`), so they can upload docs and read
+> `GET /api/captains/{id}` while pending. Alternatives that also work: return a short-lived
+> onboarding token in the `register` 201 body, or make the document + self-read endpoints accept
+> the captain id without a bearer. **Which will you do?**
+>
+> (Pre-empting two likely questions: "register then log in after approval to upload" doesn't
+> work — approval *requires* the docs first, so docs must go up while pending. And the client is
+> already built to the preferred fix with token-acquisition isolated to one function, so a
+> different choice is a one-line change.)
+>
+> **2. Staging test credentials.** To E2E the auth flow I need:
+> - the **MockSms fixed OTP code** on staging (123456/000000/111111/654321 all return 401), and
+> - the **captain test phone(s)** behind plates **STG-1001** (male) and **STG-1002** (female).
+>
+> **3. Minor.** No public cities endpoint (`/api/cities` → 404); I'm deriving `city_id` from
+> `GET /api/zones` (fine for one seeded city). A public active-cities list with display names
+> would help the registration city picker if multi-city goes live.
+
+**Status of this ask:** item 1 is the real blocker (gates the document-upload path); items 2–3
+are needed to fully verify but don't block building.
