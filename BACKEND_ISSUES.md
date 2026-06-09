@@ -182,9 +182,28 @@ change is to read the token from the `register` response instead of from `verify
 > - the **MockSms fixed OTP code** on staging (123456/000000/111111/654321 all return 401), and
 > - the **captain test phone(s)** behind plates **STG-1001** (male) and **STG-1002** (female).
 >
-> **3. Minor.** No public cities endpoint (`/api/cities` → 404); I'm deriving `city_id` from
+> **3. Verification rigs for the later captain areas** (Activate Today → Online → Queue →
+> Live Trip → Earnings). The two seeded captains (STG-1001/STG-1002) are already approved +
+> activated + online, which is great for some paths but means a few states can never be reached
+> on them. Please provide / confirm:
+>   - **(a) A captain who is approved but NOT yet activated today** — or a way to reset a
+>     captain's daily activation (Asia/Baghdad date) — so the "Activate Today" CTA is reachable
+>     and I can exercise the **402 insufficient-funds** path on `POST /api/captain/activation/today`.
+>   - **(b) Confirm captains can call `GET /api/me/wallet` + `POST /api/me/wallet/topup`**
+>     (owner_type derived from the captain JWT). Needed for the top-up-then-retry loop after a 402.
+>   - **(c) A trip and/or open Abriyah room sitting in a captain's queue on demand** (or how the
+>     seed harness creates one), so `GET /api/captain/trip-queue` returns an offer I can accept
+>     and drive through arrive → start → complete.
+>   - **(d) Is FCM configured on staging, or Mock-only?** Affects whether `POST /api/me/fcm-token`
+>     does anything live (the push feature is deferred to a dev build either way).
+>
+> **4. Minor.** No public cities endpoint (`/api/cities` → 404); I'm deriving `city_id` from
 > `GET /api/zones` (fine for one seeded city). A public active-cities list with display names
 > would help the registration city picker if multi-city goes live.
 
-**Status of this ask:** item 1 is the real blocker (gates the document-upload path); items 2–3
-are needed to fully verify but don't block building.
+**Status of this ask:**
+- **Hard blockers:** (1) the deadlock fix [gates document upload] and the **MockSms OTP code +
+  STG-1001/STG-1002 phones** under item 2 [gates *every* captain login → blocks live verification
+  of all 6 areas].
+- **Needed to verify Areas 2–6** but not to build: items 3(a)–(d).
+- **Nice-to-have:** item 4 (public cities list).
