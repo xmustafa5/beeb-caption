@@ -15,7 +15,7 @@ import { Input } from '@/components/forms/input'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
-import { requestOtp } from '@/services/auth'
+import { requestOtp } from '@/services/captain-auth'
 import { apiErrorKey } from '@/lib/api'
 
 const phoneSchema = z.object({
@@ -134,7 +134,7 @@ export default function PhoneScreen() {
                 letterSpacing: -0.5,
               }}
             >
-              {t('auth.phoneTitle')}
+              {t('captain.auth.phoneTitle')}
             </Text>
             <Text
               style={{
@@ -145,7 +145,7 @@ export default function PhoneScreen() {
                 lineHeight: 22,
               }}
             >
-              {t('auth.phoneSubtitle')}
+              {t('captain.auth.phoneSubtitle')}
             </Text>
           </View>
         </View>

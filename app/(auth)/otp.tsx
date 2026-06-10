@@ -15,7 +15,8 @@ import { Input } from '@/components/forms/input'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
-import { requestOtp, verifyOtp } from '@/services/auth'
+import { requestOtp, verifyCaptainOtp } from '@/services/captain-auth'
+import { useRegistrationStore } from '@/store/registration-store'
 import { parseApiError, apiErrorKey } from '@/lib/api'
 import { useAuthStore } from '@/store/auth-store'
 
@@ -53,27 +54,35 @@ export default function OtpScreen() {
   const code = watch('code')
 
   const mutation = useMutation({
-    mutationFn: (c: string) => verifyOtp(phone, c),
+    mutationFn: (c: string) => verifyCaptainOtp(phone, c),
     onMutate: () => setApiError(null),
     onSuccess: (res) => {
-      useAuthStore.getState().setSession(res.token, res.user)
-      if (res.isNewUser || !res.user.name) {
-        router.replace('/(auth)/profile-setup')
+      if (res.kind === 'authed') {
+        // Approved OR pending — both get a token now. Route on captain.status.
+        useAuthStore.getState().setSession(res.token, res.captain)
+        if (res.captain.status === 'approved') {
+          router.replace('/(tabs)')
+        } else {
+          router.replace('/(auth)/status')
+        }
+      } else if (res.kind === 'pending') {
+        // 403 — rejected/blocked (no token). Status screen reads the reason.
+        router.replace('/(auth)/status')
       } else {
-        router.replace('/(tabs)')
+        // 404 — unregistered. Seed the draft phone and start the wizard.
+        useRegistrationStore.getState().setPhone(phone)
+        router.replace('/(auth)/register/personal')
       }
     },
     onError: (err) => {
-      // A wrong/expired code comes back as 401 (with an empty body), so branch
-      // on the status, not a message.
       const info = parseApiError(err)
       const key = info.isNetwork
         ? 'common.networkError'
         : info.status === 401
-          ? 'auth.otpWrong'
+          ? 'captain.auth.otpWrong'
           : info.status === 429
             ? 'common.rateLimited'
-            : 'auth.otpVerifyFailed'
+            : 'captain.auth.otpVerifyFailed'
       setApiError(t(key))
     },
   })
