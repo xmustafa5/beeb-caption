@@ -318,7 +318,9 @@
       "car_registration": "Car registration",
       "captain_selfie": "Selfie with car",
       "national_id_front": "National ID — front",
-      "national_id_back": "National ID — back"
+      "national_id_back": "National ID — back",
+      "verifyToContinue": "Verify your number to upload documents",
+      "verify": "Verify"
     },
     "status": {
       "pendingTitle": "Waiting for approval",

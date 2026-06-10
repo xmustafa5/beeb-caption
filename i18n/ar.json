@@ -318,7 +318,9 @@
       "car_registration": "تسجيل السيارة",
       "captain_selfie": "صورة ذاتية مع السيارة",
       "national_id_front": "الهوية الوطنية — الأمام",
-      "national_id_back": "الهوية الوطنية — الخلف"
+      "national_id_back": "الهوية الوطنية — الخلف",
+      "verifyToContinue": "تحقّق من رقمك لرفع المستندات",
+      "verify": "تحقّق"
     },
     "status": {
       "pendingTitle": "في انتظار الموافقة",
