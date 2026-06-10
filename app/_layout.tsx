@@ -85,22 +85,29 @@ export default function RootLayout() {
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
-  const user = useAuthStore((s) => s.user)
+  const captain = useAuthStore((s) => s.captain)
+  const pendingCaptainId = useAuthStore((s) => s.pendingCaptainId)
   const segments = useSegments()
   const router = useRouter()
 
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)'
-    const isAuthed = !!token
+    const isApproved = !!token && captain?.status === 'approved'
+    const isPendingLike =
+      (!!token && !!captain && captain.status !== 'approved') || !!pendingCaptainId
 
-    if (!isAuthed && !inAuthGroup) {
-      router.replace('/(auth)/phone')
-    } else if (isAuthed && !user?.name && segments.join('/') !== '(auth)/profile-setup') {
-      router.replace('/(auth)/profile-setup')
-    } else if (isAuthed && user?.name && inAuthGroup) {
-      router.replace('/(tabs)')
+    if (isApproved) {
+      if (inAuthGroup) router.replace('/(tabs)')
+    } else if (isPendingLike) {
+      // Pending/rejected/blocked or mid-onboarding → status screen, unless the
+      // captain is actively in the registration wizard.
+      const path = segments.join('/')
+      const inRegister = path.startsWith('(auth)/register')
+      if (!inRegister && path !== '(auth)/status') router.replace('/(auth)/status')
+    } else if (!token) {
+      if (!inAuthGroup) router.replace('/(auth)/phone')
     }
-  }, [token, user, segments])
+  }, [token, captain, pendingCaptainId, segments])
 
   return <>{children}</>
 }

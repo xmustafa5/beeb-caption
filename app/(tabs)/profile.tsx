@@ -10,16 +10,16 @@ import { useAuthStore } from '@/store/auth-store'
 export default function ProfileScreen() {
   const { t } = useTranslation()
   const colors = useThemeColors()
-  const user = useAuthStore((s) => s.user)
+  const captain = useAuthStore((s) => s.captain)
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: Spacing.xl, gap: Spacing.lg, justifyContent: 'center' }}>
       <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>
-        {user?.name || t('captain.scaffoldProfile')}
+        {captain?.name || t('captain.scaffoldProfile')}
       </Text>
-      {user?.phone ? (
+      {captain?.phone ? (
         <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontVariant: ['tabular-nums'] }} selectable>
-          {user.phone}
+          {captain.phone}
         </Text>
       ) : null}
       <TouchableOpacity
