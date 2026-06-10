@@ -10,7 +10,13 @@
 
 > **No unit-test runner in this project** (per `CLAUDE.md`). The verification gate for every task is `npx tsc --noEmit` + `npx expo lint` (both clean), plus targeted live `curl` probes against `https://beeb.madebyhaithem.com` where an endpoint is exercisable. This overrides the writing-plans TDD default per the skill-priority rule (user instructions win).
 
-> **Backend dependency:** the onboarding auth deadlock (BACKEND_ISSUES.md #6) means document upload + status hydration are built to the *assumed* fix (verify issues a token for a pending captain). They are not live-verifiable until the MockSms OTP code is provided. Build to the contract; mark those probes as deferred.
+> **Backend dependency: RESOLVED 2026-06-10** (BACKEND_ISSUES.md #6). `captain/otp/verify` now issues a token for **pending** captains (403 only for rejected/blocked, 404 unknown); **ownership is enforced** (a captain token may access only its own id; other id → 403). Document upload + status hydration are now **live-verifiable** with the staging bypass captain: phone `9647000000098`, code `16001600`, id `a0a0a0a0-0000-4000-8000-000000000098` (code is reusable; `otp/send` is a 200 no-op for bypass numbers).
+
+> **⚠️ FLOW CHANGE from the resolution — apply when executing Tasks 11–13.** The original tasks used `setPending(id)` (token-less pending) and an upload step that assumed a token already existed. Post-fix the flow is:
+> 1. **Login path:** `verifyCaptainOtp` → 200 → `setSession(token, captain)`; route by `captain.status` (approved → tabs, pending/rejected/blocked → `(auth)/status`). The `VerifyResult.pending` (403) branch now means **rejected/blocked only**.
+> 2. **Register path:** `verify` → 404 (valid code, no captain) → wizard → `registerCaptain` (201, **no token**) → **immediately `requestOtp(send)` + `verifyCaptainOtp`** to mint the pending token → `setSession(token, captain)` → documents step (now authenticated) → `(auth)/status`.
+> 3. **Status screen:** the captain **always holds a token**, so it polls `getCaptain(captain.id)` on foreground + a "Check status" button (no re-OTP needed). The §4.6 "no-token" fallback is **dead** — don't build it.
+> Concretely: `VerifyResult` gains a real captain on every 200 (approved or pending); Task 11's `unregistered` branch leads into the wizard; Task 12's vehicle step, after `registerCaptain`, calls send+verify then `setSession` (not `setPending`); Task 13 always has `useAuthStore.token` set. `setPending` may be dropped or kept only as a transient resume hint. See spec §3.1 + §5 for the verified detail.
 
 ---
 

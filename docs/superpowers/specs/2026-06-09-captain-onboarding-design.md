@@ -53,20 +53,30 @@ This area is the foundation: **no other captain feature works without a captain 
 
 **5 required doc types:** `driver_license`, `car_registration`, `captain_selfie`, `national_id_front`, `national_id_back`.
 
-### 3.1 KNOWN BACKEND GAP — onboarding auth deadlock (BACKEND_ISSUES.md #6)
+### 3.1 Onboarding auth — RESOLVED (BACKEND_ISSUES.md #6, fixed 2026-06-10)
 
-Document upload + `GET /api/captains/{id}` require a **bearer token**, but `register` returns
-**no token** and captain `verify` returns **403 (no token) for a non-approved captain**. As the
-contract reads, a pending captain cannot obtain a credential to upload their documents — a deadlock.
+The onboarding deadlock is **fixed** (backend shipped our preferred option, verified live):
 
-**This spec is built assuming the backend resolves it as: `verify` returns a token for a `pending`
-captain too** (reserving 403 for `rejected`/`blocked`). That token authorizes document upload and
-self-read while pending. **If the backend instead returns a token in the `register` 201 body**, the
-only change is *where* the token is read (register response vs verify). The code isolates token
-acquisition behind the `captain-auth` service so either resolution is a one-function change.
+- `POST /api/auth/captain/otp/verify` **issues a token for a `pending` captain** (403 only for
+  `rejected`/`blocked`, 404 for unknown). So: register → otp/send → verify (token while pending) →
+  upload 5 docs with that token → poll `GET /api/captains/{id}` until `approved`.
+- **Ownership is enforced:** a captain token may access **only its own** captain id
+  (`GET /api/captains/{id}`, `…/documents*`); another id → **403**; admin → any. **Always call these
+  with the captain's own id from the verify response's `user_id`** (the spec already does).
+- The **pending token is onboarding-scoped** — every operational endpoint returns **403 until
+  approved**, matching the area sequencing.
 
-Until confirmed (staging MockSms OTP code is unknown to us), document upload + status hydration are
-**not live-verifiable**; they are built to the contract and unit-checked via `tsc`/`lint`.
+**Consequence for this spec:** the "no token while pending" degraded branch (§4.6) is **dead** — a
+pending captain always holds a token, so the status screen always polls `GET /api/captains/{id}` and
+never needs a re-verify fallback. Token acquisition stays isolated in `captain-auth` (one place).
+
+**Test credentials (staging fixed-code bypass — no SMS):**
+- **Captain (approved, male):** phone `9647000000098`, code `16001600`, id
+  `a0a0a0a0-0000-4000-8000-000000000098`, plate `FE-TEST-098`.
+- **Rider:** phone `9647000000099`, code `16001600`.
+- (Real seeded captains STG-1001/1002 = `9647700000001`/`…002` now use **real SMS** — prefer the
+  bypass numbers for E2E.) The approved test captain is **not activated today** with a **0 balance**,
+  so the Activate-Today CTA + 402 path are reachable as-is for Area 2.
 
 ## 4. Architecture — units
 
@@ -207,24 +217,28 @@ One screen, switches on `captain.status` / pending context:
   "Re-submit" path is out of scope here (reconsider is admin-driven).
 - **blocked** — blocked reason + force-logout (`clear()`), Contact Support.
 
-**Approval detection.** There are two ways onto this screen, and they differ in what credential we hold:
+**Approval detection (post-fix — simplified).** Because verify now issues a token for pending
+captains, **the captain always reaches the status screen holding a token + their own id** — via
+either route:
 
-- **Via registration** (404 → wizard → register → `setPending(id)`): we have the captain **id** but
-  no token. If the assumed backend fix lands (a pending captain can get a token via re-verify),
-  "Check status" runs OTP send→verify; a 200 yields a token, then `getCaptain(id)` confirms
-  `approved` → `setSession` → tabs. Until then, "Check status" re-verify still distinguishes
-  pending (403) from approved (200) by status alone.
-- **Via login** (403 from verify on an already-registered phone): verify returns **neither token nor
-  id** on 403, so we have only the `phone`. The screen shows the await-approval state; "Check status"
-  re-runs verify (200 when approved → `setSession`; still-403 → stay pending).
+- **Via registration:** register (public, no token) → immediately `verifyCaptainOtp(phone, code)`
+  to obtain the **pending token** + `user_id` → `setSession(token, captain)` → upload the 5 docs →
+  status screen.
+- **Via login** (already-registered, unapproved): verify returns 200 with a pending token +
+  captain whose `status !== 'approved'` → `setSession` → status screen.
 
-So detection is uniformly **re-run captain verify** (on app foreground + the "Check status" button),
-which needs a fresh OTP code from the captain — never a tight timer (respects the 10/phone/10min OTP
-limit; approval is a ~24h human action). `getCaptain(id)` is used only once a token exists and we
-hold an id (the registration path post-fix). FCM push will later wake this screen automatically.
+So detection is uniformly **`getCaptain(id)` on app-foreground + a "Check status" button** (we have a
+token, so no re-OTP needed). When `status` flips to `approved`, `updateCaptain` lands it and the
+`AuthGate` routes to the tabs automatically. On-foreground + manual button, not a tight timer
+(approval is a ~24h human action). FCM push will later wake this screen automatically.
 
-Detection is **on-foreground + manual button**, not a tight timer (respects the OTP rate limit;
-approval is a ~24h human action).
+> **Flow change vs. the original plan:** the registration `documents` step now requires the captain
+> to be authenticated *before* uploading. So after `registerCaptain` returns the pending captain, the
+> wizard calls `verifyCaptainOtp` (the captain already passed OTP at the start of onboarding, but
+> register issues no token, so we verify once to mint the pending token) → `setSession` → then upload.
+> Net: `setPending(id)` is replaced by a real `setSession(token, captain)` as soon as register
+> completes + verify mints the token. The `pendingCaptainId` field remains useful only as a
+> persisted-resume hint if verify hasn't run yet; with the token in hand we key off `captain.status`.
 
 ### 4.7 `AuthGate` rework (`app/_layout.tsx`)
 
@@ -246,23 +260,33 @@ else if (!token)                                   → (auth)/phone    // unless
 `useQuery(['captain', id], () => getCaptain(id), { enabled: !!token })` → syncs into the store via
 `updateCaptain`. Refreshes the profile on app open for an authed (approved) captain.
 
-## 5. Data flow
+## 5. Data flow (post-fix — verified 2026-06-10)
+
+`verifyCaptainOtp` now returns **200 + token** for **both approved and pending** captains; **403** is
+only `rejected`/`blocked`; **404** is unknown (→ register). The captain shape's `status` field then
+decides routing.
 
 ```
-Phone → requestOtp → OTP screen → verifyCaptainOtp
-  ├ authed       → setSession(token, captain) → AuthGate → (tabs)
-  ├ pending      → setPending? (no — pending here means already-registered, no id) → status (token? getCaptain : "await push")
-  └ unregistered → draft.phone = phone → register/personal → register/vehicle
-                     → registerCaptain → setPending(id) → register/documents
-                       → 5× uploadDocument → status (pending)
-                         → [on approval] getCaptain → status approved → setSession → (tabs)
+Phone → requestOtp(send) → OTP screen → verifyCaptainOtp(phone, code)
+  ├ 200 authed  → setSession(token, captain)
+  │                 ├ status approved          → AuthGate → (tabs)
+  │                 └ status pending            → AuthGate → (auth)/status  (poll getCaptain → approved → tabs)
+  ├ 403 blocked → status: 'blocked' → (auth)/status (force-logout / support)
+  │   403 rejected → status: 'rejected' → (auth)/status (reason + support)
+  └ 404 unregistered → draft.phone = phone → register/personal → register/vehicle
+                         → registerCaptain (201 pending, NO token)
+                         → requestOtp(send) + verifyCaptainOtp  →  200 pending token + id
+                         → setSession(token, captain)  → register/documents (authenticated)
+                           → 5× uploadDocument(captain.id, …)
+                           → (auth)/status (pending) → [on approval] getCaptain → tabs
 ```
 
-Note: the `pending` (403) branch from verify means the captain is registered but unapproved, and
-verify returns **neither token nor id** on 403 — so on that path we hold only the `phone`. The status
-screen shows the await-approval state and re-runs verify to detect approval (see §4.6). Once the
-assumed backend fix lands (token on pending verify), the 200 path also yields `user_id`, and we
-hydrate via `getCaptain(user_id)`.
+**OTP timing (verified live 2026-06-10):** the backend validates the OTP code *before* checking
+captain existence, so the `404` "route to register" branch only fires on a **valid** code (a wrong
+code is 401 regardless). And `register` issues no token — so after register the wizard does **one more
+`otp/send` + `verifyCaptainOtp`** to mint the pending token before uploading docs. For the staging
+**bypass numbers the fixed code `16001600` is reusable** (verify twice → 200/200; `otp/send` is a
+200 no-op), so this second round-trip is seamless in testing; real phones get a fresh SMS naturally.
 
 ## 6. Error handling
 
@@ -271,8 +295,9 @@ All via `parseApiError` / status branching (401 has an empty body — never read
 | Status | Context | UX |
 |---|---|---|
 | 401 | OTP verify | "Wrong or expired code" inline; stay on OTP. |
-| 403 | OTP verify | Route to status (pending/blocked). |
-| 404 | OTP verify | Route to registration. |
+| 403 | OTP verify | Rejected/blocked captain → route to status screen (no token issued). |
+| 404 | OTP verify | Valid code but no captain → route to registration. |
+| 200 (status pending) | OTP verify | Token issued; route to status screen and poll `getCaptain`. |
 | 409 | register | "Phone or plate already registered" inline on the vehicle step. |
 | 400 | register | Field validation message from the envelope. |
 | 4xx/5xx | doc PUT/confirm | Row → "failed · tap to retry"; never blocks other rows. |
@@ -288,16 +313,20 @@ All via `parseApiError` / status branching (401 has an empty body — never read
 
 ## 8. Verification (no unit-test runner)
 
+Test captain (staging bypass): phone `9647000000098`, code `16001600`, id
+`a0a0a0a0-0000-4000-8000-000000000098`.
+
 - `npx tsc --noEmit` + `npx expo lint` clean.
-- Live (no token needed): `POST /api/auth/otp/send` 200; captain verify on an unknown phone+code
-  path; `POST /api/captains/register` happy-path → 201 pending; `GET /api/zones` → city derivation.
-- Live (needs MockSms code from backend — deferred): verify→token→`getCaptain`→tabs; document
-  upload round-trip; completeness. Tracked in BACKEND_ISSUES.md #6.
-- Manual: fresh phone → 404 → wizard → 201 → documents → status; approved test phone → tabs.
+- Live (no token): `POST /api/auth/otp/send` 200; `POST /api/captains/register` → 201 pending;
+  `GET /api/zones` → city derivation.
+- Live (with the bypass token — now available): verify → 200 `{token, user_id}`; `getCaptain(own id)`
+  → 200 approved; `getCaptain(other id)` → 403 (ownership); `documents/completeness` → 200.
+- Manual: fresh phone → (valid code) 404 → wizard → 201 → re-verify mints pending token → documents →
+  status; the approved bypass captain → tabs.
 
-## 9. Open dependencies (carried from the roadmap)
+## 9. Open dependencies
 
-1. **Onboarding auth deadlock** — BACKEND_ISSUES.md #6; built to the assumed fix.
-2. **MockSms fixed OTP code + captain test phone** — needed to live-verify the token paths.
-3. **City display name** — zones carry `city_id` but no city name; generic label until a cities
-   endpoint exists. Single-city today makes this moot in practice.
+1. ~~Onboarding auth deadlock~~ — **RESOLVED 2026-06-10** (BACKEND_ISSUES.md #6); built and verified.
+2. ~~MockSms fixed OTP code + test phone~~ — **PROVIDED**: bypass captain `9647000000098` / `16001600`.
+3. **City display name** — zones carry `city_id` but no city name; generic label until a public
+   cities endpoint exists (backend offered a small additive PR). Single-city today makes this moot.

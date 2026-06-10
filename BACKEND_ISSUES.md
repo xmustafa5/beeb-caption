@@ -105,9 +105,46 @@ backend instead of staying as a device-local `file://` URI.
 
 # Captain App — Open Gaps
 
-## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ⏳ **OPEN (raised 2026-06-09)**
+## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ✅ **RESOLVED 2026-06-10**
 
-**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Status:** awaiting backend confirmation/fix
+**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Resolved:** 2026-06-10
+
+> **RESOLUTION (backend shipped our preferred option 1, hardened — verified live on prod 2026-06-10):**
+> `POST /api/auth/captain/otp/verify` now **issues a captain token for `pending` captains** (still
+> 403 rejected/blocked, 404 unknown). The onboarding flow now works end to end: register →
+> otp/send → otp/verify (token issued while pending) → upload the 5 docs with that token →
+> poll `GET /api/captains/{id}` until `approved`.
+>
+> **NEW — ownership now enforced (important for the client):** a captain token may access **only its
+> own** captain id (`sub == {id}`); another captain's id → **403**; admin → any. Applies to
+> `GET /api/captains/{id}`, `…/documents`, `…/documents/upload-url`, `…/documents/completeness`.
+> **Client action:** always call these with the captain's own id (the verify response's `user_id`) —
+> which our spec/plan already do. The **pending token is onboarding-scoped**: every operational
+> endpoint (online, trip-queue, accept/arrive/start/complete, location, proxy, stop-reach) returns
+> **403 until approved** — matching our area sequencing.
+>
+> **Client follow-up — the "no token while pending" degraded branch in the spec/plan is now DEAD:**
+> a pending captain always has a token, so the status screen always polls `GET /api/captains/{id}`
+> (it never needs the re-verify fallback). Simplifies Area 1 §4.6.
+>
+> **Verified live (2026-06-10) with the test captain `9647000000098` / code `16001600`:**
+> verify → 200 `{token, user_id=a0a0a0a0-…-098}`; GET own record → 200 `status:approved`; GET a
+> different captain id → **403** (ownership); documents/completeness → 200 (all 5 present);
+> activation/today → `{activated:false}` (CTA reachable); wallet → 200 `owner_type:captain`,
+> `balance_iqd:0`; trip-queue → 200 with a live offer. **Environment fully unblocked.**
+>
+> Remaining originally-open items: 3(a) the test captain is already non-activated with a 0 balance,
+> so the **Activate-Today CTA + 402 path are reachable as-is** (no reset needed). 3(b) captain wallet
+> confirmed. 3(c) queue offers creatable via `POST /api/trips` (one is live now). 3(d) FCM is
+> Mock-only unless `FCM_PROJECT_ID`+`FCM_SERVICE_ACCOUNT_JSON` set (push deferred to a dev build
+> anyway). 4 public cities list still missing (backend offered a small additive PR) — still deriving
+> `city_id` from `/api/zones`, fine for the single seeded city.
+
+---
+
+**Original report (kept as the historical record):**
+
+**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Status (at the time):** awaiting backend confirmation/fix
 
 The documented captain onboarding flow appears to **deadlock** on auth. Verified live
 against `https://beeb.madebyhaithem.com` on 2026-06-09:
