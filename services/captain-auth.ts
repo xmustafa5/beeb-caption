@@ -1,6 +1,5 @@
 // services/captain-auth.ts
-import { api } from '@/lib/api'
-import { parseApiError } from '@/lib/api'
+import { api, parseApiError } from '@/lib/api'
 import {
   toCaptain,
   toBackendGender,
@@ -38,9 +37,7 @@ export async function requestOtp(phone: string): Promise<{ ok: true }> {
  * Verify a captain OTP. Branches on backend status:
  *  200 → token + hydrated captain (the captain's `status` field decides routing:
  *        approved → tabs, pending → status screen)
- *  403 → registered but not approved is no longer returned as 403 for pending;
- *        403 now means rejected/blocked → treat as { kind: 'pending' } so the
- *        caller routes to the status screen (which reads captain.status).
+ *  403 → rejected/blocked (pending now returns 200 + captain.status, not 403)
  *  404 → no captain for this phone (route to registration)
  * 401 (wrong/expired code) and 429 are thrown for the caller to surface.
  */
