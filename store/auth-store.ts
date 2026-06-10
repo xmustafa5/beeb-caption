@@ -1,24 +1,19 @@
+// store/auth-store.ts
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import * as SecureStore from 'expo-secure-store'
-
-export type Gender = 'male' | 'female' | 'unset'
-
-export interface User {
-  id: string
-  phone: string
-  name: string
-  gender: Gender
-  photoUri?: string | null
-  email?: string | null
-}
+import type { Captain } from '@/lib/captain-mappers'
 
 interface AuthStore {
-  user: User | null
   token: string | null
+  captain: Captain | null
+  // Set after a successful register so a pending captain who quits the app
+  // resumes on the status screen instead of the phone entry.
+  pendingCaptainId: string | null
   hasHydrated: boolean
-  setSession: (token: string, user: User) => void
-  updateUser: (patch: Partial<User>) => void
+  setSession: (token: string, captain: Captain) => void
+  setPending: (captainId: string) => void
+  updateCaptain: (patch: Partial<Captain>) => void
   clear: () => void
   setHasHydrated: (v: boolean) => void
 }
@@ -39,19 +34,25 @@ const secureStorage = {
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
-      user: null,
       token: null,
+      captain: null,
+      pendingCaptainId: null,
       hasHydrated: false,
-      setSession: (token, user) => set({ token, user }),
-      updateUser: (patch) =>
-        set((s) => ({ user: s.user ? { ...s.user, ...patch } : s.user })),
-      clear: () => set({ token: null, user: null }),
+      setSession: (token, captain) => set({ token, captain, pendingCaptainId: null }),
+      setPending: (captainId) => set({ pendingCaptainId: captainId, token: null }),
+      updateCaptain: (patch) =>
+        set((s) => ({ captain: s.captain ? { ...s.captain, ...patch } : s.captain })),
+      clear: () => set({ token: null, captain: null, pendingCaptainId: null }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
       name: 'beeb.auth',
       storage: createJSONStorage(() => secureStorage),
-      partialize: (s) => ({ token: s.token, user: s.user }),
+      partialize: (s) => ({
+        token: s.token,
+        captain: s.captain,
+        pendingCaptainId: s.pendingCaptainId,
+      }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true)
       },
