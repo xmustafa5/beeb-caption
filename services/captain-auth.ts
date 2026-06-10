@@ -11,7 +11,7 @@ import {
 
 export type VerifyResult =
   | { kind: 'authed'; token: string; captain: Captain }
-  | { kind: 'pending' } // 403 — registered but not approved
+  | { kind: 'forbidden' } // 403 — registered but rejected or blocked (no token issued)
   | { kind: 'unregistered' } // 404 — no captain for this phone
 
 export interface RegisterCaptainInput {
@@ -51,7 +51,7 @@ export async function verifyCaptainOtp(phone: string, code: string): Promise<Ver
     return { kind: 'authed', token: data.token, captain }
   } catch (err) {
     const info = parseApiError(err)
-    if (info.status === 403) return { kind: 'pending' }
+    if (info.status === 403) return { kind: 'forbidden' }
     if (info.status === 404) return { kind: 'unregistered' }
     throw err // 401 wrong code, 429, network — caller handles
   }

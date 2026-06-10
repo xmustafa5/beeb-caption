@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react'
 import { View, Text, ScrollView, AppState, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -21,9 +21,13 @@ export default function StatusScreen() {
   const { t } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  const { forbidden } = useLocalSearchParams<{ forbidden?: string }>()
   const token = useAuthStore((s) => s.token)
   const captainId = useAuthStore((s) => s.captain?.id ?? s.pendingCaptainId)
-  const status = useAuthStore((s) => s.captain?.status) ?? 'pending'
+  const captainStatus = useAuthStore((s) => s.captain?.status)
+  // 403 login (rejected/blocked) gives no captain record; treat as rejected so the
+  // captain sees a "not approved — contact support" screen rather than "pending".
+  const status = captainStatus ?? (forbidden ? 'rejected' : 'pending')
   const rejectionReason = useAuthStore((s) => s.captain?.rejectionReason)
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState<string | null>(null)

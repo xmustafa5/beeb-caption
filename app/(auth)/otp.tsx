@@ -65,9 +65,10 @@ export default function OtpScreen() {
         } else {
           router.replace('/(auth)/status')
         }
-      } else if (res.kind === 'pending') {
-        // 403 — rejected/blocked (no token). Status screen reads the reason.
-        router.replace('/(auth)/status')
+      } else if (res.kind === 'forbidden') {
+        // 403 = rejected or blocked (no token). Tell the status screen so it shows
+        // the forbidden UI instead of the default pending view.
+        router.replace({ pathname: '/(auth)/status', params: { forbidden: '1' } })
       } else {
         // 404 — unregistered. Seed the draft phone and start the wizard.
         useRegistrationStore.getState().setPhone(phone)

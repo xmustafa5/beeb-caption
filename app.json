@@ -46,7 +46,14 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Beeb needs photo access to upload your captain documents.",
+          "cameraPermission": "Beeb needs camera access to capture your captain documents."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
