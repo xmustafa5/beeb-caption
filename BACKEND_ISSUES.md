@@ -244,3 +244,36 @@ change is to read the token from the `register` response instead of from `verify
   of all 6 areas].
 - **Needed to verify Areas 2–6** but not to build: items 3(a)–(d).
 - **Nice-to-have:** item 4 (public cities list).
+
+---
+
+## 7. Captain can't list a trip's stops (multi-stop "reach" unusable from the captain side) — ⏳ **OPEN (raised 2026-06-11)**
+
+**Found:** 2026-06-11 (Captain App, Area 5 live-trip) · **Status:** awaiting backend
+
+The captain can mark a stop reached — `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach`
+(captain-scoped, verified present) — but there is **no captain-facing endpoint to LIST a trip's
+stops**, so the captain cannot obtain the `stop_id`s the reach endpoint requires.
+
+Verified live (2026-06-11):
+- The only stop-list endpoint is **`GET /api/rider/trips/{id}/stops`**, which is **rider-scoped** —
+  a captain token gets **403** (tested against trip `b96dc406-…`).
+- The `Trip` object does **not** embed stops (no `stops` field in the schema), so they can't be read
+  from `GET /api/trips/{id}` either.
+
+⇒ A captain on a multi-stop trip has no way to enumerate the stops, so the `…/reach` action is
+**unusable from the Captain App** as the contract stands.
+
+**What we need from backend — one of:**
+1. **A captain-scoped `GET /api/captain/trips/{trip_id}/stops`** returning `TripStop[]`
+   (`{id, lat, lng, address?, seq, status, reached_at?}`), assigned-captain-only. *(Preferred —
+   mirrors the existing reach endpoint's scoping.)*
+2. **Embed `stops: TripStop[]` in the `Trip` object** returned by `GET /api/trips/{id}` (the captain
+   already reads this), so no new endpoint is needed.
+
+**Client follow-up:** Captain App Area 5 ships the multi-stop **reach** wiring behind this gap — the
+stops list + per-stop "Reached" UI renders only when a stop source exists. Until the backend adds (1)
+or (2), the multi-stop panel shows nothing (regular 1:1 trips and Abriyah are unaffected). When the
+endpoint lands, the client adds a one-line `getStops()` call and the panel activates. The core legs
+(arrive/start/complete), masked call, navigate, cancel, rating, and the Abriyah roster are all fully
+supported and verified live.
