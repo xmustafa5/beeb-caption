@@ -44,42 +44,46 @@ export default function EarningsScreen() {
         </Text>
       )}
 
-      <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-        {t('captain.earnings.history')}
-      </Text>
+      {!isLoading && (
+        <>
+          <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+            {t('captain.earnings.history')}
+          </Text>
 
-      {history.length === 0 ? (
-        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-          {t('captain.earnings.historyEmpty')}
-        </Text>
-      ) : (
-        history.map((item) => (
-          <View
-            key={item.tripId}
-            style={{
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: colors.card,
-              borderRadius: 14,
-              borderCurve: 'continuous',
-              paddingVertical: Spacing.md,
-              paddingHorizontal: Spacing.lg,
-            }}
-          >
-            <View style={{ alignItems: isRTL ? 'flex-end' : 'flex-start', gap: 2 }}>
-              <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
-                {t(item.tripType === 'abriyah' ? 'captain.earnings.tripAbriyah' : 'captain.earnings.tripRegular')}
-              </Text>
-              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
-                {new Date(item.completedAt).toLocaleDateString()}
-              </Text>
-            </View>
-            <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-              {formatIqd(item.fareIqd)}
+          {history.length === 0 ? (
+            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+              {t('captain.earnings.historyEmpty')}
             </Text>
-          </View>
-        ))
+          ) : (
+            history.map((item) => (
+              <View
+                key={item.tripId}
+                style={{
+                  flexDirection: isRTL ? 'row-reverse' : 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: colors.card,
+                  borderRadius: 14,
+                  borderCurve: 'continuous',
+                  paddingVertical: Spacing.md,
+                  paddingHorizontal: Spacing.lg,
+                }}
+              >
+                <View style={{ alignItems: isRTL ? 'flex-end' : 'flex-start', gap: 2 }}>
+                  <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
+                    {t(item.tripType === 'abriyah' ? 'captain.earnings.tripAbriyah' : 'captain.earnings.tripRegular')}
+                  </Text>
+                  <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+                    {new Date(item.completedAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
+                  {formatIqd(item.fareIqd)}
+                </Text>
+              </View>
+            ))
+          )}
+        </>
       )}
     </ScrollView>
   )
