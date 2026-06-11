@@ -34,8 +34,9 @@ export default function QueueScreen() {
     } catch (err) {
       const info = parseApiError(err)
       if (info.status === 409) setError(t('captain.queue.taken'))
-      else if (info.status === 403 || info.status === 400) refetch()
-      else setError(t(info.isNetwork ? 'common.networkError' : 'captain.queue.acceptFailed'))
+      else if (info.status !== 403 && info.status !== 400) {
+        setError(t(info.isNetwork ? 'common.networkError' : 'captain.queue.acceptFailed'))
+      }
       refetch()
     }
   }
