@@ -66,6 +66,7 @@ export function useLiveTrip(id: string) {
   return {
     trip: query.data,
     isLoading: query.isLoading,
+    isError: query.isError,
     arrived,
     arrive: () => arriveM.mutateAsync(),
     start: () => startM.mutateAsync(),

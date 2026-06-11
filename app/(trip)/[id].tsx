@@ -107,11 +107,27 @@ export default function LiveTripScreen() {
     router.replace('/(tabs)')
   }
 
-  if (isLoading || !trip) {
+  if (isLoading && !trip) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.tint} />
       </View>
+    )
+  }
+
+  if (!trip) {
+    // Query errored (or no data) — don't spin forever; offer a way back.
+    return (
+      <CenteredState
+        icon="alert-circle"
+        tone={colors.destructive}
+        title={t('common.error')}
+        body={t('common.networkError')}
+        button={t('captain.live.done')}
+        onPress={() => router.replace('/(tabs)')}
+        colors={colors}
+        insets={insets}
+      />
     )
   }
 
