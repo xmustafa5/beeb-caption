@@ -304,6 +304,24 @@
       "notActivated": "Activate today before going online.",
       "onlineFailed": "Couldn't change your status. Please try again."
     },
+    "queue": {
+      "tabLabel": "Queue",
+      "title": "Trip queue",
+      "offlineTitle": "You're offline",
+      "offlineBody": "Go online from Home to start receiving trips.",
+      "emptyTitle": "Waiting for trips…",
+      "emptyBody": "New trips in your area will appear here.",
+      "newTrip": "New trip",
+      "newRoom": "Abriyah room",
+      "kmAway": "{{km}} km away",
+      "tripDistance": "{{km}} km trip",
+      "roomMixed": "Mixed",
+      "roomWomenOnly": "Women only",
+      "accept": "Accept",
+      "acceptRoom": "Accept room",
+      "taken": "That trip was just taken.",
+      "acceptFailed": "Couldn't accept. Please try again."
+    },
     "register": {
       "step": "Step {{current}} of {{total}}",
       "personalTitle": "Your details",

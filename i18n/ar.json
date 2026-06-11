@@ -304,6 +304,24 @@
       "notActivated": "فعّل اليوم قبل الاتصال.",
       "onlineFailed": "تعذّر تغيير حالتك. حاول مرة أخرى."
     },
+    "queue": {
+      "tabLabel": "الطابور",
+      "title": "طابور الرحلات",
+      "offlineTitle": "أنت غير متصل",
+      "offlineBody": "اتصل بالإنترنت من الرئيسية لبدء استقبال الرحلات.",
+      "emptyTitle": "في انتظار الرحلات…",
+      "emptyBody": "ستظهر الرحلات الجديدة في منطقتك هنا.",
+      "newTrip": "رحلة جديدة",
+      "newRoom": "غرفة عبريّة",
+      "kmAway": "على بُعد {{km}} كم",
+      "tripDistance": "رحلة {{km}} كم",
+      "roomMixed": "مختلط",
+      "roomWomenOnly": "نساء فقط",
+      "accept": "قبول",
+      "acceptRoom": "قبول الغرفة",
+      "taken": "تم أخذ هذه الرحلة للتو.",
+      "acceptFailed": "تعذّر القبول. حاول مرة أخرى."
+    },
     "register": {
       "step": "الخطوة {{current}} من {{total}}",
       "personalTitle": "بياناتك",
