@@ -357,6 +357,22 @@
       "cancelFailed": "Couldn't cancel. Please try again.",
       "callUnavailable": "Calling isn't available right now."
     },
+    "earnings": {
+      "tabLabel": "Earnings",
+      "title": "Earnings",
+      "today": "Today",
+      "week": "Week",
+      "month": "Month",
+      "gross": "Gross",
+      "activationFee": "Activation fee",
+      "net": "Net",
+      "tripCount": "{{count}} trips",
+      "history": "Trip history",
+      "historyEmpty": "No completed trips yet.",
+      "tripRegular": "Regular",
+      "tripAbriyah": "Abriyah",
+      "loadFailed": "Couldn't load earnings. Pull to refresh."
+    },
     "register": {
       "step": "Step {{current}} of {{total}}",
       "personalTitle": "Your details",

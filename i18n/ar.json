@@ -357,6 +357,22 @@
       "cancelFailed": "تعذّر الإلغاء. حاول مرة أخرى.",
       "callUnavailable": "الاتصال غير متاح حاليًا."
     },
+    "earnings": {
+      "tabLabel": "الأرباح",
+      "title": "الأرباح",
+      "today": "اليوم",
+      "week": "الأسبوع",
+      "month": "الشهر",
+      "gross": "الإجمالي",
+      "activationFee": "رسوم التفعيل",
+      "net": "الصافي",
+      "tripCount": "{{count}} رحلات",
+      "history": "سجل الرحلات",
+      "historyEmpty": "لا توجد رحلات مكتملة بعد.",
+      "tripRegular": "عادي",
+      "tripAbriyah": "عبريّة",
+      "loadFailed": "تعذّر تحميل الأرباح. اسحب للتحديث."
+    },
     "register": {
       "step": "الخطوة {{current}} من {{total}}",
       "personalTitle": "بياناتك",
