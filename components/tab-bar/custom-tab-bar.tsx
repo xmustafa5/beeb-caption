@@ -17,7 +17,7 @@ interface TabDef {
 
 const TAB_DEFS: TabDef[] = [
   { name: 'index',         icon: 'home',          labelKey: 'tabs.home'          },
-  { name: 'trips',         icon: 'time',          labelKey: 'tabs.trips'         },
+  { name: 'trips',         icon: 'list',          labelKey: 'captain.queue.tabLabel' },
   { name: 'notifications', icon: 'notifications', labelKey: 'tabs.notifications' },
   { name: 'profile',       icon: 'person',        labelKey: 'tabs.profile'       },
 ]
