@@ -293,6 +293,18 @@
       "topUpFailed": "فشل الشحن. حاول مرة أخرى.",
       "amountInvalid": "أدخل مبلغًا صحيحًا"
     },
+    "online": {
+      "toggleLabel": "ابدأ الاتصال",
+      "online": "متصل",
+      "offline": "غير متصل",
+      "connecting": "جارٍ الاتصال…",
+      "live": "مباشر",
+      "stale": "إعادة الاتصال…",
+      "gpsHint": "تتم مشاركة موقعك كل بضع ثوانٍ أثناء الاتصال.",
+      "permissionNeeded": "إذن الموقع مطلوب للاتصال.",
+      "notActivated": "فعّل اليوم قبل الاتصال.",
+      "onlineFailed": "تعذّر تغيير حالتك. حاول مرة أخرى."
+    },
     "register": {
       "step": "الخطوة {{current}} من {{total}}",
       "personalTitle": "بياناتك",

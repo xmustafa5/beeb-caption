@@ -293,6 +293,18 @@
       "topUpFailed": "Top-up failed. Please try again.",
       "amountInvalid": "Enter a valid amount"
     },
+    "online": {
+      "toggleLabel": "Go online",
+      "online": "Online",
+      "offline": "Offline",
+      "connecting": "Connecting…",
+      "live": "Live",
+      "stale": "Reconnecting…",
+      "gpsHint": "Your location is shared every few seconds while online.",
+      "permissionNeeded": "Location permission is required to go online.",
+      "notActivated": "Activate today before going online.",
+      "onlineFailed": "Couldn't change your status. Please try again."
+    },
     "register": {
       "step": "Step {{current}} of {{total}}",
       "personalTitle": "Your details",
