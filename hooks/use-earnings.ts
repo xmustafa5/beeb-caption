@@ -29,7 +29,7 @@ export function useEarnings(period: EarningsPeriod) {
   return {
     earnings: summary.data,
     history: history.data ?? [],
-    isLoading: summary.isLoading,
+    isLoading: summary.isLoading || history.isLoading,
     isRefetching: summary.isRefetching || history.isRefetching,
     refetch: () => { summary.refetch(); history.refetch() },
   }

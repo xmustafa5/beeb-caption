@@ -14,7 +14,7 @@ import type { EarningsPeriod } from '@/services/earnings'
 const isRTL = I18nManager.isRTL
 
 export default function EarningsScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const [period, setPeriod] = useState<EarningsPeriod>('today')
@@ -39,12 +39,12 @@ export default function EarningsScreen() {
       ) : earnings ? (
         <EarningsSummary earnings={earnings} />
       ) : (
-        <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal' }}>
+        <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
           {t('captain.earnings.loadFailed')}
         </Text>
       )}
 
-      {!isLoading && (
+      {!isLoading && earnings && (
         <>
           <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.earnings.history')}
@@ -74,7 +74,7 @@ export default function EarningsScreen() {
                     {t(item.tripType === 'abriyah' ? 'captain.earnings.tripAbriyah' : 'captain.earnings.tripRegular')}
                   </Text>
                   <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
-                    {new Date(item.completedAt).toLocaleDateString()}
+                    {new Date(item.completedAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-IQ' : 'en-GB')}
                   </Text>
                 </View>
                 <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
