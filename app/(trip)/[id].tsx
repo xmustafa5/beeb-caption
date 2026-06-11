@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, Linking, Platform, I18nManager } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, Linking, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -85,11 +85,10 @@ export default function LiveTripScreen() {
   function onNavigate() {
     if (!target) return
     const ll = `${target.latitude},${target.longitude}`
-    const url = Platform.select({
-      ios: `https://maps.google.com/?daddr=${ll}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${ll}`,
-    })
-    if (url) Linking.openURL(url)
+    const url = process.env.EXPO_OS === 'ios'
+      ? `https://maps.google.com/?daddr=${ll}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${ll}`
+    Linking.openURL(url)
   }
 
   async function onCancelConfirm(reason: CancelReason, comment?: string) {
@@ -161,7 +160,8 @@ export default function LiveTripScreen() {
   const primaryLabel =
     status === 'accepted' && !arrived ? t('captain.live.arrivedAtPickup')
     : status === 'accepted' && arrived ? t('captain.live.startTrip')
-    : t('captain.live.completeTrip')
+    : status === 'in_progress' ? t('captain.live.completeTrip')
+    : t('captain.live.arrivedAtPickup') // 'requested' (transient) fallback — refetch clears it
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

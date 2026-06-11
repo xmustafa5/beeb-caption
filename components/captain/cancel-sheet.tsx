@@ -1,5 +1,5 @@
 // components/captain/cancel-sheet.tsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, View, Text, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +26,10 @@ export function CancelSheet({ visible, submitting, onClose, onConfirm }: CancelS
   const insets = useSafeAreaInsets()
   const [reason, setReason] = useState<CancelReason>('changed_mind')
   const [comment, setComment] = useState('')
+
+  useEffect(() => {
+    if (!visible) { setReason('changed_mind'); setComment('') }
+  }, [visible])
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
