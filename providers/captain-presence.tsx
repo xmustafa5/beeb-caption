@@ -96,17 +96,21 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
     pingTimer.current = setInterval(async () => {
       const c = lastCoords.current
       if (!c) return
-      try {
-        if (queue.current.length > 0) {
-          const batch = [...queue.current, c]
-          queue.current = []
-          await flushPings(batch)
-        } else {
-          await pingLocation(c)
+      if (queue.current.length > 0) {
+        const queued = [...queue.current]
+        queue.current = []
+        try {
+          await flushPings([...queued, c])
+        } catch (err) {
+          // 400 (bad coords) → drop the batch; else restore everything for next tick.
+          if (parseApiError(err).status !== 400) queue.current = [...queued, c]
         }
-      } catch (err) {
-        // 400 (bad coords) → drop this ping, keep going. Else queue for flush.
-        if (parseApiError(err).status !== 400) queue.current.push(c)
+      } else {
+        try {
+          await pingLocation(c)
+        } catch (err) {
+          if (parseApiError(err).status !== 400) queue.current.push(c)
+        }
       }
     }, PING_INTERVAL_MS)
   }, [token, markFreshEcho])
@@ -149,6 +153,7 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
         const age = Date.now() - new Date(loc.lastPingAt).getTime()
         if (age < RESUME_WINDOW_MS) {
           await startSession()
+          if (cancelled) { stopSession(); return }
           setOnlineState(true)
           setConnection('connecting')
         }

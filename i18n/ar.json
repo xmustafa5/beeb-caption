@@ -281,7 +281,6 @@
       "activateCta": "تفعيل اليوم",
       "activatedTitle": "تم تفعيلك لليوم",
       "activatedBody": "تم دفع {{fee}} · أنت جاهز للاتصال بالإنترنت.",
-      "onlineComingSoon": "الاتصال بالإنترنت قادم قريبًا.",
       "insufficientTitle": "الرصيد غير كافٍ",
       "insufficientBody": "رصيد محفظتك {{balance}}. الرسوم اليومية {{fee}}.",
       "topUpAndActivate": "اشحن وفعّل",

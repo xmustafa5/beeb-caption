@@ -281,7 +281,6 @@
       "activateCta": "Activate today",
       "activatedTitle": "You're activated for today",
       "activatedBody": "Paid {{fee}} · you're ready to go online.",
-      "onlineComingSoon": "Going online is coming next.",
       "insufficientTitle": "Not enough balance",
       "insufficientBody": "Your wallet has {{balance}}. The daily fee is {{fee}}.",
       "topUpAndActivate": "Top up & activate",
