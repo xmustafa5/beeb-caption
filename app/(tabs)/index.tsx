@@ -80,7 +80,12 @@ export default function HomeScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ padding: Spacing.xl, paddingTop: insets.top + Spacing.xl, gap: Spacing.lg }}
-      refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} />}
+      refreshControl={
+          <RefreshControl
+            refreshing={query.isRefetching}
+            onRefresh={() => { setInsufficient(false); setError(null); query.refetch() }}
+          />
+        }
     >
       <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>
         {t('captain.activate.homeTitle')}
@@ -125,7 +130,7 @@ export default function HomeScreen() {
         >
           <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
             <Text style={{ ...Typography['heading-md'], color: colors.text }}>
-              {t('captain.activate.notActivatedTitle')}
+              {insufficient ? t('captain.activate.insufficientTitle') : t('captain.activate.notActivatedTitle')}
             </Text>
             <Text style={{ ...Typography.body, color: colors.subtle, fontStyle: 'normal' }}>
               {insufficient

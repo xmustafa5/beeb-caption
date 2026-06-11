@@ -33,6 +33,13 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
   const [custom, setCustom] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  function handleClose() {
+    setCustom('')
+    setPreset(PRESETS[0])
+    setError(null)
+    onClose()
+  }
+
   const amount = custom ? parseInt(custom.replace(/\D/g, ''), 10) || 0 : (preset ?? 0)
 
   const mutation = useMutation({
@@ -51,9 +58,9 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
   })
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={handleClose} />
         <View
           style={{
             backgroundColor: colors.background,
@@ -67,6 +74,9 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
         >
           <Text style={{ ...Typography['heading-md'], color: colors.text }}>
             {t('captain.activate.topUpTitle')}
+          </Text>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+            {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd), fee: formatIqd(feeIqd) })}
           </Text>
 
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
