@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { View, Text, ActivityIndicator, ScrollView, RefreshControl, I18nManager } from 'react-native'
+import { View, Text, ActivityIndicator, ScrollView, RefreshControl, I18nManager, Switch } from 'react-native'
+import { useCaptainPresence, type ConnectionHealth } from '@/providers/captain-presence'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -112,10 +113,7 @@ export default function HomeScreen() {
           <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal' }}>
             {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd) })}
           </Text>
-          {/* Area 3 (online toggle) mounts here. */}
-          <Text style={{ ...Typography['caption-sm'], color: colors.muted, textAlign: 'center', fontStyle: 'normal' }}>
-            {t('captain.activate.onlineComingSoon')}
-          </Text>
+          <OnlineToggle />
         </View>
       ) : (
         <View
@@ -168,5 +166,52 @@ export default function HomeScreen() {
         }}
       />
     </ScrollView>
+  )
+}
+
+const HEALTH_COLORS: Record<ConnectionHealth, 'muted' | 'success' | 'tint' | 'destructive'> = {
+  offline: 'muted',
+  connecting: 'tint',
+  live: 'success',
+  stale: 'destructive',
+}
+
+function OnlineToggle() {
+  const { t } = useTranslation()
+  const colors = useThemeColors()
+  const { online, connection, goingOnline, error, setOnline } = useCaptainPresence()
+
+  const healthColor = colors[HEALTH_COLORS[connection]]
+  const healthLabel =
+    connection === 'live' ? t('captain.online.live')
+    : connection === 'connecting' ? t('captain.online.connecting')
+    : connection === 'stale' ? t('captain.online.stale')
+    : online ? t('captain.online.online') : t('captain.online.offline')
+
+  return (
+    <View style={{ alignSelf: 'stretch', gap: Spacing.md, marginTop: Spacing.sm }}>
+      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
+          {online ? t('captain.online.online') : t('captain.online.toggleLabel')}
+        </Text>
+        <Switch
+          value={online}
+          onValueChange={(v) => setOnline(v)}
+          disabled={goingOnline}
+          trackColor={{ true: colors.tint }}
+        />
+      </View>
+
+      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: Spacing.sm }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: healthColor }} />
+        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+          {healthLabel}
+        </Text>
+      </View>
+
+      <Text style={{ ...Typography['caption-sm'], color: error ? colors.destructive : colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
+        {error ? t(`captain.online.${error}`) : t('captain.online.gpsHint')}
+      </Text>
+    </View>
   )
 }

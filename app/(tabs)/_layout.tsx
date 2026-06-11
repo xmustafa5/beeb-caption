@@ -5,6 +5,7 @@ import { usePathname } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { CustomTabBar } from '@/components/tab-bar/custom-tab-bar'
 import { useTabStore } from '@/store/tab-store'
+import { CaptainPresenceProvider } from '@/providers/captain-presence'
 
 import HomeScreen from './index'
 import TripsScreen from './trips'
@@ -38,30 +39,32 @@ export default function TabLayout() {
   }, [])
 
   return (
-    <View style={{ flex: 1 }}>
-      <PagerView
-        ref={pagerRef}
-        style={{ flex: 1 }}
-        initialPage={0}
-        layoutDirection={isRTL ? 'rtl' : 'ltr'}
-        overdrag
-        onPageSelected={(e) => {
-          const page = e.nativeEvent.position
-          setActiveIndex(page)
-          useTabStore.getState().setActiveTabIndex(page)
-          setRendered(prev => new Set([...prev, page]))
-          if (process.env.EXPO_OS === 'ios') {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          }
-        }}
-      >
-        {SCREENS.map((Screen, i) => (
-          <View key={i} style={{ flex: 1 }}>
-            {rendered.has(i) && <Screen />}
-          </View>
-        ))}
-      </PagerView>
-      <CustomTabBar activeIndex={activeIndex} onTabPress={goToTab} />
-    </View>
+    <CaptainPresenceProvider>
+      <View style={{ flex: 1 }}>
+        <PagerView
+          ref={pagerRef}
+          style={{ flex: 1 }}
+          initialPage={0}
+          layoutDirection={isRTL ? 'rtl' : 'ltr'}
+          overdrag
+          onPageSelected={(e) => {
+            const page = e.nativeEvent.position
+            setActiveIndex(page)
+            useTabStore.getState().setActiveTabIndex(page)
+            setRendered(prev => new Set([...prev, page]))
+            if (process.env.EXPO_OS === 'ios') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            }
+          }}
+        >
+          {SCREENS.map((Screen, i) => (
+            <View key={i} style={{ flex: 1 }}>
+              {rendered.has(i) && <Screen />}
+            </View>
+          ))}
+        </PagerView>
+        <CustomTabBar activeIndex={activeIndex} onTabPress={goToTab} />
+      </View>
+    </CaptainPresenceProvider>
   )
 }
