@@ -13,7 +13,7 @@ import { useActivation } from '@/hooks/use-activation'
 import { DEFAULT_DAILY_FEE_IQD } from '@/services/activation'
 import { getWallet } from '@/services/wallet'
 import { formatIqd } from '@/lib/format-currency'
-import { parseApiError } from '@/lib/api'
+import { parseApiError, apiErrorKey } from '@/lib/api'
 
 const isRTL = I18nManager.isRTL
 
@@ -48,12 +48,7 @@ export default function HomeScreen() {
         }
         setInsufficient(true)
       } else {
-        const key = info.isNetwork
-          ? 'common.networkError'
-          : info.status === 429
-            ? 'common.rateLimited'
-            : 'captain.activate.activateFailed'
-        setError(t(key))
+        setError(t(apiErrorKey(err, 'captain.activate.activateFailed')))
       }
     }
   }
@@ -67,6 +62,18 @@ export default function HomeScreen() {
     )
   }
 
+  // Initial load failed (network / 403) — don't render a misleading activate card.
+  if (query.isError && !query.data) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, padding: Spacing.xl, gap: Spacing.lg }}>
+        <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal' }}>
+          {t('common.networkError')}
+        </Text>
+        <Button label={t('common.retry')} variant="secondary" onPress={() => query.refetch()} />
+      </View>
+    )
+  }
+
   const activated = query.data?.activated === true
 
   return (
@@ -75,7 +82,7 @@ export default function HomeScreen() {
       contentContainerStyle={{ padding: Spacing.xl, paddingTop: insets.top + Spacing.xl, gap: Spacing.lg }}
       refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} />}
     >
-      <Text style={{ ...Typography.caption, color: colors.subtle, fontStyle: 'normal' }}>
+      <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>
         {t('captain.activate.homeTitle')}
       </Text>
 
