@@ -74,9 +74,9 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
             {t('captain.queue.tripDistance', { km: tripKm.toFixed(1) })}
           </Text>
         )}
-        {isRoom && (
+        {isRoom && offer.roomType !== 'women_only' && (
           <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
-            {offer.roomType === 'women_only' ? t('captain.queue.roomWomenOnly') : t('captain.queue.roomMixed')}
+            {t('captain.queue.roomMixed')}
           </Text>
         )}
       </View>

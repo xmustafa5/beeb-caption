@@ -21,6 +21,9 @@ export function useTripQueue() {
   const focused = activeTab === QUEUE_TAB_INDEX
   const active = online && focused
 
+  // NOTE (Area 5): while online + Queue tab active, this polls every 8s even if the
+  // captain has navigated into an accepted trip (the tab screen stays mounted under
+  // the pager). Area 5 should gate polling on "no active trip" or pause it on accept.
   const query = useQuery({
     queryKey: KEY,
     queryFn: getTripQueue,
