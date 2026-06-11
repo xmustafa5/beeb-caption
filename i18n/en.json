@@ -274,6 +274,25 @@
       "otpWrong": "That code is wrong or has expired. Try again.",
       "otpVerifyFailed": "Couldn't verify the code. Please try again."
     },
+    "activate": {
+      "homeTitle": "Today",
+      "notActivatedTitle": "Activate to start driving",
+      "feeNotice": "Daily activation fee: {{fee}}",
+      "activateCta": "Activate today",
+      "activatedTitle": "You're activated for today",
+      "activatedBody": "Paid {{fee}} · you're ready to go online.",
+      "onlineComingSoon": "Going online is coming next.",
+      "insufficientTitle": "Not enough balance",
+      "insufficientBody": "Your wallet has {{balance}}. The daily fee is {{fee}}.",
+      "topUpAndActivate": "Top up & activate",
+      "topUpTitle": "Top up your wallet",
+      "amountLabel": "Amount",
+      "customAmount": "Custom amount",
+      "confirmTopUp": "Top up",
+      "activateFailed": "Couldn't activate. Please try again.",
+      "topUpFailed": "Top-up failed. Please try again.",
+      "amountInvalid": "Enter a valid amount"
+    },
     "register": {
       "step": "Step {{current}} of {{total}}",
       "personalTitle": "Your details",

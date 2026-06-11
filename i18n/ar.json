@@ -274,6 +274,25 @@
       "otpWrong": "الرمز خاطئ أو منتهي الصلاحية. حاول مرة أخرى.",
       "otpVerifyFailed": "تعذّر التحقق من الرمز. حاول مرة أخرى."
     },
+    "activate": {
+      "homeTitle": "اليوم",
+      "notActivatedTitle": "فعّل حسابك لبدء القيادة",
+      "feeNotice": "رسوم التفعيل اليومي: {{fee}}",
+      "activateCta": "تفعيل اليوم",
+      "activatedTitle": "تم تفعيلك لليوم",
+      "activatedBody": "تم دفع {{fee}} · أنت جاهز للاتصال بالإنترنت.",
+      "onlineComingSoon": "الاتصال بالإنترنت قادم قريبًا.",
+      "insufficientTitle": "الرصيد غير كافٍ",
+      "insufficientBody": "رصيد محفظتك {{balance}}. الرسوم اليومية {{fee}}.",
+      "topUpAndActivate": "اشحن وفعّل",
+      "topUpTitle": "اشحن محفظتك",
+      "amountLabel": "المبلغ",
+      "customAmount": "مبلغ مخصص",
+      "confirmTopUp": "اشحن",
+      "activateFailed": "تعذّر التفعيل. حاول مرة أخرى.",
+      "topUpFailed": "فشل الشحن. حاول مرة أخرى.",
+      "amountInvalid": "أدخل مبلغًا صحيحًا"
+    },
     "register": {
       "step": "الخطوة {{current}} من {{total}}",
       "personalTitle": "بياناتك",
