@@ -322,6 +322,10 @@
       "taken": "تم أخذ هذه الرحلة للتو.",
       "acceptFailed": "تعذّر القبول. حاول مرة أخرى."
     },
+    "trip": {
+      "acceptedTitle": "تم قبول الرحلة",
+      "comingSoon": "شاشة الرحلة المباشرة قادمة قريبًا."
+    },
     "register": {
       "step": "الخطوة {{current}} من {{total}}",
       "personalTitle": "بياناتك",

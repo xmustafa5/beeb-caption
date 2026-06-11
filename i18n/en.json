@@ -322,6 +322,10 @@
       "taken": "That trip was just taken.",
       "acceptFailed": "Couldn't accept. Please try again."
     },
+    "trip": {
+      "acceptedTitle": "Trip accepted",
+      "comingSoon": "Your live trip screen is coming next."
+    },
     "register": {
       "step": "Step {{current}} of {{total}}",
       "personalTitle": "Your details",
