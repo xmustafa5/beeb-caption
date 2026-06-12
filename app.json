@@ -53,7 +53,8 @@
           "photosPermission": "Beeb needs photo access to upload your captain documents.",
           "cameraPermission": "Beeb needs camera access to capture your captain documents."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
