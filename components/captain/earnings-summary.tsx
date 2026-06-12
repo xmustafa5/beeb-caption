@@ -25,7 +25,7 @@ export function EarningsSummary({ earnings }: EarningsSummaryProps) {
         borderCurve: 'continuous',
         padding: Spacing.xl,
         gap: Spacing.md,
-        boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)',
+        boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
       }}
     >
       <Row label={t('captain.earnings.gross')} value={formatIqd(earnings.grossIqd)} colors={colors} />

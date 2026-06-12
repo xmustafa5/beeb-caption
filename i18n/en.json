@@ -189,7 +189,16 @@
     "changePhoto": "Change photo",
     "removePhoto": "Remove photo",
     "selectPhoto": "Choose photo",
-    "permissionRequired": "Photo library access is required to set a profile picture."
+    "permissionRequired": "Photo library access is required to set a profile picture.",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accountTitle": "Account",
+    "vehicleTitle": "Vehicle",
+    "ratingStat": "Rating",
+    "tripsStat": "Trips",
+    "statusStat": "Status"
   },
   "wallet": {
     "title": "Wallet",

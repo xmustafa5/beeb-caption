@@ -43,7 +43,7 @@ export function PeriodTabs({ value, onChange }: PeriodTabsProps) {
               borderCurve: 'continuous',
               backgroundColor: active ? colors.card : 'transparent',
               alignItems: 'center',
-              ...(active ? { boxShadow: '0px 1px 4px rgba(13, 24, 42, 0.08)' } : {}),
+              ...(active ? { boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)' } : {}),
             }}
           >
             <Text

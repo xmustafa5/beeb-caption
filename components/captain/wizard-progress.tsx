@@ -15,24 +15,24 @@ interface WizardProgressProps {
 export function WizardProgress({ current, total }: WizardProgressProps) {
   const colors = useThemeColors()
   const { t } = useTranslation()
-  const dots = Array.from({ length: total })
+  const segments = Array.from({ length: total })
 
   return (
     <View style={{ gap: Spacing.sm }}>
       <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.xs + 2 }}>
-        {dots.map((_, i) => (
+        {segments.map((_, i) => (
           <View
             key={i}
             style={{
               flex: 1,
               height: 5,
               borderRadius: 3,
-              backgroundColor: i < current ? colors.onTint : 'rgba(255,255,255,0.35)',
+              backgroundColor: i < current ? colors.tint : colors.surface,
             }}
           />
         ))}
       </View>
-      <Text style={{ ...Typography['caption-sm'], color: colors.onTint, opacity: 0.85, fontStyle: 'normal' }}>
+      <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
         {t('captain.register.step', { current, total })}
       </Text>
     </View>

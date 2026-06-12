@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View } from 'react-native'
+import { View, Appearance } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -23,6 +23,7 @@ import 'react-native-reanimated'
 import i18n, { languageReady } from '@/i18n'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useAuthStore } from '@/store/auth-store'
+import { useThemeStore } from '@/store/theme-store'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -52,13 +53,22 @@ export default function RootLayout() {
     languageReady.then(() => setLangReady(true))
   }, [])
 
+  // Load the saved theme preference, then keep "system" in sync with the OS.
+  const [themeReady, setThemeReady] = useState(false)
+  useEffect(() => {
+    useThemeStore.getState().loadPersistedScheme().finally(() => setThemeReady(true))
+    const sub = Appearance.addChangeListener(() => useThemeStore.getState().syncSystemScheme())
+    return () => sub.remove()
+  }, [])
+
+  const scheme = useThemeStore((s) => s.scheme)
   const hasHydrated = useAuthStore((s) => s.hasHydrated)
 
   useEffect(() => {
-    if (fontsLoaded && langReady && hasHydrated) SplashScreen.hideAsync()
-  }, [fontsLoaded, langReady, hasHydrated])
+    if (fontsLoaded && langReady && themeReady && hasHydrated) SplashScreen.hideAsync()
+  }, [fontsLoaded, langReady, themeReady, hasHydrated])
 
-  if (!fontsLoaded || !langReady || !hasHydrated)
+  if (!fontsLoaded || !langReady || !themeReady || !hasHydrated)
     return <View style={{ flex: 1, backgroundColor: colors.background }} />
 
   return (
@@ -75,7 +85,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="(trip)" />
               </Stack>
-              <StatusBar style="auto" />
+              <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             </AuthGate>
           </SafeAreaProvider>
         </GestureHandlerRootView>

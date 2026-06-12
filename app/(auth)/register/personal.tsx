@@ -57,24 +57,20 @@ export default function PersonalStep() {
       >
         <View
           style={{
-            backgroundColor: colors.tint,
-            paddingTop: insets.top + Spacing.lg,
+            paddingTop: insets.top + Spacing.xl,
             paddingHorizontal: Spacing.xl,
-            paddingBottom: Spacing.xl * 1.6,
-            borderBottomLeftRadius: 36,
-            borderBottomRightRadius: 36,
-            borderCurve: 'continuous',
+            paddingBottom: Spacing.lg,
             gap: Spacing.lg,
           }}
         >
           <WizardProgress current={1} total={3} />
-          <Text style={{ ...Typography['heading-lg'], color: colors.onTint, fontSize: 28, lineHeight: 34 }}>
+          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.register.personalTitle')}
           </Text>
         </View>
 
-        <View style={{ flex: 1, paddingHorizontal: Spacing.xl, marginTop: Spacing.lg, gap: Spacing.lg }}>
-          <View style={{ backgroundColor: colors.card, borderRadius: 22, borderCurve: 'continuous', padding: Spacing.xl, gap: Spacing.lg, boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)' }}>
+        <View style={{ flex: 1, paddingHorizontal: Spacing.xl, gap: Spacing.lg }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.border, padding: Spacing.xl, gap: Spacing.lg }}>
             <Controller control={control} name="name" render={({ field: { onChange, value } }) => (
               <Input label={t('captain.register.name')} value={value} onChangeText={onChange} autoCapitalize="words"
                 error={errors.name ? t(errors.name.message ?? '') : undefined} />

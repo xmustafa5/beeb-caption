@@ -104,29 +104,25 @@ export default function DocumentsStep() {
       >
         <View
           style={{
-            backgroundColor: colors.tint,
-            paddingTop: insets.top + Spacing.lg,
+            paddingTop: insets.top + Spacing.xl,
             paddingHorizontal: Spacing.xl,
-            paddingBottom: Spacing.xl * 1.6,
-            borderBottomLeftRadius: 36,
-            borderBottomRightRadius: 36,
-            borderCurve: 'continuous',
+            paddingBottom: Spacing.lg,
             gap: Spacing.lg,
           }}
         >
           <WizardProgress current={3} total={3} />
           <View style={{ gap: Spacing.xs, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-            <Text style={{ ...Typography['heading-lg'], color: colors.onTint, fontSize: 28, lineHeight: 34 }}>
+            <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
               {t('captain.register.documentsTitle')}
             </Text>
-            <Text style={{ ...Typography['caption-sm'], color: colors.onTint, opacity: 0.85, fontStyle: 'normal' }}>
+            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
               {t('captain.documents.subtitle', { uploaded: uploadedCount, total: DOC_TYPES.length })}
             </Text>
           </View>
         </View>
 
         {token ? (
-          <View style={{ flex: 1, paddingHorizontal: Spacing.xl, marginTop: Spacing.lg, gap: Spacing.sm }}>
+          <View style={{ flex: 1, paddingHorizontal: Spacing.xl, gap: Spacing.sm }}>
             {DOC_TYPES.map((d) => (
               <DocumentRow key={d} docType={d} state={states[d]} onPress={() => chooseSource(d)} />
             ))}
@@ -191,15 +187,16 @@ function VerifyGate({ phone }: { phone: string }) {
   const resend = useMutation({ mutationFn: () => requestOtp(phone), onMutate: () => setError(null) })
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: Spacing.xl, marginTop: Spacing.lg, gap: Spacing.lg }}>
+    <View style={{ flex: 1, paddingHorizontal: Spacing.xl, gap: Spacing.lg }}>
       <View
         style={{
           backgroundColor: colors.card,
           borderRadius: 22,
           borderCurve: 'continuous',
+          borderWidth: 1,
+          borderColor: colors.border,
           padding: Spacing.xl,
           gap: Spacing.lg,
-          boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)',
         }}
       >
         <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>

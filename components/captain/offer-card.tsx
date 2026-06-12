@@ -39,7 +39,7 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
         borderCurve: 'continuous',
         padding: Spacing.lg,
         gap: Spacing.md,
-        boxShadow: '0px 6px 18px rgba(13, 24, 42, 0.06)',
+        boxShadow: '0px 6px 18px rgba(0, 0, 0, 0.06)',
       }}
     >
       {/* header: type + fare */}

@@ -101,7 +101,7 @@ export default function HomeScreen() {
             padding: Spacing.xl,
             gap: Spacing.md,
             alignItems: 'center',
-            boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)',
+            boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
           }}
         >
           <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
@@ -123,7 +123,7 @@ export default function HomeScreen() {
             borderCurve: 'continuous',
             padding: Spacing.xl,
             gap: Spacing.lg,
-            boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)',
+            boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
           }}
         >
           <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>

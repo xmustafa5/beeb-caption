@@ -236,7 +236,7 @@ export default function OtpScreen() {
               borderCurve: 'continuous',
               padding: Spacing.xl,
               gap: Spacing.lg,
-              boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)',
+              boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
             }}
           >
             <Controller

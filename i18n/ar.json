@@ -189,7 +189,16 @@
     "changePhoto": "تغيير الصورة",
     "removePhoto": "إزالة الصورة",
     "selectPhoto": "اختر صورة",
-    "permissionRequired": "نحتاج إذن الوصول لمكتبة الصور لتعيين صورة الملف."
+    "permissionRequired": "نحتاج إذن الوصول لمكتبة الصور لتعيين صورة الملف.",
+    "theme": "المظهر",
+    "themeSystem": "النظام",
+    "themeLight": "فاتح",
+    "themeDark": "داكن",
+    "accountTitle": "الحساب",
+    "vehicleTitle": "المركبة",
+    "ratingStat": "التقييم",
+    "tripsStat": "الرحلات",
+    "statusStat": "الحالة"
   },
   "wallet": {
     "title": "المحفظة",

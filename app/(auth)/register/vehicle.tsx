@@ -89,16 +89,15 @@ export default function VehicleStep() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + Spacing.xl }}>
-        <View style={{ backgroundColor: colors.tint, paddingTop: insets.top + Spacing.lg, paddingHorizontal: Spacing.xl,
-          paddingBottom: Spacing.xl * 1.6, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, borderCurve: 'continuous', gap: Spacing.lg }}>
+        <View style={{ paddingTop: insets.top + Spacing.xl, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg, gap: Spacing.lg }}>
           <WizardProgress current={2} total={3} />
-          <Text style={{ ...Typography['heading-lg'], color: colors.onTint, fontSize: 28, lineHeight: 34 }}>
+          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.register.vehicleTitle')}
           </Text>
         </View>
 
-        <View style={{ flex: 1, paddingHorizontal: Spacing.xl, marginTop: Spacing.lg, gap: Spacing.lg }}>
-          <View style={{ backgroundColor: colors.card, borderRadius: 22, borderCurve: 'continuous', padding: Spacing.xl, gap: Spacing.lg, boxShadow: '0px 8px 24px rgba(13, 24, 42, 0.08)' }}>
+        <View style={{ flex: 1, paddingHorizontal: Spacing.xl, gap: Spacing.lg }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.border, padding: Spacing.xl, gap: Spacing.lg }}>
             <Controller control={control} name="carMake" render={({ field: { onChange, value } }) => (
               <Input label={t('captain.register.carMake')} value={value} onChangeText={onChange}
                 error={errors.carMake ? t(errors.carMake.message ?? '') : undefined} />
