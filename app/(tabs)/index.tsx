@@ -16,10 +16,11 @@ import { getWallet } from '@/services/wallet'
 import { formatIqd } from '@/lib/format-currency'
 import { parseApiError, apiErrorKey } from '@/lib/api'
 
-const isRTL = I18nManager.isRTL
-
 export default function HomeScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Drive layout off the active language, not I18nManager.isRTL: in dev the native
+  // RTL flag can lag a forceRTL restart, leaving isRTL=false while the UI is Arabic.
+  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { query, activate } = useActivation()
@@ -177,7 +178,8 @@ const HEALTH_COLORS: Record<ConnectionHealth, 'muted' | 'success' | 'tint' | 'de
 }
 
 function OnlineToggle() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
   const colors = useThemeColors()
   const { online, connection, goingOnline, error, setOnline } = useCaptainPresence()
 
@@ -206,7 +208,7 @@ function OnlineToggle() {
         />
       </View>
 
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: Spacing.sm }}>
+      <View style={{ alignSelf: 'stretch', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: Spacing.sm }}>
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: healthColor }} />
         <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
           {healthLabel}
