@@ -88,7 +88,7 @@ export default function HomeScreen() {
           />
         }
     >
-      <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>
+      <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
         {t('captain.activate.homeTitle')}
       </Text>
 
@@ -127,10 +127,10 @@ export default function HomeScreen() {
           }}
         >
           <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-            <Text style={{ ...Typography['heading-md'], color: colors.text }}>
+            <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
               {insufficient ? t('captain.activate.insufficientTitle') : t('captain.activate.notActivatedTitle')}
             </Text>
-            <Text style={{ ...Typography.body, color: colors.subtle, fontStyle: 'normal' }}>
+            <Text style={{ ...Typography.body, color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
               {insufficient
                 ? t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd), fee: formatIqd(feeIqd) })
                 : t('captain.activate.feeNotice', { fee: formatIqd(feeIqd) })}
