@@ -33,7 +33,8 @@ export function EarningsSummary({ earnings }: EarningsSummaryProps) {
       <Row label={t('captain.earnings.gross')} value={formatIqd(earnings.grossIqd, isAr ? 'ar' : 'en')} colors={colors} />
       <Row label={t('captain.earnings.activationFee')} value={`- ${formatIqd(earnings.activationFeeIqd, isAr ? 'ar' : 'en')}`} colors={colors} muted />
       <View style={{ height: 1, backgroundColor: colors.border }} />
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* native forceRTL mirrors this row in AR — no manual flip */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{t('captain.earnings.net')}</Text>
         <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(earnings.netIqd, isAr ? 'ar' : 'en')}</Text>
       </View>
@@ -52,8 +53,9 @@ interface RowProps {
 }
 
 function Row({ label, value, colors, muted }: RowProps) {
+  // native forceRTL mirrors this row in AR — no manual flip
   return (
-    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>{label}</Text>
       {/* Currency value stays LTR (Western/AR grouping + suffix) inside the RTL card */}
       <Text style={{ ...Typography['body-md'], color: muted ? colors.subtle : colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{value}</Text>

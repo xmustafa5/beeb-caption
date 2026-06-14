@@ -57,7 +57,7 @@ export function CancelSheet({ visible, submitting, onClose, onConfirm }: CancelS
                   onPress={() => setReason(r)}
                   activeOpacity={0.85}
                   style={{
-                    flexDirection: isRTL ? 'row-reverse' : 'row',
+                    flexDirection: 'row', // native forceRTL mirrors this row in AR — no manual flip
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     paddingVertical: Spacing.md,

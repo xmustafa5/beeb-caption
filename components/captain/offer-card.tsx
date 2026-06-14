@@ -44,8 +44,10 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
       }}
     >
       {/* header: type + fare */}
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: Spacing.sm }}>
+      {/* native forceRTL mirrors this row in AR — no manual flip */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* native forceRTL mirrors this row in AR — no manual flip */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
           <Icon name={isRoom ? 'people' : 'car'} size={18} color={colors.tint} />
           <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
             {isRoom ? t('captain.queue.newRoom') : t('captain.queue.newTrip')}

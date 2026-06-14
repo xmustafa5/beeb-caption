@@ -16,7 +16,7 @@ export function FormError({ message }: { message?: string | null }) {
     <Animated.View entering={FadeIn} exiting={FadeOut}>
       <View
         style={{
-          flexDirection: isRTL ? 'row-reverse' : 'row',
+          flexDirection: 'row', // native forceRTL mirrors this row in AR — no manual flip
           alignItems: 'center',
           gap: Spacing.sm,
           backgroundColor: `${colors.destructive}14`,

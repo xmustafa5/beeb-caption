@@ -47,7 +47,8 @@ export function DocumentRow({ docType, state, onPress }: DocumentRowProps) {
       activeOpacity={0.8}
       disabled={state === 'uploading'}
       style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
         backgroundColor: colors.card,

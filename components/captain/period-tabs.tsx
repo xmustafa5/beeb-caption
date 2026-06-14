@@ -1,13 +1,11 @@
 // components/captain/period-tabs.tsx
-import { View, Text, TouchableOpacity, I18nManager } from 'react-native'
+import { View, Text, TouchableOpacity } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import type { EarningsPeriod } from '@/services/earnings'
 
-// Stable for the session — forceRTL changes require a restart anyway
-const isRTL = I18nManager.isRTL
 const PERIODS: EarningsPeriod[] = ['today', 'week', 'month']
 
 interface PeriodTabsProps {
@@ -22,7 +20,8 @@ export function PeriodTabs({ value, onChange }: PeriodTabsProps) {
   return (
     <View
       style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         backgroundColor: colors.surface,
         borderRadius: 14,
         borderCurve: 'continuous',

@@ -19,7 +19,7 @@ export function WizardProgress({ current, total }: WizardProgressProps) {
 
   return (
     <View style={{ gap: Spacing.sm }}>
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.xs + 2 }}>
+      <View style={{ flexDirection: 'row', gap: Spacing.xs + 2 }}>{/* native forceRTL mirrors this row in AR — no manual flip */}
         {segments.map((_, i) => (
           <View
             key={i}

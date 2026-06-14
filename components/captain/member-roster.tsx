@@ -29,7 +29,8 @@ export function MemberRoster({ members }: MemberRosterProps) {
         <View
           key={m.riderId}
           style={{
-            flexDirection: isRTL ? 'row-reverse' : 'row',
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             backgroundColor: colors.surface,

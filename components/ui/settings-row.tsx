@@ -41,7 +41,8 @@ export function SettingsRow({
       onPress={onPress}
       activeOpacity={0.7}
       style={{
-        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
         paddingVertical: 14,

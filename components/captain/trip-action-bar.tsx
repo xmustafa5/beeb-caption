@@ -1,12 +1,10 @@
 // components/captain/trip-action-bar.tsx
-import { View, Text, TouchableOpacity, I18nManager } from 'react-native'
+import { View, Text, TouchableOpacity } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
-
-const isRTL = I18nManager.isRTL // Stable for the session — forceRTL changes require a restart anyway
 
 interface TripActionBarProps {
   onCall: () => void
@@ -18,8 +16,9 @@ export function TripActionBar({ onCall, onNavigate, onCancel }: TripActionBarPro
   const { t } = useTranslation()
   const colors = useThemeColors()
 
+  // native forceRTL mirrors this row in AR — no manual flip
   return (
-    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
+    <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
       <ActionButton icon="call" label={t('captain.live.call')} onPress={onCall} colors={colors} />
       <ActionButton icon="navigate" label={t('captain.live.navigate')} onPress={onNavigate} colors={colors} />
       {onCancel && (

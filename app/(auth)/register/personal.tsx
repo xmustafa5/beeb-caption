@@ -82,7 +82,8 @@ export default function PersonalStep() {
             )} />
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.gender')}</Text>
-              <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
+              {/* native forceRTL mirrors this row in AR — no manual flip */}
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
                 {(['male', 'female'] as CaptainGender[]).map((g) => {
                   const active = gender === g
                   return (
@@ -101,9 +102,9 @@ export default function PersonalStep() {
               </View>
               <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.genderNote')}</Text>
             </View>
+            {/* National ID is numeric: normalize Arabic-Indic/Persian digits to ASCII before the \D strip
+                (a bare \D strip would delete Arabic digits the AR keyboard produces). numeric keeps the ID LTR. */}
             <Controller control={control} name="nationalId" render={({ field: { onChange, value } }) => (
-              // National ID is numeric: normalize Arabic-Indic/Persian digits to ASCII before the \D strip
-              // (a bare \D strip would delete Arabic digits the AR keyboard produces). numeric keeps the ID LTR.
               <Input label={t('captain.register.nationalId')} value={value ?? ''}
                 onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))} keyboardType="number-pad" numeric />
             )} />

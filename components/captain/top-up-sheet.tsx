@@ -83,7 +83,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
             {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isAr ? 'ar' : 'en'), fee: formatIqd(feeIqd, isAr ? 'ar' : 'en') })}
           </Text>
 
-          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>{/* native forceRTL mirrors this row in AR — no manual flip */}
             {PRESETS.map((p) => {
               const active = !custom && preset === p
               return (

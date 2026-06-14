@@ -192,7 +192,8 @@ function OnlineToggle() {
 
   return (
     <View style={{ alignSelf: 'stretch', gap: Spacing.md, marginTop: Spacing.sm }}>
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* native forceRTL mirrors this row in AR — no manual flip */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
           {online ? t('captain.online.online') : t('captain.online.toggleLabel')}
         </Text>
@@ -208,7 +209,8 @@ function OnlineToggle() {
         />
       </View>
 
-      <View style={{ alignSelf: 'stretch', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: Spacing.sm }}>
+      {/* native forceRTL mirrors this row in AR — no manual flip */}
+      <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: healthColor }} />
         <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
           {healthLabel}

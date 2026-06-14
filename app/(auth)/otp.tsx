@@ -162,7 +162,8 @@ export default function OtpScreen() {
           {/* Top bar: back + logo */}
           <View
             style={{
-              flexDirection: isRTL ? 'row-reverse' : 'row',
+              // native forceRTL mirrors this row in AR — no manual flip
+              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
             }}
@@ -262,7 +263,8 @@ export default function OtpScreen() {
 
             <View
               style={{
-                flexDirection: isRTL ? 'row-reverse' : 'row',
+                // native forceRTL mirrors this row in AR — no manual flip
+                flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
@@ -346,7 +348,8 @@ function CodeBoxes({ value, onChangeText, colors }: CodeBoxesProps) {
       />
       <View
         style={{
-          flexDirection: isRTL ? 'row-reverse' : 'row',
+          // native forceRTL mirrors this row in AR — no manual flip
+          flexDirection: 'row',
           gap: Spacing.sm,
           justifyContent: 'space-between',
         }}

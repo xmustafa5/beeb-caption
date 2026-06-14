@@ -70,7 +70,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
-          <Text style={{ ...Typography['heading-lg'], fontSize: 24, color: colors.text }} numberOfLines={1}>
+          <Text style={{ ...Typography['heading-lg'], fontSize: 24, color: colors.text, alignSelf: 'stretch', textAlign: isRTL ? 'right' : 'left' }} numberOfLines={1}>
             {captain.name || '—'}
           </Text>
           <Text
@@ -82,7 +82,8 @@ export default function ProfileScreen() {
           </Text>
 
           {/* Inline chips: language + status */}
-          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm, marginTop: Spacing.xs }}>
+          {/* native forceRTL mirrors this row in AR — no manual flip */}
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs }}>
             <Chip icon="language-outline" label={languageLabel} onPress={() => changeLanguage(lang === 'en' ? 'ar' : 'en')} colors={colors} />
             <StatusChip status={captain.status} colors={colors} />
           </View>
@@ -90,7 +91,8 @@ export default function ProfileScreen() {
 
         {/* ── Stats: rating + trips ── */}
         <View style={{
-          flexDirection: isRTL ? 'row-reverse' : 'row',
+          // native forceRTL mirrors this row in AR — no manual flip
+          flexDirection: 'row',
           marginTop: Spacing.xl,
           backgroundColor: colors.card,
           borderRadius: 18,
@@ -108,7 +110,8 @@ export default function ProfileScreen() {
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={sectionLabel(colors)}>{t('profile.vehicleTitle')}</Text>
           <View style={{
-            flexDirection: isRTL ? 'row-reverse' : 'row',
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
             alignItems: 'center',
             gap: Spacing.md,
             backgroundColor: colors.card,
@@ -157,7 +160,8 @@ export default function ProfileScreen() {
           onPress={onLogout}
           activeOpacity={0.85}
           style={{
-            flexDirection: isRTL ? 'row-reverse' : 'row',
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
             alignItems: 'center',
             gap: Spacing.md,
             marginTop: Spacing.lg,
@@ -216,7 +220,8 @@ function Chip({ icon, label, onPress, colors }: ChipProps) {
       onPress={onPress}
       activeOpacity={0.7}
       style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
         backgroundColor: colors.surface,
@@ -235,7 +240,8 @@ function StatusChip({ status, colors }: { status: string; colors: ReturnType<typ
   const tone = status === 'approved' ? colors.success : status === 'pending' ? colors.accent : colors.destructive
   return (
     <View style={{
-      flexDirection: isRTL ? 'row-reverse' : 'row',
+      // native forceRTL mirrors this row in AR — no manual flip
+      flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       backgroundColor: tone + '1A',
@@ -260,7 +266,8 @@ interface StatProps {
 function Stat({ value, label, icon, iconColor, colors }: StatProps) {
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 3 }}>
-      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
+      {/* native forceRTL mirrors this row in AR — no manual flip */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         <Icon name={icon} size={16} color={iconColor} />
         {/* Stat value is a Western number — lock LTR so digits stay ltr under native forceRTL */}
         <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{value}</Text>
@@ -282,7 +289,8 @@ function ThemeRow<T extends string>({ label, value, onChange, options, colors }:
   const activeLabel = options.find((o) => o.value === value)?.label ?? ''
   return (
     <View style={{
-      flexDirection: isRTL ? 'row-reverse' : 'row',
+      // native forceRTL mirrors this row in AR — no manual flip
+      flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.md,
       backgroundColor: colors.card,
@@ -304,7 +312,8 @@ function ThemeRow<T extends string>({ label, value, onChange, options, colors }:
         <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{activeLabel}</Text>
       </View>
       <View style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         backgroundColor: colors.surface,
         borderRadius: 999,
         padding: 3,

@@ -254,7 +254,8 @@ export function LocationPicker({
         gap: Spacing.sm,
       }}>
         <View style={{
-          flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+          // native forceRTL mirrors this row in AR — no manual flip
+          flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: colors.card,
           borderRadius: 16,
@@ -281,7 +282,8 @@ export function LocationPicker({
 
         {/* Search input */}
         <View style={{
-          flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+          // native forceRTL mirrors this row in AR — no manual flip
+          flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: colors.card,
           borderRadius: 16,
@@ -394,7 +396,8 @@ export function LocationPicker({
               paddingVertical: 10,
               paddingHorizontal: 14,
               borderRadius: 12,
-              flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+              // native forceRTL mirrors this row in AR — no manual flip
+              flexDirection: 'row',
               alignItems: 'center',
               gap: 8,
             }}>
@@ -415,7 +418,8 @@ export function LocationPicker({
             borderColor: colors.border,
           }}>
             <View style={{
-              flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+              // native forceRTL mirrors this row in AR — no manual flip
+              flexDirection: 'row',
               alignItems: 'center',
               gap: Spacing.md,
             }}>
@@ -445,7 +449,8 @@ export function LocationPicker({
                 }}>
                   {pinKind === 'pickup' ? t('booking.fromLabel') : t('booking.toLabel')}
                 </Text>
-                <View style={{ flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                {/* native forceRTL mirrors this row in AR — no manual flip */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {resolving && <ActivityIndicator size="small" color={colors.tint} />}
                   <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1 }} numberOfLines={1}>
                     {address ?? t('booking.locating')}
@@ -503,7 +508,8 @@ function PlaceRow({ place, colors, onPress }: PlaceRowProps) {
       onPress={onPress}
       activeOpacity={0.7}
       style={{
-        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
+        // native forceRTL mirrors this row in AR — no manual flip
+        flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
         paddingVertical: 12,
