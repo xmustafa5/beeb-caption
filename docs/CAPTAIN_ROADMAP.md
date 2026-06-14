@@ -217,12 +217,48 @@ multi-stop), with map + navigation deep-link + masked call.
 
 ---
 
-### Later (post-v1, dedicated tasks)
-- **FCM push** (`expo-notifications` + `POST /api/me/fcm-token` + background offers + tap
-  deep-linking) — needs a custom dev build.
-- **Background location** (currently foreground-only).
+### Status: Areas 1–6 BUILT & verified on `main` (2026-06-11)
+
+All six v1 areas are complete (`tsc` clean, lint 0 errors, live-verified). Specs + plans in
+`docs/superpowers/{specs,plans}/`. The items below are **deferred follow-ups**, not part of v1.
+
+### Deferred — needs a custom dev build (NOT testable in Expo Go)
+
+These were intentionally pushed past v1 because they require native modules / native config that
+Expo Go doesn't include. They need: native config in `app.json` (+ config plugins), an EAS account
+or local native toolchain (Xcode / Android Studio), real FCM `google-services.json` / APNs key from
+the backend/Firebase, and a `npx expo run:ios|android` (or EAS) build — after which you test on a
+device/simulator, **not Expo Go**.
+
+- **FCM push** (the bigger win). Backend already supports it (`POST /api/me/fcm-token`; sends
+  `new_trip_in_queue`, `trip_cancelled`, `captain_approval_decision`, `trip_accepted/arriving/
+  completed`, `room_dispatched/expired`). Client work, in order:
+  1. `npx expo install expo-notifications`; add the config plugin + FCM/APNs creds to `app.json`.
+  2. On login → get the push token → `POST /api/me/fcm-token {fcm_token}`; send `null` on logout
+     (wire into the captain-auth flow / AuthGate).
+  3. `setNotificationHandler` for foreground display.
+  4. `addNotificationResponseReceivedListener` → deep-link on `data.type`: `new_trip_in_queue` →
+     Queue tab, `trip_cancelled` → the trip, `captain_approval_decision` → status screen.
+  5. Android: a high-importance notification channel for trip offers.
+  - **Buys:** a backgrounded/closed captain is woken for new offers + approval decisions. Today
+    (WS-only, foreground) the captain only receives offers while the app is open on the Queue tab.
+- **Background location.** The Area-3 GPS ping loop is **foreground-only**; a backgrounded captain
+  is force-offlined by the backend's 5-min staleness sweep. Background tracking needs
+  `expo-location` background mode + TaskManager + the "Always" location permission + config plugin.
+
+### Deferred — backend gap (BACKEND_ISSUES #7)
+
+- **Multi-stop "reach"** is built but **inert**: the captain can't list a trip's stops (no
+  captain stops-list endpoint; rider one 403s for captains; Trip embeds no stops). `getStops` returns
+  `[]`; the stops panel is hidden. One-line activation once the backend ships a captain stops-list.
+
+### Deferred — minor / Horizon 2
+
+- `captain.earnings.tripCount` i18n **plural forms** (EN/AR) — cosmetic ("1 trips" / Arabic plural rules).
 - Earnings analytics / trend graphs (Horizon 2).
 - Self-service zone preference / availability (Horizon 2).
+- Cleanup: rider-only leftovers from the template (e.g. `services/places.ts`/`routing.ts` are reused;
+  audit for any unused rider code once all areas are stable).
 
 ## 5. Cross-cutting conventions
 
