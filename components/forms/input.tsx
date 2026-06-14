@@ -9,10 +9,16 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   error?: string
   trailing?: React.ReactNode
   leading?: React.ReactNode
+  /**
+   * Force left-to-right for numeric content (phone, OTP, amounts). Numbers read
+   * LTR in both English and Arabic, so these fields stay left-aligned/LTR even
+   * when the app is in RTL. Defaults to false (text follows the app direction).
+   */
+  numeric?: boolean
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, trailing, leading, ...props },
+  { label, error, trailing, leading, numeric, ...props },
   ref,
 ) {
   const colors = useThemeColors()
@@ -25,6 +31,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         </Text>
       )}
       <View style={{
+        // Literal 'row' is NOT auto-mirrored by RN under RTL, so the leading slot stays
+        // on the left and the TextInput to its right in both languages. For numeric
+        // fields the TextInput's textAlign:'left' + writingDirection:'ltr' keep digits LTR.
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.surface,
@@ -45,7 +54,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             flex: 1,
             ...Typography.body,
             color: colors.text,
-            textAlign: I18nManager.isRTL ? 'right' : 'left',
+            // Numeric fields (phone/OTP) stay LTR in both languages; text fields follow the app direction.
+            textAlign: numeric ? 'left' : I18nManager.isRTL ? 'right' : 'left',
+            writingDirection: numeric ? 'ltr' : undefined,
             includeFontPadding: false,
           }}
         />

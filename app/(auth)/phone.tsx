@@ -180,17 +180,19 @@ export default function PhoneScreen() {
                   keyboardType="phone-pad"
                   placeholder={t('auth.phonePlaceholder')}
                   maxLength={11}
+                  numeric
                   autoFocus
                   leading={
+                    // The phone field reads LTR in both languages: flag + "+964" on the
+                    // left, divider on the right, digits after it. Pinned LTR (not flipped
+                    // in RTL) so the country code sits next to the LTR number coherently.
                     <View
                       style={{
-                        flexDirection: isRTL ? 'row-reverse' : 'row',
+                        flexDirection: 'row',
                         alignItems: 'center',
                         gap: 6,
-                        paddingRight: isRTL ? 0 : Spacing.sm,
-                        paddingLeft: isRTL ? Spacing.sm : 0,
-                        borderRightWidth: isRTL ? 0 : 1,
-                        borderLeftWidth: isRTL ? 1 : 0,
+                        paddingRight: Spacing.sm,
+                        borderRightWidth: 1,
                         borderColor: colors.border,
                       }}
                     >

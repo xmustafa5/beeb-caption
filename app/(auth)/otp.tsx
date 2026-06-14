@@ -251,6 +251,7 @@ export default function OtpScreen() {
                     placeholder={t('auth.otpPlaceholder')}
                     maxLength={6}
                     error={errors.code ? t(errors.code.message ?? '') : undefined}
+                    numeric
                     autoFocus
                   />
                   <CodeBoxes value={value} colors={colors} />
