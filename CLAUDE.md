@@ -274,6 +274,12 @@ Native `WebSocket` (not socket.io) when you need realtime:
 
 Set `EXPO_PUBLIC_API_URL` in env (in `.env` and `app.json` extra). Never hardcode.
 
+**API reference (source of truth — curl this, it's the live spec):**
+- OpenAPI JSON: `https://beeb.madebyhaithem.com/api-docs/openapi.json`
+- Swagger UI: `https://beeb.madebyhaithem.com/swagger-ui/`
+
+The committed `docs/openapi.json` can lag the deployed API — when in doubt, curl the live `/api-docs/openapi.json` above and trust it over the committed copy.
+
 When you find a backend bug, log it in a project-root `BACKEND_ISSUES.md` instead of working around it in the client.
 
 ## Libraries to Install When Needed
