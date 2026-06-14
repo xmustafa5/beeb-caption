@@ -11,7 +11,7 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
     ar: { translation: ar },
   },
-  lng: 'en',
+  lng: 'ar',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
 })
@@ -23,7 +23,8 @@ export const languageReady: Promise<void> = (async () => {
     AsyncStorage.getItem('language'),
     consumeRestartFlag(),
   ])
-  const lang = (saved === 'ar' || saved === 'en') ? saved : 'en'
+  // Default to Arabic (Iraqi captains) on first launch; respect a saved choice thereafter.
+  const lang = (saved === 'ar' || saved === 'en') ? saved : 'ar'
   const shouldBeRTL = lang === 'ar'
 
   if (I18nManager.isRTL !== shouldBeRTL && !justRestarted) {
