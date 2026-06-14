@@ -18,8 +18,12 @@ import { FormError } from '@/components/forms/form-error'
 import { requestOtp } from '@/services/captain-auth'
 import { apiErrorKey } from '@/lib/api'
 
+// Accept the Iraqi mobile number with OR without the leading zero:
+//   "07XXXXXXXXX" (11 digits, leading 0) or "7XXXXXXXXX" (10 digits, no 0).
+// The frontend keeps whatever the captain typed; the service normalizes to the
+// backend's "9647XXXXXXXXX" form (normalizePhone strips the leading zero).
 const phoneSchema = z.object({
-  phone: z.string().regex(/^07\d{9}$/, 'auth.phoneInvalid'),
+  phone: z.string().regex(/^0?7\d{9}$/, 'auth.phoneInvalid'),
 })
 
 type PhoneForm = z.infer<typeof phoneSchema>
@@ -182,17 +186,17 @@ export default function PhoneScreen() {
                   maxLength={11}
                   numeric
                   autoFocus
-                  leading={
-                    // The phone field reads LTR in both languages: flag + "+964" on the
-                    // left, divider on the right, digits after it. Pinned LTR (not flipped
-                    // in RTL) so the country code sits next to the LTR number coherently.
+                  trailing={
+                    // The +964 country code sits on the RIGHT of the field (always), with
+                    // its divider on the left edge; the LTR digits occupy the left. Pinned
+                    // LTR (flag + code) so it reads coherently regardless of app language.
                     <View
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 6,
-                        paddingRight: Spacing.sm,
-                        borderRightWidth: 1,
+                        paddingLeft: Spacing.sm,
+                        borderLeftWidth: 1,
                         borderColor: colors.border,
                       }}
                     >
