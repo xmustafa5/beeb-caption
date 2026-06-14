@@ -21,7 +21,8 @@ interface OfferCardProps {
 }
 
 export function OfferCard({ offer, captainLocation, onAccept, accepting }: OfferCardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
 
   const isRoom = offer.offerType === 'room'
@@ -57,8 +58,9 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
             </View>
           )}
         </View>
-        <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'] }}>
-          {formatIqd(offer.fareIqd)}
+        {/* Fare is a Western-grouped number — lock LTR so the IQD suffix and digits read correctly under native forceRTL */}
+        <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
+          {formatIqd(offer.fareIqd, isAr ? 'ar' : 'en')}
         </Text>
       </View>
 

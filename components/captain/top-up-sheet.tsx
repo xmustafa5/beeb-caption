@@ -11,6 +11,7 @@ import { Input } from '@/components/forms/input'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/forms/form-error'
 import { formatIqd } from '@/lib/format-currency'
+import { toAsciiDigits } from '@/lib/digits'
 import { topUp } from '@/services/wallet'
 import { parseApiError } from '@/lib/api'
 
@@ -27,7 +28,9 @@ interface TopUpSheetProps {
 
 export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }: TopUpSheetProps) {
   const colors = useThemeColors()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Reactive locale for currency formatting (layout mirroring still uses module-scope isRTL).
+  const isAr = i18n.language === 'ar'
   const insets = useSafeAreaInsets()
   const [preset, setPreset] = useState<number | null>(PRESETS[0])
   const [custom, setCustom] = useState('')
@@ -40,7 +43,8 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
     onClose()
   }
 
-  const amount = custom ? parseInt(custom.replace(/\D/g, ''), 10) || 0 : (preset ?? 0)
+  // Normalize Arabic-Indic/Persian digits to ASCII before the \D strip — a bare replace deletes them.
+  const amount = custom ? parseInt(toAsciiDigits(custom).replace(/\D/g, ''), 10) || 0 : (preset ?? 0)
 
   const mutation = useMutation({
     mutationFn: () => topUp(amount),
@@ -76,7 +80,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
             {t('captain.activate.topUpTitle')}
           </Text>
           <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-            {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd), fee: formatIqd(feeIqd) })}
+            {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isAr ? 'ar' : 'en'), fee: formatIqd(feeIqd, isAr ? 'ar' : 'en') })}
           </Text>
 
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
@@ -106,7 +110,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
                       fontVariant: ['tabular-nums'],
                     }}
                   >
-                    {formatIqd(p)}
+                    {formatIqd(p, isAr ? 'ar' : 'en')}
                   </Text>
                 </TouchableOpacity>
               )
@@ -116,7 +120,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
           <Input
             label={t('captain.activate.customAmount')}
             value={custom}
-            onChangeText={(v) => { setCustom(v.replace(/\D/g, '')); setError(null) }}
+            onChangeText={(v) => { setCustom(toAsciiDigits(v).replace(/\D/g, '')); setError(null) }}
             keyboardType="number-pad"
             placeholder={t('captain.activate.amountLabel')}
           />

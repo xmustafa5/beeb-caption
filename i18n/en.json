@@ -156,7 +156,10 @@
     "noZonesBody": "Abriyah zones aren’t available in your area right now.",
     "pickZoneManually": "Pick a zone to start:",
     "zoneNotFound": "Zone not found.",
-    "joinFailed": "Couldn’t join a room"
+    "joinFailed": "Couldn’t join a room",
+    "pickupNumbered": "Pickup {{n}}",
+    "stopNumbered": "Stop {{n}}",
+    "driverTitle": "Driver"
   },
   "notifications": {
     "empty": "You have no notifications yet."

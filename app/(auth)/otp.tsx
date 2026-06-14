@@ -18,6 +18,7 @@ import { requestOtp, verifyCaptainOtp } from '@/services/captain-auth'
 import { useRegistrationStore } from '@/store/registration-store'
 import { parseApiError, apiErrorKey } from '@/lib/api'
 import { useAuthStore } from '@/store/auth-store'
+import { toAsciiDigits } from '@/lib/digits'
 
 const otpSchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'auth.otpInvalid'),
@@ -245,7 +246,9 @@ export default function OtpScreen() {
                 <>
                   <CodeBoxes
                     value={value}
-                    onChangeText={(v) => onChange(v.replace(/\D/g, ''))}
+                    // Normalize Arabic-Indic/Persian digits before the \D strip — an Arabic
+                    // keyboard sends ٠-٩, which the bare \D strip would delete entirely.
+                    onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))}
                     colors={colors}
                   />
                   {errors.code && (
@@ -332,7 +335,9 @@ function CodeBoxes({ value, onChangeText, colors }: CodeBoxesProps) {
       <TextInput
         ref={inputRef}
         value={value}
-        onChangeText={(v) => onChangeText(v.replace(/\D/g, ''))}
+        // Normalize Arabic-Indic/Persian digits before the \D strip — captains on an
+        // Arabic keyboard type ٠-٩, which a bare \D strip would drop, blocking OTP entry.
+        onChangeText={(v) => onChangeText(toAsciiDigits(v).replace(/\D/g, ''))}
         keyboardType="number-pad"
         maxLength={6}
         autoFocus

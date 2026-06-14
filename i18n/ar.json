@@ -156,7 +156,10 @@
     "noZonesBody": "مناطق عبرية غير متوفرة في منطقتك حالياً.",
     "pickZoneManually": "اختر منطقة للبدء:",
     "zoneNotFound": "المنطقة غير موجودة.",
-    "joinFailed": "تعذّر الانضمام إلى غرفة"
+    "joinFailed": "تعذّر الانضمام إلى غرفة",
+    "pickupNumbered": "نقطة الانطلاق {{n}}",
+    "stopNumbered": "محطة {{n}}",
+    "driverTitle": "السائق"
   },
   "notifications": {
     "empty": "ما عندك إشعارات لحد الآن."

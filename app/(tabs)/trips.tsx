@@ -14,6 +14,7 @@ import { useCurrentLocation } from '@/hooks/use-current-location'
 import { parseApiError } from '@/lib/api'
 import type { CaptainOffer } from '@/services/captain-queue'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
 export default function QueueScreen() {

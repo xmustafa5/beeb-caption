@@ -17,6 +17,7 @@ import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
 import { requestOtp } from '@/services/captain-auth'
 import { apiErrorKey } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 // Accept the Iraqi mobile number with OR without the leading zero:
 //   "07XXXXXXXXX" (11 digits, leading 0) or "7XXXXXXXXX" (10 digits, no 0).
@@ -180,7 +181,9 @@ export default function PhoneScreen() {
                 <Input
                   label={t('auth.phoneTitle')}
                   value={value}
-                  onChangeText={(v) => onChange(v.replace(/\D/g, ''))}
+                  // Normalize Arabic-Indic/Persian digits to ASCII BEFORE the \D strip —
+                  // a bare /\D/g would delete typed Arabic digits entirely.
+                  onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))}
                   keyboardType="phone-pad"
                   placeholder={t('auth.phonePlaceholder')}
                   maxLength={11}
@@ -205,6 +208,8 @@ export default function PhoneScreen() {
                         style={{
                           ...Typography.body,
                           color: colors.text,
+                          // Western dialing code: stay LTR + tabular even when the app is RTL.
+                          writingDirection: 'ltr',
                           fontVariant: ['tabular-nums'],
                         }}
                       >

@@ -5,6 +5,7 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
 /** Inline API-error banner shown above a form's submit button. */

@@ -14,7 +14,9 @@ interface MemberRosterProps {
 }
 
 export function MemberRoster({ members }: MemberRosterProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Reactive locale for currency suffix/grouping (د.ع vs IQD); layout uses module-scope isRTL.
+  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
   if (members.length === 0) return null
 
@@ -39,7 +41,7 @@ export function MemberRoster({ members }: MemberRosterProps) {
         >
           <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{m.name}</Text>
           <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-            {formatIqd(m.fareIqd)} · {t('captain.live.distanceLabel', { km: m.distanceKm.toFixed(1) })}
+            {formatIqd(m.fareIqd, isAr ? 'ar' : 'en')} · {t('captain.live.distanceLabel', { km: m.distanceKm.toFixed(1) })}
           </Text>
         </View>
       ))}

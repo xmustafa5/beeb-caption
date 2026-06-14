@@ -2,6 +2,8 @@
 // Pure conversion helpers between the backend Captain JSON (snake_case, gender m/f)
 // and the app's Captain shape (camelCase, gender male/female). No network here.
 
+import { toAsciiDigits } from '@/lib/digits'
+
 export type CaptainStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
 export type CaptainGender = 'male' | 'female'
 
@@ -78,7 +80,9 @@ export function toCaptain(b: BackendCaptain): Captain {
 // The phone input stores the local Iraqi format `07XXXXXXXXX`; the backend wants
 // international digits `9647XXXXXXXXX`. Identical to the rider normalizer.
 export function normalizePhone(local: string): string {
-  const digits = local.replace(/\D/g, '')
+  // Defensively normalize Arabic-Indic/Persian digits at the boundary so any
+  // caller's raw input survives the \D strip (callers already pass ASCII today).
+  const digits = toAsciiDigits(local).replace(/\D/g, '')
   if (digits.startsWith('964')) return digits
   return `964${digits.replace(/^0+/, '')}`
 }

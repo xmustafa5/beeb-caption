@@ -6,7 +6,7 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 
-const isRTL = I18nManager.isRTL
+const isRTL = I18nManager.isRTL // Stable for the session — forceRTL changes require a restart anyway
 
 interface TripActionBarProps {
   onCall: () => void

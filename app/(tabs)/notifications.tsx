@@ -11,6 +11,7 @@ import { useEarnings } from '@/hooks/use-earnings'
 import { formatIqd } from '@/lib/format-currency'
 import type { EarningsPeriod } from '@/services/earnings'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
 export default function EarningsScreen() {
@@ -73,12 +74,14 @@ export default function EarningsScreen() {
                   <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
                     {t(item.tripType === 'abriyah' ? 'captain.earnings.tripAbriyah' : 'captain.earnings.tripRegular')}
                   </Text>
-                  <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+                  {/* Date is a numeric run — pin LTR + tabular so day/month/year order stays stable in AR */}
+                  <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', writingDirection: 'ltr', fontVariant: ['tabular-nums'] }}>
                     {new Date(item.completedAt).toLocaleDateString(i18n.language === 'ar' ? 'ar-IQ' : 'en-GB')}
                   </Text>
                 </View>
-                <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-                  {formatIqd(item.fareIqd)}
+                {/* Currency stays LTR + tabular even in AR — digits read left-to-right; locale only picks grouping + suffix */}
+                <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
+                  {formatIqd(item.fareIqd, i18n.language === 'ar' ? 'ar' : 'en')}
                 </Text>
               </View>
             ))

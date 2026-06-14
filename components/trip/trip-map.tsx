@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import { View } from 'react-native'
+import { useTranslation } from 'react-i18next'
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, type Region } from 'react-native-maps'
 import type { ComponentProps, Ref, ReactNode } from 'react'
 import type { LatLng } from '@/hooks/use-current-location'
@@ -44,6 +45,7 @@ export const TripMap = forwardRef<MapView, TripMapProps>(function TripMap(
   ref: Ref<MapView>,
 ) {
   const colors = useThemeColors()
+  const { t } = useTranslation()
 
   return (
     <View style={{ flex: 1 }} pointerEvents={pointerEvents}>
@@ -81,19 +83,19 @@ export const TripMap = forwardRef<MapView, TripMapProps>(function TripMap(
           />
         )}
         {pickup && (
-          <Marker coordinate={pickup} pinColor={colors.tint} title="Pickup" />
+          <Marker coordinate={pickup} pinColor={colors.tint} title={t('abriyah.pickupTitle')} />
         )}
         {pickups?.map((p, i) => (
-          <Marker key={`pk-${i}`} coordinate={p} pinColor={colors.tint} title={`Pickup ${i + 1}`} />
+          <Marker key={`pk-${i}`} coordinate={p} pinColor={colors.tint} title={t('abriyah.pickupNumbered', { n: i + 1 })} />
         ))}
         {stops?.map((s, i) => (
-          <Marker key={`stop-${i}`} coordinate={s} pinColor={colors.info} title={`Stop ${i + 1}`} />
+          <Marker key={`stop-${i}`} coordinate={s} pinColor={colors.info} title={t('abriyah.stopNumbered', { n: i + 1 })} />
         ))}
         {dropoff && (
-          <Marker coordinate={dropoff} pinColor={colors.destructive} title="Drop-off" />
+          <Marker coordinate={dropoff} pinColor={colors.destructive} title={t('abriyah.dropoffTitle')} />
         )}
         {driver && (
-          <Marker coordinate={driver} pinColor={colors.info} title="Driver" />
+          <Marker coordinate={driver} pinColor={colors.info} title={t('abriyah.driverTitle')} />
         )}
         {children}
       </MapView>

@@ -5,7 +5,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 
-const isRTL = I18nManager.isRTL
+const isRTL = I18nManager.isRTL // Stable for the session — forceRTL changes require a restart anyway
 
 interface WizardProgressProps {
   current: number // 1-based

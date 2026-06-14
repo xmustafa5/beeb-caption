@@ -112,7 +112,7 @@ export default function HomeScreen() {
             {t('captain.activate.activatedTitle')}
           </Text>
           <Text style={{ ...Typography.body, color: colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
-            {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd) })}
+            {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
           </Text>
           <OnlineToggle />
         </View>
@@ -133,8 +133,8 @@ export default function HomeScreen() {
             </Text>
             <Text style={{ ...Typography.body, color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
               {insufficient
-                ? t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd), fee: formatIqd(feeIqd) })
-                : t('captain.activate.feeNotice', { fee: formatIqd(feeIqd) })}
+                ? t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isRTL ? 'ar' : 'en'), fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })
+                : t('captain.activate.feeNotice', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
             </Text>
           </View>
 

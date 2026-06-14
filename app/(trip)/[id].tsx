@@ -147,7 +147,7 @@ export default function LiveTripScreen() {
         </View>
         <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>{t('captain.live.completedTitle')}</Text>
         <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-          {t('captain.live.fareCollected', { fare: formatIqd(trip.fareIqd) })}
+          {t('captain.live.fareCollected', { fare: formatIqd(trip.fareIqd, isRTL ? 'ar' : 'en') })}
         </Text>
         <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'center', fontStyle: 'normal' }}>{t('captain.live.rateRider')}</Text>
         <RatingStars value={stars} onChange={setStars} />
@@ -181,7 +181,8 @@ export default function LiveTripScreen() {
       >
         <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>{t('captain.live.fareLabel')}</Text>
-          <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'] }}>{formatIqd(trip.fareIqd)}</Text>
+          {/* Currency value: lock LTR so the IQD amount keeps Western digit order inside the AR (forceRTL) screen. */}
+          <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(trip.fareIqd, isRTL ? 'ar' : 'en')}</Text>
         </View>
 
         {trip.tripType === 'abriyah' && <MemberRoster members={roster.data ?? []} />}

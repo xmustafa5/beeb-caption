@@ -22,6 +22,7 @@ import { getCities } from '@/services/cities'
 import { useAuthStore } from '@/store/auth-store'
 import { parseApiError } from '@/lib/api'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
 const schema = z.object({

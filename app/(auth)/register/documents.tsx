@@ -19,6 +19,7 @@ import { requestOtp, verifyCaptainOtp } from '@/services/captain-auth'
 import { useAuthStore } from '@/store/auth-store'
 import { useRegistrationStore } from '@/store/registration-store'
 import { parseApiError } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 const isRTL = I18nManager.isRTL
 
@@ -204,11 +205,15 @@ function VerifyGate({ phone }: { phone: string }) {
         </Text>
         <Input
           value={code}
-          onChangeText={(v) => setCode(v.replace(/\D/g, ''))}
+          // Normalize Arabic-Indic/Persian digits before the \D strip — an Arabic
+          // keyboard sends ٠-٩, which the bare \D strip would delete entirely.
+          onChangeText={(v) => setCode(toAsciiDigits(v).replace(/\D/g, ''))}
           keyboardType="number-pad"
           placeholder={t('auth.otpPlaceholder')}
           maxLength={6}
           autoFocus
+          // numeric → textAlign:'left' + writingDirection:'ltr' so the OTP digits stay LTR in AR.
+          numeric
         />
         <FormError message={error} />
         <Button

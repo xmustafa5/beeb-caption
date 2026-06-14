@@ -15,6 +15,7 @@ import { Icon } from '@/components/ui/icon'
 import { WizardProgress } from '@/components/captain/wizard-progress'
 import { useRegistrationStore } from '@/store/registration-store'
 import type { CaptainGender } from '@/lib/captain-mappers'
+import { toAsciiDigits } from '@/lib/digits'
 
 const isRTL = I18nManager.isRTL
 
@@ -101,7 +102,10 @@ export default function PersonalStep() {
               <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.genderNote')}</Text>
             </View>
             <Controller control={control} name="nationalId" render={({ field: { onChange, value } }) => (
-              <Input label={t('captain.register.nationalId')} value={value ?? ''} onChangeText={onChange} keyboardType="number-pad" />
+              // National ID is numeric: normalize Arabic-Indic/Persian digits to ASCII before the \D strip
+              // (a bare \D strip would delete Arabic digits the AR keyboard produces). numeric keeps the ID LTR.
+              <Input label={t('captain.register.nationalId')} value={value ?? ''}
+                onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))} keyboardType="number-pad" numeric />
             )} />
           </View>
 

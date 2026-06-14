@@ -114,11 +114,16 @@ export function SettingsSection({ title, children }: { title?: string; children:
 
 export function SettingsDivider() {
   const colors = useThemeColors()
+  // Indent the divider to align under the label, past the icon column.
+  // Physical marginLeft does NOT auto-swap under forceRTL, so branch the edge:
+  // in AR the icon sits on the reading start (visual right), so inset on the right.
+  const indent = Spacing.lg + 36 + Spacing.md
   return (
     <View style={{
       height: 1,
       backgroundColor: colors.border,
-      marginLeft: Spacing.lg + 36 + Spacing.md,
+      marginLeft: I18nManager.isRTL ? 0 : indent,
+      marginRight: I18nManager.isRTL ? indent : 0,
     }} />
   )
 }

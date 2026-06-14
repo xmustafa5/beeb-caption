@@ -75,7 +75,8 @@ export default function ProfileScreen() {
           </Text>
           <Text
             selectable
-            style={{ ...Typography.body, color: colors.subtle, fontVariant: ['tabular-nums'], marginTop: -4 }}
+            // Phone is Western digits — lock LTR so it reads left-to-right even under native forceRTL
+            style={{ ...Typography.body, color: colors.subtle, fontVariant: ['tabular-nums'], writingDirection: 'ltr', marginTop: -4 }}
           >
             {captain.phone}
           </Text>
@@ -128,7 +129,8 @@ export default function ProfileScreen() {
               <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }} numberOfLines={1}>
                 {car || '—'}
               </Text>
-              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], textAlign: isRTL ? 'right' : 'left' }} selectable>
+              {/* Plate is a Western-digit ID — lock LTR so it isn't reordered under native forceRTL */}
+              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: isRTL ? 'right' : 'left' }} selectable>
                 {captain.carPlate}
               </Text>
             </View>
@@ -260,7 +262,8 @@ function Stat({ value, label, icon, iconColor, colors }: StatProps) {
     <View style={{ flex: 1, alignItems: 'center', gap: 3 }}>
       <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
         <Icon name={icon} size={16} color={iconColor} />
-        <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'] }}>{value}</Text>
+        {/* Stat value is a Western number — lock LTR so digits stay ltr under native forceRTL */}
+        <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{value}</Text>
       </View>
       <Text style={{ ...Typography.micro, color: colors.subtle, fontStyle: 'normal', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</Text>
     </View>

@@ -4,6 +4,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
 interface RatingStarsProps {

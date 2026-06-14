@@ -6,6 +6,7 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import type { EarningsPeriod } from '@/services/earnings'
 
+// Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 const PERIODS: EarningsPeriod[] = ['today', 'week', 'month']
 

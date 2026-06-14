@@ -10,7 +10,7 @@ import { Input } from '@/components/forms/input'
 import { Button } from '@/components/ui/button'
 import type { CancelReason } from '@/services/captain-trips'
 
-const isRTL = I18nManager.isRTL
+const isRTL = I18nManager.isRTL // Stable for the session — forceRTL changes require a restart anyway
 const REASONS: CancelReason[] = ['changed_mind', 'wait_too_long', 'wrong_pickup', 'safety', 'other']
 
 interface CancelSheetProps {
