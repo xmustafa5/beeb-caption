@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, I18nManager } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, I18nManager } from 'react-native'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -11,7 +11,6 @@ import { useMutation } from '@tanstack/react-query'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
-import { Input } from '@/components/forms/input'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
@@ -244,17 +243,16 @@ export default function OtpScreen() {
               name="code"
               render={({ field: { onChange, value } }) => (
                 <>
-                  <Input
+                  <CodeBoxes
                     value={value}
                     onChangeText={(v) => onChange(v.replace(/\D/g, ''))}
-                    keyboardType="number-pad"
-                    placeholder={t('auth.otpPlaceholder')}
-                    maxLength={6}
-                    error={errors.code ? t(errors.code.message ?? '') : undefined}
-                    numeric
-                    autoFocus
+                    colors={colors}
                   />
-                  <CodeBoxes value={value} colors={colors} />
+                  {errors.code && (
+                    <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal' }}>
+                      {t(errors.code.message ?? '')}
+                    </Text>
+                  )}
                 </>
               )}
             />
@@ -315,49 +313,70 @@ export default function OtpScreen() {
 
 interface CodeBoxesProps {
   value: string
+  onChangeText: (v: string) => void
   colors: ReturnType<typeof useThemeColors>
 }
 
-function CodeBoxes({ value, colors }: CodeBoxesProps) {
+/**
+ * The OTP entry: six visual boxes backed by a single hidden TextInput that
+ * captures the digits. Tapping anywhere on the boxes focuses the hidden input.
+ * This is the only input on the verification screen.
+ */
+function CodeBoxes({ value, onChangeText, colors }: CodeBoxesProps) {
+  const inputRef = useRef<TextInput>(null)
   const digits = value.split('')
+
   return (
-    <View
-      style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
-        gap: Spacing.sm,
-        justifyContent: 'space-between',
-      }}
-    >
-      {Array.from({ length: 6 }).map((_, i) => {
-        const filled = !!digits[i]
-        const active = digits.length === i
-        return (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: 52,
-              borderRadius: 12,
-              borderCurve: 'continuous',
-              borderWidth: 1.5,
-              borderColor: active ? colors.tint : filled ? colors.border : colors.muted,
-              backgroundColor: filled ? colors.surface : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text
+    <TouchableOpacity activeOpacity={1} onPress={() => inputRef.current?.focus()}>
+      {/* Hidden input — captures the keystrokes; boxes are the visible UI. */}
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={(v) => onChangeText(v.replace(/\D/g, ''))}
+        keyboardType="number-pad"
+        maxLength={6}
+        autoFocus
+        textContentType="oneTimeCode"
+        style={{ position: 'absolute', opacity: 0, height: 1, width: 1 }}
+      />
+      <View
+        style={{
+          flexDirection: isRTL ? 'row-reverse' : 'row',
+          gap: Spacing.sm,
+          justifyContent: 'space-between',
+        }}
+      >
+        {Array.from({ length: 6 }).map((_, i) => {
+          const filled = !!digits[i]
+          const active = digits.length === i
+          return (
+            <View
+              key={i}
               style={{
-                ...Typography['heading-md'],
-                color: colors.text,
-                fontVariant: ['tabular-nums'],
+                flex: 1,
+                height: 52,
+                borderRadius: 12,
+                borderCurve: 'continuous',
+                borderWidth: 1.5,
+                borderColor: active ? colors.tint : filled ? colors.border : colors.muted,
+                backgroundColor: filled ? colors.surface : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              {digits[i] ?? ''}
-            </Text>
-          </View>
-        )
-      })}
-    </View>
+              <Text
+                style={{
+                  ...Typography['heading-md'],
+                  color: colors.text,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {digits[i] ?? ''}
+              </Text>
+            </View>
+          )
+        })}
+      </View>
+    </TouchableOpacity>
   )
 }
