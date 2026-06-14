@@ -72,10 +72,10 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
             gap: Spacing.lg,
           }}
         >
-          <Text style={{ ...Typography['heading-md'], color: colors.text }}>
+          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.activate.topUpTitle')}
           </Text>
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd), fee: formatIqd(feeIqd) })}
           </Text>
 

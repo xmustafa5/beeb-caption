@@ -65,17 +65,17 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
       {/* details */}
       <View style={{ gap: Spacing.xs, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
         {!isRoom && awayKm != null && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.queue.kmAway', { km: awayKm.toFixed(1) })}
           </Text>
         )}
         {!isRoom && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.queue.tripDistance', { km: tripKm.toFixed(1) })}
           </Text>
         )}
         {isRoom && offer.roomType !== 'women_only' && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.queue.roomMixed')}
           </Text>
         )}

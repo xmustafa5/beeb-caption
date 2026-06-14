@@ -46,7 +46,7 @@ export function CancelSheet({ visible, submitting, onClose, onConfirm }: CancelS
             gap: Spacing.lg,
           }}
         >
-          <Text style={{ ...Typography['heading-md'], color: colors.text }}>{t('captain.live.cancelTitle')}</Text>
+          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>{t('captain.live.cancelTitle')}</Text>
 
           <View style={{ gap: Spacing.sm }}>
             {REASONS.map((r) => {

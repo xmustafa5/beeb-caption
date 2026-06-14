@@ -80,7 +80,7 @@ export default function PersonalStep() {
                 error={errors.nameAr ? t(errors.nameAr.message ?? '') : undefined} />
             )} />
             <View style={{ gap: Spacing.sm }}>
-              <Text style={{ ...Typography['input-label'], color: colors.subtle }}>{t('captain.register.gender')}</Text>
+              <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.gender')}</Text>
               <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: Spacing.sm }}>
                 {(['male', 'female'] as CaptainGender[]).map((g) => {
                   const active = gender === g
@@ -98,7 +98,7 @@ export default function PersonalStep() {
                   )
                 })}
               </View>
-              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>{t('captain.register.genderNote')}</Text>
+              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.genderNote')}</Text>
             </View>
             <Controller control={control} name="nationalId" render={({ field: { onChange, value } }) => (
               <Input label={t('captain.register.nationalId')} value={value ?? ''} onChangeText={onChange} keyboardType="number-pad" />

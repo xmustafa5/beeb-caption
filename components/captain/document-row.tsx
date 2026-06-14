@@ -73,10 +73,10 @@ export function DocumentRow({ docType, state, onPress }: DocumentRowProps) {
         <Icon name={ICONS[docType]} size={20} color={colors.subtle} />
       </View>
       <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
+        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
           {t(`captain.documents.${docType}`)}
         </Text>
-        <Text style={{ ...Typography['caption-sm'], color: statusColor, fontStyle: 'normal' }}>
+        <Text style={{ ...Typography['caption-sm'], color: statusColor, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
           {statusText}
         </Text>
       </View>
