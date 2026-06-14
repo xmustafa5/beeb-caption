@@ -100,17 +100,17 @@ export default function HomeScreen() {
             borderCurve: 'continuous',
             padding: Spacing.xl,
             gap: Spacing.md,
-            alignItems: 'center',
+            alignItems: isRTL ? 'flex-end' : 'flex-start',
             boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
           }}
         >
           <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="checkmark-circle" size={40} color={colors.success} />
           </View>
-          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>
+          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.activate.activatedTitle')}
           </Text>
-          <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal' }}>
+          <Text style={{ ...Typography.body, color: colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
             {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd) })}
           </Text>
           <OnlineToggle />
@@ -199,6 +199,10 @@ function OnlineToggle() {
           onValueChange={(v) => setOnline(v)}
           disabled={goingOnline}
           trackColor={{ true: colors.tint }}
+          // RN's Switch doesn't auto-mirror in RTL — the knob always slides to the
+          // visual right when "on". Mirror it in RTL so the knob travels the natural
+          // way for an Arabic reader. (scaleX on a symmetric control, not a directional icon.)
+          style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
         />
       </View>
 
