@@ -82,7 +82,10 @@ export function toCaptain(b: BackendCaptain): Captain {
 export function normalizePhone(local: string): string {
   // Defensively normalize Arabic-Indic/Persian digits at the boundary so any
   // caller's raw input survives the \D strip (callers already pass ASCII today).
-  const digits = toAsciiDigits(local).replace(/\D/g, '')
+  let digits = toAsciiDigits(local).replace(/\D/g, '')
+  // Strip an international "00" prefix (a common Iraqi habit) BEFORE the 964 check,
+  // otherwise "00964…" would survive as a leading-zero local and double-prefix.
+  digits = digits.replace(/^00/, '')
   if (digits.startsWith('964')) return digits
   return `964${digits.replace(/^0+/, '')}`
 }

@@ -1,5 +1,6 @@
 import { ScrollView, View, Text, TouchableOpacity, I18nManager, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -15,6 +16,7 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const captain = useAuthStore((s) => s.captain)
   const lang = i18n.language as 'en' | 'ar'
   const themePref = useThemeStore((s) => s.preference)
@@ -139,6 +141,37 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Documents ── */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/register/documents')}
+          activeOpacity={0.85}
+          style={{
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.md,
+            marginTop: Spacing.lg,
+            backgroundColor: colors.card,
+            borderRadius: 16,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: Spacing.lg,
+          }}
+        >
+          <View style={{
+            width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+            backgroundColor: colors.tint + '1A',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="document-text-outline" size={18} color={colors.tint} />
+          </View>
+          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('profile.documents')}
+          </Text>
+          <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.subtle} />
+        </TouchableOpacity>
 
         {/* ── Theme switch ── */}
         <View style={{ marginTop: Spacing.xl }}>

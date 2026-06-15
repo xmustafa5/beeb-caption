@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react'
 import { View, Text, ScrollView, AppState, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/Spacing'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { useAuthStore } from '@/store/auth-store'
+import { useRegistrationStore } from '@/store/registration-store'
 import { getCaptain } from '@/services/captain-auth'
 
 // Ops support line. Set EXPO_PUBLIC_SUPPORT_WHATSAPP_URL in env; the fallback is a
@@ -21,20 +22,24 @@ export default function StatusScreen() {
   const { t } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const { forbidden } = useLocalSearchParams<{ forbidden?: string }>()
   const token = useAuthStore((s) => s.token)
   const captainId = useAuthStore((s) => s.captain?.id ?? s.pendingCaptainId)
   const captainStatus = useAuthStore((s) => s.captain?.status)
-  // 403 login (rejected/blocked) gives no captain record; treat as rejected so the
-  // captain sees a "not approved — contact support" screen rather than "pending".
-  const status = captainStatus ?? (forbidden ? 'rejected' : 'pending')
+  // A confirmed rejected/blocked status only exists when we hold a captain record
+  // (from a token poll). A bare 403 login (forbidden=1) carries no record and
+  // can't distinguish pending vs rejected vs blocked — so we DON'T claim
+  // "rejected"; we show a neutral "not active yet" view with a support CTA.
+  const status = captainStatus ?? 'pending'
+  const isForbiddenUnknown = !captainStatus && !!forbidden
   const rejectionReason = useAuthStore((s) => s.captain?.rejectionReason)
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState<string | null>(null)
 
-  // With a token + id we can poll the captain record to detect approval. (Post
-  // backend-fix, a pending captain always holds a token.) Without one, there's
-  // nothing to poll — show the await-approval note.
+  // With a token + id we can poll the captain record to detect approval. A
+  // freshly-registered captain has NO token (login is approval-gated), so there's
+  // nothing to poll — they tap "Log in" once approved to obtain a token.
   const refresh = useCallback(async () => {
     if (!token || !captainId) {
       setNote(t('captain.status.stillPending'))
@@ -67,12 +72,16 @@ export default function StatusScreen() {
     ? t('captain.status.blockedTitle')
     : isRejected
       ? t('captain.status.rejectedTitle')
-      : t('captain.status.pendingTitle')
+      : isForbiddenUnknown
+        ? t('captain.status.notActiveTitle')
+        : t('captain.status.pendingTitle')
   const body = isBlocked
     ? t('captain.status.blockedBody')
     : isRejected
       ? t('captain.status.rejectedBody')
-      : t('captain.status.pendingBody')
+      : isForbiddenUnknown
+        ? t('captain.status.notActiveBody')
+        : t('captain.status.pendingBody')
   const icon = isBlocked ? 'lock-closed' : isRejected ? 'close-circle' : 'hourglass'
   const tone = isBlocked || isRejected ? colors.destructive : colors.tint
   const reasonText = rejectionReason
@@ -118,8 +127,13 @@ export default function StatusScreen() {
         <View style={{ flex: 1 }} />
 
         <View style={{ gap: Spacing.md }}>
-          {!isRejected && !isBlocked && (
+          {/* With a token we can poll for approval in place; without one (fresh
+              register), the captain logs in once approved to obtain a token. */}
+          {!isRejected && !isBlocked && token && (
             <Button label={t('captain.status.checkStatus')} loading={checking} onPress={refresh} />
+          )}
+          {!isRejected && !isBlocked && !token && (
+            <Button label={t('captain.auth.login')} onPress={() => router.replace('/(auth)/login')} />
           )}
           <Button
             label={t('captain.status.contactSupport')}
@@ -127,9 +141,16 @@ export default function StatusScreen() {
             onPress={() => Linking.openURL(SUPPORT_URL)}
             leading={<Icon name="logo-whatsapp" size={18} color={colors.text} />}
           />
-          {isBlocked && (
-            <Button label={t('profile.logout')} variant="ghost" onPress={() => useAuthStore.getState().clear()} />
-          )}
+          {/* Always offer an escape hatch: drop the session/pending state AND the
+              in-memory registration draft (a now-consumed ticket / stale details). */}
+          <Button
+            label={t('captain.status.startOver')}
+            variant="ghost"
+            onPress={() => {
+              useRegistrationStore.getState().reset()
+              useAuthStore.getState().clear()
+            }}
+          />
         </View>
       </ScrollView>
     </View>

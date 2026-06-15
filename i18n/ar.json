@@ -50,7 +50,11 @@
     "genderMale": "ذكر",
     "genderFemale": "أنثى",
     "genderUnset": "أفضّل عدم الإفصاح",
-    "finish": "إنهاء"
+    "finish": "إنهاء",
+    "phone": "رقم الهاتف",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "كلمة المرور",
+    "otpRateLimited": "طلبات كثيرة للرمز. انتظر لحظة وحاول مرة أخرى."
   },
   "home": {
     "greeting": "مرحبا، {{name}}",
@@ -201,7 +205,8 @@
     "vehicleTitle": "المركبة",
     "ratingStat": "التقييم",
     "tripsStat": "الرحلات",
-    "statusStat": "الحالة"
+    "statusStat": "الحالة",
+    "documents": "مستنداتي"
   },
   "wallet": {
     "title": "المحفظة",
@@ -282,9 +287,24 @@
     "startCta": "ابدأ ككابتن",
     "auth": {
       "phoneTitle": "تسجيل دخول الكابتن",
-      "phoneSubtitle": "سنرسل رمزًا لمرة واحدة إلى هاتفك.",
+      "phoneSubtitle": "سجّل الدخول برقم هاتفك وكلمة المرور.",
       "otpWrong": "الرمز خاطئ أو منتهي الصلاحية. حاول مرة أخرى.",
-      "otpVerifyFailed": "تعذّر التحقق من الرمز. حاول مرة أخرى."
+      "otpVerifyFailed": "تعذّر التحقق من الرمز. حاول مرة أخرى.",
+      "loginTitle": "أهلاً بعودتك كابتن",
+      "loginSubtitle": "سجّل الدخول لتبدأ الكسب.",
+      "login": "تسجيل الدخول",
+      "register": "التسجيل ككابتن",
+      "noAccount": "لست كابتن بعد؟",
+      "invalidCredentials": "رقم الهاتف أو كلمة المرور غير صحيحة.",
+      "tooManyAttempts": "محاولات كثيرة. حاول بعد قليل.",
+      "loginFailed": "تعذّر تسجيل الدخول. حاول مرة أخرى.",
+      "passwordRequired": "أدخل كلمة المرور",
+      "passwordTooShort": "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+      "accountTitle": "أنشئ حساب الكابتن",
+      "accountSubtitle": "أدخل رقم هاتفك للبدء.",
+      "setPasswordTitle": "اختر كلمة المرور",
+      "setPasswordSubtitle": "اختر كلمة مرور ستستخدمها لتسجيل الدخول.",
+      "ticketExpired": "انتهت صلاحية التحقق. ابدأ من جديد."
     },
     "activate": {
       "homeTitle": "اليوم",
@@ -449,7 +469,10 @@
       "reason_vehicle_unfit": "المركبة لا تستوفي المتطلبات.",
       "reason_identity_mismatch": "الهوية لا تطابق المستندات.",
       "reason_existing_account": "يوجد حساب مسبقًا.",
-      "reason_other": "يرجى التواصل مع الدعم للمزيد."
+      "reason_other": "يرجى التواصل مع الدعم للمزيد.",
+      "startOver": "البدء من جديد",
+      "notActiveTitle": "الحساب غير مفعّل بعد",
+      "notActiveBody": "حساب الكابتن غير مفعّل بعد. إذا تمت الموافقة عليك للتو، حاول تسجيل الدخول مرة أخرى. إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم."
     },
     "scaffoldHome": "هيكل تطبيق الكابتن — الميزات قادمة.",
     "scaffoldProfile": "الكابتن"

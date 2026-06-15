@@ -50,7 +50,11 @@
     "genderMale": "Male",
     "genderFemale": "Female",
     "genderUnset": "Prefer not to say",
-    "finish": "Finish"
+    "finish": "Finish",
+    "phone": "Phone number",
+    "password": "Password",
+    "passwordPlaceholder": "Your password",
+    "otpRateLimited": "Too many code requests. Wait a moment and try again."
   },
   "home": {
     "greeting": "Hi, {{name}}",
@@ -201,7 +205,8 @@
     "vehicleTitle": "Vehicle",
     "ratingStat": "Rating",
     "tripsStat": "Trips",
-    "statusStat": "Status"
+    "statusStat": "Status",
+    "documents": "My documents"
   },
   "wallet": {
     "title": "Wallet",
@@ -282,9 +287,24 @@
     "startCta": "Start as a Captain",
     "auth": {
       "phoneTitle": "Captain sign in",
-      "phoneSubtitle": "We'll send a one-time code to your phone.",
+      "phoneSubtitle": "Sign in with your phone and password.",
       "otpWrong": "That code is wrong or has expired. Try again.",
-      "otpVerifyFailed": "Couldn't verify the code. Please try again."
+      "otpVerifyFailed": "Couldn't verify the code. Please try again.",
+      "loginTitle": "Welcome back, captain",
+      "loginSubtitle": "Sign in to start earning.",
+      "login": "Log in",
+      "register": "Register as captain",
+      "noAccount": "Not a captain yet?",
+      "invalidCredentials": "Wrong phone number or password.",
+      "tooManyAttempts": "Too many attempts. Try again in a little while.",
+      "loginFailed": "Couldn't log in. Please try again.",
+      "passwordRequired": "Enter your password",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "accountTitle": "Create your captain account",
+      "accountSubtitle": "Enter your phone number to get started.",
+      "setPasswordTitle": "Set a password",
+      "setPasswordSubtitle": "Choose a password you'll use to sign in.",
+      "ticketExpired": "That verification expired. Please start again."
     },
     "activate": {
       "homeTitle": "Today",
@@ -449,7 +469,10 @@
       "reason_vehicle_unfit": "The vehicle did not meet requirements.",
       "reason_identity_mismatch": "Identity did not match the documents.",
       "reason_existing_account": "An account already exists.",
-      "reason_other": "Please contact support for details."
+      "reason_other": "Please contact support for details.",
+      "startOver": "Start over",
+      "notActiveTitle": "Account not active yet",
+      "notActiveBody": "Your captain account isn't active yet. If you were just approved, try logging in again. If you think this is a mistake, contact support."
     },
     "scaffoldHome": "Captain app scaffold — features coming next.",
     "scaffoldProfile": "Captain"

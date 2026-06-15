@@ -55,6 +55,8 @@ export default function VehicleStep() {
       draft.setStep2({ carMake: v.carMake, carModel: v.carModel, carColor: v.carColor ?? '', carPlate: v.carPlate, cityId })
       return registerCaptain({
         phone: draft.phone,
+        password: draft.password,
+        ticket: draft.ticket,
         name: draft.name,
         nameAr: draft.nameAr,
         gender: draft.gender,
@@ -68,15 +70,25 @@ export default function VehicleStep() {
     },
     onMutate: () => setApiError(null),
     onSuccess: (captain) => {
-      // Register issues NO token. Hold the captain id as pending; the documents
-      // step mints the token (re-verify) before uploads. See plan flow-change note.
+      // Register issues NO token and the captain is PENDING — login is gated on
+      // admin approval (403 until then), so there's no token to hold. Mark the
+      // pending id so the AuthGate parks the captain on the status screen until
+      // they're approved; documents are uploaded later, after approval + login.
       useAuthStore.getState().setPending(captain.id)
-      router.replace('/(auth)/register/documents')
+      useRegistrationStore.getState().reset()
+      router.replace('/(auth)/status')
     },
     onError: (err) => {
       const info = parseApiError(err)
+      if (info.status === 401) {
+        // Register-purpose ticket expired/used — restart the account step.
+        setApiError(t('captain.auth.ticketExpired'))
+        router.replace('/(auth)/register/account')
+        return
+      }
       const key = info.isNetwork ? 'common.networkError'
         : info.status === 409 ? 'captain.register.duplicate'
+        : info.status === 400 ? 'captain.register.registerFailed'
         : info.status === 429 ? 'common.rateLimited'
         : 'captain.register.registerFailed'
       setApiError(t(key))
@@ -91,7 +103,7 @@ export default function VehicleStep() {
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + Spacing.xl }}>
         <View style={{ paddingTop: insets.top + Spacing.xl, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg, gap: Spacing.lg }}>
-          <WizardProgress current={2} total={3} />
+          <WizardProgress current={3} total={3} />
           <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.register.vehicleTitle')}
           </Text>

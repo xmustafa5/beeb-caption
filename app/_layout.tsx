@@ -109,22 +109,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (isApproved) {
       if (inAuthGroup) router.replace('/(tabs)')
-    } else if (!token && pendingCaptainId) {
-      // Registered but no token yet (quit mid-onboarding before doc upload).
-      // Send them back to the documents step, which re-mints the token via its
-      // verify gate so they can finish uploading. Don't redirect while they're
-      // already in the register wizard.
-      const path = segments.join('/')
-      if (!path.startsWith('(auth)/register')) {
-        router.replace('/(auth)/register/documents')
-      }
     } else if (isPendingLike) {
-      // Pending/rejected/blocked WITH a token → status screen.
+      // Pending/rejected/blocked — with OR without a token. Captain login is gated
+      // on admin approval, so a freshly-registered captain holds a pendingCaptainId
+      // and NO token; an approved-but-not-yet-active captain may hold a token. Both
+      // park on the status screen until approved (then they log in / get routed to
+      // tabs). Don't redirect while they're still in the register wizard.
       const path = segments.join('/')
       const inRegister = path.startsWith('(auth)/register')
       if (!inRegister && path !== '(auth)/status') router.replace('/(auth)/status')
     } else if (!token) {
-      if (!inAuthGroup) router.replace('/(auth)/phone')
+      if (!inAuthGroup) router.replace('/(auth)/login')
     }
   }, [token, captain, pendingCaptainId, segments])
 

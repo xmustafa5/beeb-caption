@@ -3,11 +3,33 @@
 Tracked here instead of being worked around in the client (per `CLAUDE.md`).
 Backend: `https://beeb.madebyhaithem.com` · spec snapshot: `docs/openapi.json`.
 
-> **2026-06-07 — All five items below are RESOLVED.** The backend shipped and
+> **2026-06-07 — Items #1–#5 below are RESOLVED.** The backend shipped and
 > deployed fixes for #1–#5; verified live against the prod stack on 2026-06-07
 > (zones seeded, `validate-pins` public, both new endpoints live and auth-gated).
 > The `docs/openapi.json` snapshot was refreshed from the live spec the same day.
-> Kept here as a record of what was requested vs. delivered. No open backend gaps.
+> Kept here as a record of what was requested vs. delivered.
+
+---
+
+## 6. `POST /api/auth/captain/login` 500-on-unknown-phone — ✅ **RESOLVED 2026-06-15**
+
+A first probe during the OTP→password auth migration saw a **500** for an
+unknown phone instead of the documented 404. On re-verification later the same
+day the endpoint returned the correct **404 `{"error":"not found"}`** (3/3
+attempts), so it was a transient (likely a cold DB connection / deploy blip),
+not a standing bug:
+
+```
+curl -X POST https://beeb.madebyhaithem.com/api/auth/captain/login \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"9647000000001","password":"whatever123"}'
+# → HTTP 404 {"error":"not found"}
+```
+
+Rider `POST /api/auth/login` correctly returns 401 for unknown/bad creds
+(verified 2026-06-15). The temporary client-side "treat 500 as unregistered"
+mitigation was **removed** from `loginCaptain()` — it now branches only on the
+documented 403/404. No open backend gap.
 
 ---
 

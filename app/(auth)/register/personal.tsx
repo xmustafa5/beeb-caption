@@ -64,7 +64,7 @@ export default function PersonalStep() {
             gap: Spacing.lg,
           }}
         >
-          <WizardProgress current={1} total={3} />
+          <WizardProgress current={2} total={3} />
           <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
             {t('captain.register.personalTitle')}
           </Text>
