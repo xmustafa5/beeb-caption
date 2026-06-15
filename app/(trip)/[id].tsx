@@ -186,7 +186,7 @@ export default function LiveTripScreen() {
           <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(trip.fareIqd, isRTL ? 'ar' : 'en')}</Text>
         </View>
 
-        {trip.tripType === 'abriyah' && <MemberRoster members={roster.data ?? []} />}
+        {trip.tripType === 'abriyah' && <MemberRoster data={roster.data} />}
 
         <FormError message={error} />
 
