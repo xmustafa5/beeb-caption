@@ -41,6 +41,10 @@ export function useCaptainPresence(): CaptainPresence {
 
 export function CaptainPresenceProvider({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
+  // Presence (location ping + resume) only applies to an approved captain;
+  // /api/captain/location 403s otherwise. AuthGate already keeps non-approved
+  // captains out of the tabs, but gate here too so a transient state never pings.
+  const isApproved = useAuthStore((s) => s.captain?.status === 'approved')
 
   const [online, setOnlineState] = useState(false)
   const [connection, setConnection] = useState<ConnectionHealth>('offline')
@@ -144,7 +148,7 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
 
   // On launch: resume if recently online.
   useEffect(() => {
-    if (!token) return
+    if (!token || !isApproved) return
     let cancelled = false
     ;(async () => {
       try {
@@ -160,7 +164,7 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       } catch { /* start offline */ }
     })()
     return () => { cancelled = true }
-  }, [token, startSession])
+  }, [token, isApproved, startSession])
 
   // Cleanup on unmount.
   useEffect(() => () => stopSession(), [stopSession])

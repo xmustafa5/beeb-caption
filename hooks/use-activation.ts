@@ -11,13 +11,16 @@ const KEY = ['captain', 'activation', 'today'] as const
  * so the home screen re-renders the activated state.
  */
 export function useActivation() {
-  const token = useAuthStore((s) => s.token)
+  // Gate on approval, not just a token: /api/captain/activation/today returns
+  // 403 ("captain is not approved") for a pending/rejected captain, so don't
+  // even fire it until the backend would accept it.
+  const enabled = useAuthStore((s) => !!s.token && s.captain?.status === 'approved')
   const queryClient = useQueryClient()
 
   const query = useQuery({
     queryKey: KEY,
     queryFn: getTodayActivation,
-    enabled: !!token,
+    enabled,
     staleTime: 1000 * 60, // 1 min — daily rollover is at Baghdad midnight
   })
 
