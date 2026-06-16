@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Appearance } from 'react-native'
-import { Stack, useRouter, useSegments } from 'expo-router'
+import { Stack, useRouter, useSegments, type Href } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -95,33 +95,53 @@ export default function RootLayout() {
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
+  const colors = useThemeColors()
   const token = useAuthStore((s) => s.token)
   const captain = useAuthStore((s) => s.captain)
   const pendingCaptainId = useAuthStore((s) => s.pendingCaptainId)
   const segments = useSegments()
   const router = useRouter()
 
-  useEffect(() => {
-    const inAuthGroup = segments[0] === '(auth)'
-    const isApproved = !!token && captain?.status === 'approved'
-    const isPendingLike =
-      (!!token && !!captain && captain.status !== 'approved') || !!pendingCaptainId
+  // Decide where this session belongs SYNCHRONOUSLY from the persisted auth
+  // state — don't trust the route the router mounts first. On launch it renders
+  // (tabs) before any redirect effect runs, so a logged-out user briefly sees
+  // the tabs ("skipping auth"). We compute the target during render and block
+  // rendering children until we're on it, so the wrong screen never mounts.
+  const inAuthGroup = segments[0] === '(auth)'
+  const path = segments.join('/')
+  const inRegister = path.startsWith('(auth)/register')
+  const isApproved = !!token && captain?.status === 'approved'
+  const isPendingLike =
+    (!!token && !!captain && captain.status !== 'approved') || !!pendingCaptainId
 
-    if (isApproved) {
-      if (inAuthGroup) router.replace('/(tabs)')
-    } else if (isPendingLike) {
-      // Pending/rejected/blocked — with OR without a token. Captain login is gated
-      // on admin approval, so a freshly-registered captain holds a pendingCaptainId
-      // and NO token; an approved-but-not-yet-active captain may hold a token. Both
-      // park on the status screen until approved (then they log in / get routed to
-      // tabs). Don't redirect while they're still in the register wizard.
-      const path = segments.join('/')
-      const inRegister = path.startsWith('(auth)/register')
-      if (!inRegister && path !== '(auth)/status') router.replace('/(auth)/status')
-    } else if (!token) {
-      if (!inAuthGroup) router.replace('/(auth)/login')
-    }
-  }, [token, captain, pendingCaptainId, segments])
+  if (__DEV__) {
+    console.log('🔐 AuthGate', JSON.stringify({
+      hasToken: !!token,
+      status: captain?.status ?? null,
+      pendingCaptainId,
+      seg: segments.join('/') || '(root)',
+    }))
+  }
+
+  let target: Href | null = null
+  if (isApproved) {
+    if (inAuthGroup) target = '/(tabs)'
+  } else if (isPendingLike) {
+    // Pending/rejected/blocked. Park on the status screen until approved. Don't
+    // redirect while they're still in the register wizard (uploading documents).
+    if (!inRegister && path !== '(auth)/status') target = '/(auth)/status'
+  } else if (!token) {
+    // No session at all → login. This is the case that was leaking into (tabs).
+    if (!inAuthGroup) target = '/(auth)/login'
+  }
+
+  useEffect(() => {
+    if (target) router.replace(target)
+  }, [target])
+
+  // While a redirect is pending, render the splash-colored gate instead of
+  // children so the wrong screen never mounts (and never fires its hooks).
+  if (target) return <View style={{ flex: 1, backgroundColor: colors.background }} />
 
   return <>{children}</>
 }

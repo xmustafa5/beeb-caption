@@ -1,12 +1,15 @@
 // app/(auth)/register/documents.tsx
-// Document upload. Reached AFTER approval + login (a captain token is always
-// present here): captain login is gated on approval, so there's no pre-approval
-// token to upload with. Linked from the captain profile.
+// Document upload. Two entry points:
+//  - Onboarding (onboarding=1, from the register wizard): a PENDING captain
+//    uploads docs before the status screen, because an admin can only approve
+//    after the 5 docs exist. Finishes on /(auth)/status. Authorized by the
+//    onboarding-scoped captain JWT that /api/captains/register now returns.
+//  - Profile (no flag): an approved/pending captain re-uploads; returns back.
 import { useState } from 'react'
 import { View, Text, ScrollView, ActionSheetIOS, Alert, Platform, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -32,6 +35,9 @@ export default function DocumentsStep() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  // Onboarding entry (from the register wizard) finishes on the status screen;
+  // the profile entry (no flag) returns where it came from.
+  const onboarding = useLocalSearchParams<{ onboarding?: string }>().onboarding === '1'
   const captainId = useAuthStore((s) => s.captain?.id ?? s.pendingCaptainId)
   const [states, setStates] = useState<StateMap>(INITIAL)
 
@@ -126,7 +132,7 @@ export default function DocumentsStep() {
                 : t('captain.documents.submitRemaining', { remaining: DOC_TYPES.length - uploadedCount })
             }
             disabled={!allDone}
-            onPress={() => router.back()}
+            onPress={() => (onboarding ? router.replace('/(auth)/status') : router.back())}
           />
         </View>
       </ScrollView>

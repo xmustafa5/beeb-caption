@@ -127,7 +127,66 @@ backend instead of staying as a device-local `file://` URI.
 
 # Captain App — Open Gaps
 
-## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ✅ **RESOLVED 2026-06-10**
+## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ✅ **RE-RESOLVED 2026-06-16** (backend shipped option 2)
+
+> **RE-RESOLVED 2026-06-16 — backend shipped option 2 (token in the register 201 body).**
+> Verified live against `https://beeb.madebyhaithem.com/api-docs/openapi.json` on 2026-06-16:
+> `POST /api/captains/register`'s 201 response is now `CaptainRegisteredResponse` =
+> `allOf [ Captain, { token: string (required) } ]` — the flattened Captain plus a required
+> captain JWT (onboarding-scoped: authorizes documents + self-read while pending; operational
+> endpoints stay 403 until approved). The deadlock is gone.
+>
+> **Client wired (this commit):**
+> - `registerCaptain()` now returns `{ captain, token }` (reads `token` from the 201 body).
+> - The register wizard's vehicle step calls `setSession(token, captain)` on success, so the
+>   request interceptor authenticates the document uploads, then routes to the **documents step**
+>   (`onboarding=1`) → after the 5 uploads → `/(auth)/status`.
+> - The status screen already polls `GET /api/captains/{id}` with the token until `approved`
+>   (AuthGate then routes to the tabs). No re-verify fallback needed.
+>
+> (Backend also shipped #7's captain stops list and `DELETE /api/captains/{id}` in the same image.)
+>
+> ---
+>
+> **REOPENED 2026-06-16 — the 2026-06-10 fix is GONE from the live spec.** Re-verified
+> against the live `https://beeb.madebyhaithem.com/api-docs/openapi.json` on 2026-06-16:
+>
+> - `POST /api/auth/captain/otp/verify` **no longer exists** — the only verify route is
+>   `POST /api/auth/otp/verify`, which returns `{ purpose, ticket }` (a single-use ticket,
+>   **NO token**).
+> - `POST /api/captains/register` returns the Captain object (status `pending`) with **NO
+>   `token` field** in its 201 body (confirmed against the response schema).
+> - `POST /api/captains/{id}/documents` (and `…/upload-url`, `…/completeness`) still require
+>   `bearer_auth` → **401 without a token**.
+> - An admin still **cannot approve** until all 5 documents are uploaded.
+>
+> ⇒ The exact original deadlock is back: register (no token) → can't upload docs (needs token)
+> → can't be approved (docs missing). The onboarding flow the backend documented on 2026-06-10
+> (verify issues a token for pending captains) is **not present in the current deployment** — it
+> was reverted or the auth flow was redesigned to the ticket model without restoring the
+> pending-captain token.
+>
+> **Product requirement (confirmed with the team 2026-06-16):** documents MUST be uploaded
+> **before** the waiting-for-approval screen, because the admin can only approve after seeing
+> the captain's documents. So "upload after approval + login" is not an acceptable flow — the
+> token must exist during onboarding.
+>
+> **What we need from backend — one of (same as the original ask):**
+> 1. **`POST /api/auth/otp/verify` with `purpose: "register"` returns a captain token** (alongside
+>    or instead of the ticket) for the captain being registered, scoped to the document +
+>    self-read endpoints. *(Preferred.)*
+> 2. **`POST /api/captains/register` returns a short-lived onboarding token** in its 201 body
+>    (`{ ...captain, token }`).
+>
+> **Client state until fixed:** the wizard now routes register → **documents step** →
+> status screen (matching the product requirement). Document uploads will **401** during
+> onboarding until the backend restores a pending-captain token. The token-acquisition point is
+> isolated to `verifyOtp()` / `registerCaptain()` in `services/captain-auth.ts`, so wiring the
+> token in is a one-line change once the backend ships either option.
+
+---
+
+**Historical resolution (2026-06-10 — since regressed, see REOPENED note above):**
 
 **Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Resolved:** 2026-06-10
 

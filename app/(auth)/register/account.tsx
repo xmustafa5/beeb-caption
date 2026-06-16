@@ -200,7 +200,13 @@ export default function AccountStep() {
               trailing={<Icon name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color={colors.onTint} />} />
           )}
           {step === 'password' && (
-            <Button label={t('captain.register.next')} disabled={!passwordForm.formState.isValid}
+            // Gate on the live field value, not formState.isValid: the password
+            // field mounts only on this step, and RHF's isValid (mode: onChange)
+            // lags a render behind a late-registered field's first async (zod)
+            // validation — so the button stayed disabled until you bounced back to
+            // the OTP step and returned. handleSubmit still runs the full zod check,
+            // so an <8-char password is rejected with the inline error here.
+            <Button label={t('captain.register.next')} disabled={passwordForm.watch('password').length < 8}
               onPress={passwordForm.handleSubmit(onContinuePassword)}
               trailing={<Icon name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color={colors.onTint} />} />
           )}

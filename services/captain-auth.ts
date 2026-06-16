@@ -90,14 +90,18 @@ export async function getCaptain(id: string, token?: string): Promise<Captain> {
 
 /**
  * Self-register a captain (public; authorized by a register-purpose ticket).
- * Returns the pending Captain. NO token is issued — captain login is gated on
- * admin approval (403 until approved), so the wizard routes to the status screen
- * after this; documents are uploaded later, once approved and logged in.
+ * Returns the pending Captain AND a captain JWT: the 201 body is
+ * `CaptainRegisteredResponse` (Captain + required `token`). The token is
+ * onboarding-scoped — it authorizes the document-upload + self-read endpoints
+ * while pending, so the captain can upload the 5 docs and an admin can then
+ * approve. Operational endpoints stay 403 until approved.
  *
  * 409 → phone or plate already registered; 401 → bad/expired ticket;
  * 400 → invalid gender/phone; 404 → referenced city doesn't exist.
  */
-export async function registerCaptain(input: RegisterCaptainInput): Promise<Captain> {
+export async function registerCaptain(
+  input: RegisterCaptainInput,
+): Promise<{ captain: Captain; token: string }> {
   const body = {
     phone: normalizePhone(input.phone),
     password: input.password,
@@ -112,6 +116,9 @@ export async function registerCaptain(input: RegisterCaptainInput): Promise<Capt
     ...(input.carColor ? { car_color: input.carColor } : {}),
     ...(input.nationalId ? { national_id: input.nationalId } : {}),
   }
-  const { data } = await api.post<BackendCaptain>('/api/captains/register', body)
-  return toCaptain(data)
+  const { data } = await api.post<BackendCaptain & { token: string }>(
+    '/api/captains/register',
+    body,
+  )
+  return { captain: toCaptain(data), token: data.token }
 }

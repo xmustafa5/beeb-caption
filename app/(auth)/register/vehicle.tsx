@@ -69,14 +69,16 @@ export default function VehicleStep() {
       })
     },
     onMutate: () => setApiError(null),
-    onSuccess: (captain) => {
-      // Register issues NO token and the captain is PENDING — login is gated on
-      // admin approval (403 until then), so there's no token to hold. Mark the
-      // pending id so the AuthGate parks the captain on the status screen until
-      // they're approved; documents are uploaded later, after approval + login.
-      useAuthStore.getState().setPending(captain.id)
+    onSuccess: ({ captain, token }) => {
+      // Register now returns a captain JWT (onboarding-scoped). Store the full
+      // session so the request interceptor authenticates the document uploads,
+      // then send the captain to the documents step to upload the 5 docs. The
+      // captain is still PENDING — the token only authorizes docs + self-read.
+      useAuthStore.getState().setSession(token, captain)
       useRegistrationStore.getState().reset()
-      router.replace('/(auth)/status')
+      // onboarding=1 tells the documents step to finish on the status screen
+      // (waiting-for-approval), not router.back() — which is for the profile entry.
+      router.replace({ pathname: '/(auth)/register/documents', params: { onboarding: '1' } })
     },
     onError: (err) => {
       const info = parseApiError(err)
