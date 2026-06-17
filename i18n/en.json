@@ -322,7 +322,10 @@
       "confirmTopUp": "Top up",
       "activateFailed": "Couldn't activate. Please try again.",
       "topUpFailed": "Top-up failed. Please try again.",
-      "amountInvalid": "Enter a valid amount"
+      "amountInvalid": "Enter a valid amount",
+      "payByCard": "Pay {{fee}} by card",
+      "cardPaymentFailed": "Card payment failed. Please try again.",
+      "cardPaymentPending": "Payment is processing. Pull to refresh in a moment."
     },
     "online": {
       "toggleLabel": "Go online",

@@ -52,17 +52,21 @@ No client-facing endpoints change in Phase 0; this is infrastructure the later p
 
 ## Auth model (Phase 1 — Live)
 
-- **Riders:** phone + OTP.
-  - `POST /api/auth/otp/send` — body `{ "phone": "9647501234567" }` (international, with or without leading `+`, 10–15 digits). We generate a 6-digit code, store a hash, and deliver via OTPIQ (or log it in dev/MockSms). Response `200 { "message": "OTP sent" }`. Rate-limited to 10 sends per phone per 10 min (429-class → `400 { "error": "bad request: rate limited: too many OTP requests" }`).
-  - `POST /api/auth/otp/verify` — body `{ "phone", "code", "name?" }`. Optional `name` is set atomically on first-time account creation only (never overwrites an existing name). Response `200 { "token": "<jwt>", "user_id": "<uuid>" }`. Wrong/expired code → `401`; 5-attempt cap per challenge; blocked account → `403`.
+- **Riders:** phone + password. OTP is used **only** to prove phone ownership for registration and password reset — it never logs anyone in.
+  - `POST /api/auth/otp/send` — body `{ "phone": "9647501234567" }` (international, with or without leading `+`, 10–15 digits). We generate a 6-digit code, store a hash, and deliver via OTPIQ (or log it in dev/MockSms). Response `200 { "message": "OTP sent" }`. Rate-limited to 10 sends per phone per 10 min (429-class → `400 { "error": "bad request: rate limited: too many OTP requests" }`). Used by riders **and** captains, for **both** registration and password reset.
+  - `POST /api/auth/otp/verify` — body `{ "phone", "code", "purpose" }` where `purpose ∈ {"register","reset"}`. This **no longer logs anyone in**; on success it returns a short-lived **ticket** to redeem at register/reset: `200 { "ticket": "<uuid>", "purpose": "<register|reset>" }`. Wrong/expired code → `401`; >5 attempts, or bad phone/purpose → `400`. (No `name` field here anymore.)
+  - `POST /api/auth/register` — rider signup. Body `{ "ticket", "phone", "password", "name?" }`. Consumes a verified `register` ticket and creates the rider with the password. Response `200 { "token": "<jwt>", "user_id": "<uuid>" }`. Weak password (min 8 chars) or bad phone → `400`; invalid/expired/already-used ticket → `401`; phone already registered → `409`.
+  - `POST /api/auth/login` — rider login. Body `{ "phone", "password" }` → `200 { "token", "user_id" }`. Invalid credentials → `401`; blocked account → `403`; too many failed attempts (5) → `429` (per-phone lockout, 15 min, cleared on a successful login).
   - `GET /api/riders/me` (Bearer) → rider profile. `PATCH /api/riders/me` (Bearer) — body any of `{ "name", "photo_url", "gender" }`; `gender ∈ {"m","f","unset"}` (else `400`).
 - **Admins:** `POST /api/auth/admin/login` — body `{ "email", "password" }` → `200 { "token", "user_id" }`. Wrong/unknown credentials → `401` (no user enumeration); disabled account → `403`. Seeded super-admin for dev: `admin@beep.iq` / `ChangeMe123!` (change before deploy).
   - Admin-user management (super_admin only): `GET/POST /api/admin/users`, `PATCH/DELETE /api/admin/users/{id}`. Guards: cannot delete your own account or the last super-admin (`400`); duplicate email (`409`). New admins get a server-generated temporary password (surfaced via the invite flow in Phase 8).
 - **JWT claim shape:** `{ "sub": <uuid>, "role": "rider" | "captain" | "super_admin" | "operator" | "finance", "exp", "iat" }`. HS256. Rider + captain tokens last 30 days; admin tokens 8 hours. For a captain token, `sub` is the **captain id**; for a rider token, `sub` is the user id.
 - All authenticated requests send `Authorization: Bearer <jwt>`. Role-gated endpoints return `403` for a valid token with insufficient role, `401` for a missing/invalid token.
-- **Captains (LIVE):** phone + OTP, gated on admin approval.
-  - `POST /api/auth/otp/send` — same endpoint as riders (delivers the code to the phone).
-  - `POST /api/auth/captain/otp/verify` — body `{ "phone", "code" }` (no `name`). Returns `200 { "token", "user_id": <captain_id> }` with `role: "captain"` **only if the captain is registered AND admin-approved**. A phone with no captain account → `404`; a captain not yet approved (pending/rejected/blocked) → `403`. The captain must complete onboarding (register + upload all 5 documents) and be approved by an admin before they can obtain a token.
+- **Captains (LIVE):** phone + password, gated on admin approval. Registration requires a verified `register` ticket plus a password.
+  - `POST /api/auth/otp/send` — same endpoint as riders (delivers the code to the phone). Used to prove the phone before `captains/register`, and for password reset.
+  - `POST /api/captains/register` — now additionally requires `ticket` and `password` (consumes a verified `register` ticket so the phone is proven first), creating a `pending` captain **with a password**. See [Captain Lifecycle](#captain-lifecycle-phase-3--live).
+  - `POST /api/auth/captain/login` — body `{ "phone", "password" }`. Returns `200 { "token", "user_id": <captain_id> }` with `role: "captain"`. Issued for **`approved` AND `pending`** captains (a pending captain can keep onboarding); `rejected`/`blocked` → `403` (CaptainNotApproved); a phone with no captain account → `404`; wrong password → `401`; too many failed attempts (5) → `429` (per-phone lockout, 15 min).
+  - `POST /api/auth/password/reset` — rider **and** captain. Body `{ "ticket", "phone", "new_password" }`. Consumes a verified `reset` ticket and sets the new password for whichever account (rider or captain) owns the phone (rider wins if somehow both exist). Response `200 { "token", "user_id" }`. Weak password → `400`; invalid/expired/already-used ticket → `401`; no account for that phone → `404`.
 - **Device push token:** `POST /api/me/fcm-token` (any rider or captain Bearer) — body `{ "fcm_token": "<token>" | null }` → `204`. Stores the token on the caller's row (rider → `users`, captain → `captains`) so the backend can deliver FCM pushes; send `null` on logout.
 - **Seeded admin / production:** the dev super-admin `admin@beep.iq` / `ChangeMe123!` is seeded for local use. In production the server **refuses to start** while that default password still works; set `BOOTSTRAP_ADMIN_PASSWORD` to rotate it on first boot. See `docs/DEPLOYMENT.md`.
 
@@ -81,23 +85,24 @@ No client-facing endpoints change in Phase 0; this is infrastructure the later p
 
 **Upgrade-time errors** are returned as the HTTP response to the upgrade request (the socket never opens): missing/invalid token → `401`; non-captain token on `/ws/captain` → `403`; missing `channel` → `400`; a channel you're not allowed to see → `403` (rider may only watch their own trip or a room they're a member of; only admins may watch `rt:admin:ops` and arbitrary trips/rooms).
 
-**Frame format — IMPORTANT.** Each message is a **JSON text frame containing the event payload object directly**. There is **no envelope and no event-type field inside the frame** — the `beep.*` action name (e.g. `beep.trip.accepted`) is the audit/internal name and is **NOT** sent on the wire. The client correlates by:
-1. **The channel it subscribed to** (you already know if a frame is a trip vs room vs location vs ops event from which socket/channel it arrived on), and
-2. **The fields in the payload** — for trip frames, the `status` field is the state signal (`requested` → `accepted` → `in_progress` → `completed`/`cancelled`).
+**Frame format — IMPORTANT.** Each message is a **JSON text frame containing the event payload object directly** (no outer envelope). The `beep.*` action name (e.g. `beep.trip.accepted`) is the audit/internal name and is **NOT** sent on the wire. **The most common rider-facing frames now carry an additive inline `event` discriminator** so you can switch on it instead of sniffing fields: trip lifecycle frames carry `"event": "trip_update"`, captain-location frames carry `"event": "captain_location"`, and zone cache-invalidation frames carry `"event": "beep.zone.updated"`. The field is **additive and optional** — not every channel/frame has one yet (room and admin-ops frames still rely on field-presence), so build tolerant handlers. The client correlates by:
+1. **The `event` field when present** (prefer this), then
+2. **The channel it subscribed to** (you already know if a frame is a trip vs room vs location vs ops event from which socket/channel it arrived on), and
+3. **The fields in the payload** — for trip frames, the `status` field is the state signal (`requested` → `accepted` → `in_progress` → `completed`/`cancelled`).
 
 Per-channel frame shapes (the keys actually published today):
 
 | Channel | Typical frame payload (JSON object) | Notes |
 |-|-|-|
-| `rt:trip:{id}` | `{ "id", "rider_id", "status", "fare_iqd", "distance_km" }` | Trip lifecycle. Watch `status` for transitions. Some transitions publish a fuller object; treat extra keys as additive. |
-| `rt:trip:{id}` (location during active trip) | a captain-location object: `{ "captain_id", "longitude", "latitude", "last_ping_at", ... }` | The captain's GPS pings are forwarded onto the active trip's channel so the rider can animate the car. Distinguish from a lifecycle frame by the presence of `longitude`/`latitude`. |
+| `rt:trip:{id}` | `{ "event": "trip_update", "id", "rider_id", "captain_id", "status", "fare_per_rider_iqd", "distance_per_rider_km", ... }` | Trip lifecycle. Carries `"event": "trip_update"`. Watch `status` for transitions. Treat extra keys as additive. |
+| `rt:trip:{id}` (location during active trip) | a captain-location object: `{ "event": "captain_location", "captain_id", "longitude", "latitude", "last_ping_at", ... }` | The captain's GPS pings are forwarded onto the active trip's channel so the rider can animate the car. Carries `"event": "captain_location"` (also distinguishable by `longitude`/`latitude`). |
 | `rt:captain:{id}` | offer broadcast: `{ "trip_id", "captain_id", "pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng", "fare_iqd", "distance_km" }` | A dispatch offer to this captain. The Captain App should also rely on the durable FCM push (below) for backgrounded delivery. |
-| `rt:captain:{id}:location` | `{ "captain_id", "longitude", "latitude", "last_ping_at", "online" }` | The captain's own location echo (used by `/ws/captain`). |
+| `rt:captain:{id}:location` | `{ "event": "captain_location", "captain_id", "longitude", "latitude", "last_ping_at", "online" }` | The captain's own location echo (used by `/ws/captain`). Carries `"event": "captain_location"`. |
 | `rt:room:{id}` | room object: `{ "id"/"room_id", "zone_id", "room_type", "status", "rider_count", "max_riders", ... }` | Abriyah room lifecycle (`open`/`locked`/`dispatched`/`expired`). |
 | `rt:admin:ops` | mixed ops events (trip/room/city/location), each a plain object | Admin live map / ops feed. Admins infer kind from the fields present. |
-| `rt:zone:{id}` | `{ "event": "beep.zone.updated", "zone_id", ... }` | **The one channel that DOES carry an inline `event` field.** Cache-invalidation signal — refresh cached zone pricing within ~30s. |
+| `rt:zone:{id}` | `{ "event": "beep.zone.updated", "zone_id", ... }` | Carries an inline `event`. Cache-invalidation signal — refresh cached zone pricing within ~30s. |
 
-> Design note for clients: because frames (except `rt:zone:*`) don't carry an event-type discriminator, build your handlers around **(channel, payload fields)**, not a `type` switch. The backend may add an envelope/`event` field in a future version; tolerate unknown extra keys. If your team needs an explicit per-frame event type, raise it with the backend team — it's a small additive change.
+> Design note for clients: the high-traffic rider frames (`trip_update`, `captain_location`) and `rt:zone:*` now carry an inline **`event`** discriminator — prefer switching on it. Room (`rt:room:*`) and admin-ops (`rt:admin:ops`) frames don't yet, so keep a **(channel, payload fields)** fallback for those, and always tolerate unknown extra keys. If your team needs `event` on the remaining channels too, raise it with the backend team — it's a small additive change.
 
 **Client→server frames are ignored.** The server does not accept commands over the socket; it only reads frames to detect disconnect/close. All actions are REST calls. Send a WS `Close` to disconnect cleanly.
 
@@ -138,26 +143,28 @@ The message the device receives is a standard FCM HTTP v1 message:
 ### Customer App
 | Capability | Phase | Key endpoints |
 |-|-|-|
-| Onboarding (OTP) | 1 **Live** | `POST /api/auth/otp/send`, `POST /api/auth/otp/verify`; `GET/PATCH /api/riders/me` |
+| Onboarding (phone + password) | 1 **Live** | **Register:** `POST /api/auth/otp/send` → `POST /api/auth/otp/verify` `{purpose:"register"}` → `{ticket}` → `POST /api/auth/register` `{ticket,phone,password,name?}` → token. **Thereafter:** `POST /api/auth/login` `{phone,password}`. **Forgot password:** `otp/send` → `otp/verify` `{purpose:"reset"}` → `POST /api/auth/password/reset` `{ticket,phone,new_password}`. Profile: `GET/PATCH /api/riders/me`. Avatar upload: `POST /api/riders/me/photo/upload-url` → PUT to storage → `PATCH /api/riders/me` `{photo_url:"<object_key>"}` (see [Rider profile photo upload](#rider-profile-photo-upload)) |
 | Service-area lookup (zones) | 2 **Live** | `GET /api/zones` (active only), `GET /api/zones/{id}` — polygons as WKT |
 | Regular booking | 5 **Live** | `GET /api/trips/estimate` (public), `POST /api/trips` (regular), `GET /api/trips/{id}`, `POST /api/trips/{id}/cancel`. **On completion the fare is charged to the rider wallet** (best-effort: a debit failure is logged + recorded as a `failed` ledger row but never blocks completion). **Cancelling after a captain has accepted** incurs a flat penalty (admin-tunable `trip.cancellation_penalty_iqd`, default 2000 IQD); cancelling while still `requested`/`matched` is free. Card capture is still MockGateway (real PSP at v2) |
-| Abriyah booking + waiting room | 6 **Live** | `POST /api/abriyah/validate-pins`, `POST /api/abriyah/join`, `GET /api/abriyah/rooms/{id}`, `DELETE /api/abriyah/leave` (+ `rt:room:{id}` events) |
-| Live trip | 5 + 7 **Live** | `GET /api/trips/{id}`; trip events on `rt:trip:{id}` live over `GET /ws/subscribe?channel=rt:trip:{id}` (captain location pings forwarded onto the active trip's channel) |
+| Abriyah booking + waiting room | 6 **Live** | `POST /api/abriyah/validate-pins` (now returns `dropoff_zone_id`/`pickup_zone_id`, replacing the old `zone_id`; request `zone_id` deprecated/ignored), `POST /api/abriyah/join` (**request body UNCHANGED**), `GET /api/abriyah/rooms/{id}`, `DELETE /api/abriyah/leave` (+ `rt:room:{id}` events). **Matching is now by dropoff zone** with cross-zone pickup support — see [Abriyah Rooms](#abriyah-rooms-phase-6--live) |
+| Live trip | 5 + 7 **Live** | `GET /api/trips/{id}`; **captain card:** `GET /api/rider/trips/{id}/captain` → `{name, car_make, car_model, car_color, car_plate, avg_rating, trip_count}` (rider must own the trip; **no phone** — use the proxy endpoint for calls); trip events on `rt:trip:{id}` live over `GET /ws/subscribe?channel=rt:trip:{id}` (captain location pings forwarded onto the active trip's channel) |
 | Rate | 5 **Live** | `POST /api/trips/{id}/ratings` (editable 7 days via `PUT /api/trips/{id}/ratings/{rating_id}`) |
 | Trip history | 5 **Live** | `GET /api/trips?rider_id={id}` |
 | Wallet / pay (payment-ready) | 10 **Live** | `GET /api/me/wallet` (auto-provisions), `POST /api/me/wallet/topup` `{amount_iqd, payment_method_id?}`, `GET/POST /api/me/payment-methods`, `PUT /api/me/payment-methods/{id}/default`, `DELETE /api/me/payment-methods/{id}`, `GET /api/me/transactions`. MockGateway (no real PSP yet); `gateway_token` never returned |
-| Scheduled / multi-stop | 11 **Live** | `GET/POST /api/rider/scheduled-trips`, `GET/PUT /api/rider/scheduled-trips/{id}`, `POST .../{id}/cancel`; `GET/POST /api/rider/trips/{id}/stops` (max 3), `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach` |
+| Card payment (QiCard checkout) | QiCard **Live** | `POST /api/payments/checkout` `{purpose, amount_iqd, target_id?}` → `{order_id, payment_id?, form_url?, status, paid, sandbox}`. In sandbox auto-confirm `status:"paid"`/`paid:true` immediately; in live open `form_url` then poll `GET /api/payments/orders/{id}` (or `POST .../refresh`). `GET /api/payments/orders`. `purpose`: `wallet_topup`/`trip_fare`/`daily_fee`. See [QiCard checkout](#qicard-checkout-hosted-form-card-payment--live) |
+| Scheduled / multi-stop | 12 **Live** | `GET/POST /api/rider/scheduled-trips`, `GET/PUT /api/rider/scheduled-trips/{id}`, `POST .../{id}/cancel`; `GET/POST /api/rider/trips/{id}/stops` (max 3), **`GET /api/captain/trips/{trip_id}/stops`** (assigned-captain list — enumerate `stop_id`s), `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach` |
 | Masked numbers | 11 **Live** | `GET /api/rider/trips/{id}/proxy` + `GET /api/captain/trips/{id}/proxy` → masked `ProxySession` (lazy-allocated; real numbers never exposed) |
+| Promo codes (discounts) | feature/promo-codes **Live** | `POST /api/rider/promo/validate` (pre-check, never HTTP-errors); `GET /api/trips/estimate` now returns `discount_iqd` + `final_fare_iqd`; `POST /api/trips` now accepts optional `promo_code` (400 on invalid/exhausted/already-used); `POST /api/trips/{id}/cancel` releases any reserved promo. See [Promo codes / discounts](#promo-codes--discounts--live) |
 
 ### Captain App
 | Capability | Phase | Key endpoints |
 |-|-|-|
-| Onboarding (OTP login) | 1+3 **Live** | `POST /api/auth/otp/send` then `POST /api/auth/captain/otp/verify` `{phone,code}` → captain token (approved only; pending → 403, unknown → 404). Register device for push: `POST /api/me/fcm-token` `{fcm_token}` |
-| Registration + documents | 3 **Live** | `POST /api/captains/register` (public); presigned upload `POST /api/captains/{id}/documents/upload-url` → PUT to storage → `POST /api/captains/{id}/documents` `{doc_type, object_key}`; `GET /api/captains/{id}/documents`; `GET /api/captains/{id}/documents/completeness`. **5 required document types** before an admin can approve: `driver_license`, `car_registration`, `captain_selfie`, `national_id_front`, `national_id_back`. See [Captain document upload](#captain-document-upload-important-for-the-captain-app) |
-| Approval pending | 3 **Live** | `GET /api/captains/{id}` (status: pending/approved/rejected/blocked) |
+| Onboarding (phone + password) | 1+3 **Live** | **Register:** `POST /api/auth/otp/send` → `POST /api/auth/otp/verify` `{purpose:"register"}` → `{ticket}` → `POST /api/captains/register` `{ticket,...,password}` (pending) → admin approves. **Login:** `POST /api/auth/captain/login` `{phone,password}` → captain token. **Issued for `approved` AND `pending`** (so a new captain can onboard); `rejected`/`blocked` → 403, unknown phone → 404, lockout → 429. A `pending` token is scoped to document upload + own-status polling only. Forgot password: `otp/send` → `otp/verify` `{purpose:"reset"}` → `POST /api/auth/password/reset`. Register device for push: `POST /api/me/fcm-token` `{fcm_token}` |
+| Registration + documents | 3 **Live** | `POST /api/captains/register` (public; requires a verified `register` ticket + `password` — run `otp/send` → `otp/verify` `{purpose:"register"}` first) → **201 `{ ...captain, token }`: the onboarding captain JWT is in the response body, use it directly to upload docs** (no separate login needed; `auth/captain/login` still issues a pending token on relaunch). Presigned upload `POST /api/captains/{id}/documents/upload-url` → PUT to storage → `POST /api/captains/{id}/documents` `{doc_type, object_key}`; `GET /api/captains/{id}/documents`; `GET /api/captains/{id}/documents/completeness`. **A captain may only touch its OWN id (`sub`==`{id}`), else 403; admins any.** **5 required document types** before an admin can approve: `driver_license`, `car_registration`, `captain_selfie`, `national_id_front`, `national_id_back`. See [Captain document upload](#captain-document-upload-important-for-the-captain-app) |
+| Approval pending | 3 **Live** | `GET /api/captains/{id}` (own id only, else 403; status: pending/approved/rejected/blocked/archived) — poll until `approved`. Operational endpoints (online, queue, trip lifecycle, location, proxy) return **403** until approved |
 | Activate Today | 4 + 10 **Live** | `GET/POST /api/captain/activation/today` (gate status / activate). **P10:** POST now charges the captain wallet — success → 201 `status:"paid"` + `collected_at`; insufficient funds → **402** `payment required: Insufficient wallet balance` + row `status:"failed"`/`charge_error` (CTA persists; top up then retry) |
 | Online toggle + location | 7 **Live** | `PUT /api/captain/online` `{online}` (gated by today's activation — 403 if not activated), `POST /api/captain/location` `{longitude,latitude}` ping, `POST /api/captain/location/flush` `{pings:[...]}` (last wins), `GET /api/captain/location`; live trip stream over `GET /ws/captain?token=` |
-| Trip queue + accept | 5 + 7 **Live**; room accept 6 **Live** | `GET /api/captain/trip-queue` (pending regular trips + open rooms; **women-only rooms hidden unless captain gender = f**); `POST /api/trips/{id}/accept`; `POST /api/abriyah/rooms/{id}/accept` (room → dispatched), `GET /api/abriyah/rooms/{id}/members`; offers fan out live on `rt:captain:{id}` (WS) + a durable `new_trip_in_queue` FCM push |
+| Trip queue + accept | 5 + 7 **Live**; room accept 6 **Live** | `GET /api/captain/trip-queue` (pending regular trips + open rooms; **women-only rooms hidden unless captain gender = f**); `POST /api/trips/{id}/accept`; `POST /api/abriyah/rooms/{id}/accept` (room → dispatched), `GET /api/abriyah/rooms/{id}/members` (**response now wraps the roster with `dropoff_zone` + per-pickup-zone `pickup_breakdown`**); offers fan out live on `rt:captain:{id}` (WS) + a durable `new_trip_in_queue` FCM push |
 | Live trip legs | 5 **Live** | `POST /api/trips/{id}/{arrive,start,complete}` |
 | Earnings | 5 **Live** | `GET /api/captains/{id}/earnings?period=today\|week\|month` (gross minus daily fee); `GET /api/captains/{id}/earnings/history` |
 
@@ -165,21 +172,22 @@ The message the device receives is a standard FCM HTTP v1 message:
 | Capability | Phase | Key endpoints |
 |-|-|-|
 | Dashboard (KPIs + Needs Action) | 8 **Live** | `GET /api/admin/dashboard/kpis`, `.../highlights`, `.../needs-action/{counts,pending-captains,flagged-trips,expired-rooms,stuck-items}`, `POST .../needs-action/dismiss` |
-| Operations (live map + rooms + force) | 8 **Live** | `GET /api/admin/operations/{trips,rooms}` (filters); `POST /api/admin/operations/trips/{id}/force-cancel`, `.../rooms/{id}/{force-dispatch,force-expire}` (super_admin) |
+| Operations (live map + rooms + force) | 8 **Live** | `GET /api/admin/operations/{trips,rooms}` (filters); `POST /api/admin/operations/trips/{id}/force-cancel`, `.../rooms/{id}/{force-dispatch,force-expire}` (super_admin); **Map Replay:** `GET /api/admin/trips/{id}/track` → ordered `[{latitude,longitude,recorded_at}]` breadcrumb of the driven route (empty `[]` for trips with no recorded pings / pre-tracking trips) |
 | Live Rooms (Abriyah Kanban) | 6 **Live** (force actions: 8 **Live**) | `GET /api/admin/rooms?status=&zone_id=`, `GET /api/admin/rooms/{id}` (room + members); force-dispatch/expire via Operations |
-| Cities + Zones (CRUD + polygon + pricing + import) | 2 **Live**; city activate 11 **Live** | `GET/POST/PUT /api/admin/cities[/{id}]`, `POST .../cities/{id}/{activate,deactivate}` (P11, idempotent → 409 on no-op); `GET/POST/PUT /api/admin/zones[/{id}]`, `POST .../zones/{id}/{archive,restore}`, `PUT .../zones/{id}/pricing`, `POST .../zones/import`, `POST .../zones/validate-polygon` |
+| Cities + Zones (CRUD + polygon + pricing + import) | 2 **Live**; city activate 11 **Live** | `GET/POST/PUT /api/admin/cities[/{id}]`, `POST .../cities/{id}/{activate,deactivate}` (P11, idempotent → 409 on no-op); `GET/POST/PUT /api/admin/zones[/{id}]`, `POST .../zones/{id}/{archive,restore}`, `PUT .../zones/{id}/pricing`, `POST .../zones/import`, `POST .../zones/validate-polygon`; **`GET /api/admin/zones/{id}/history` → `ActivityHighlight[]`** (Zone Detail History tab — pricing/update/archive events) |
 | Scheduled trips (admin view) | 11 **Live** | `GET /api/admin/scheduled-trips?status=&rider_id=&limit=&offset=` |
-| Captains (approval queue + lifecycle + import) | 3 **Live** | `GET /api/captains`, `GET /api/captains/pending`; `POST /api/captains/{id}/{approve,reject}` (admin), `.../{block,unblock,reconsider}` (super_admin); `POST /api/captains/bulk-import` |
+| Captains (approval queue + lifecycle + import) | 3 **Live** | `GET /api/captains` (excludes archived unless `?status=archived`), `GET /api/captains/pending`; `POST /api/captains/{id}/{approve,reject}` (admin), `.../{block,unblock,reconsider}` (super_admin); **`DELETE /api/captains/{id}` (super_admin) — soft-delete/archive**; `POST /api/captains/bulk-import`; **`GET /api/admin/captains/{id}/history` → `ActivityHighlight[]`** (Captain Detail History tab — registration/approval/block events) |
 | Daily activation log + fee waiver | 4 **Live** | `GET /api/admin/activations` (filter + fee sum), `GET /api/admin/activations/{id}`; `POST /api/admin/activations/{id}/waive` (super_admin) |
 | Customers (directory + detail + block) | 8 **Live** | `GET /api/admin/customers` (phone/blocked filter, paged), `GET .../{id}`, `GET .../{id}/history`; `POST .../{id}/{block,unblock}`, `PUT .../{id}/gender` (super_admin) |
 | Admin login + admin users | 1 + 8 **Live** | `POST /api/auth/admin/login`; `GET/POST /api/admin/users` (list/invite, P8), `POST .../{id}/{resend-invite,disable,enable}`, `PUT .../{id}/role` (P8, super_admin); `PATCH/DELETE /api/admin/users/{id}` (name edit/delete, P1) |
-| Setup (config singletons) | 8 **Live** | `GET /api/admin/settings`, `GET/PUT .../settings/{key}` (PUT super_admin; range-validated; non-retroactive) |
-| Reports (7 reports + CSV) | 9 **Live** | `GET /api/reports/{trips/volume,trips/abriyah-performance,trips/cancellations,captains/leaderboard,captains/daily-activation,financial/revenue-by-zone,financial/activation-fees}`; every report takes `?period=&from=&to=` (+ optional `zone_id`/`city_id`/`limit`/`room_type`) and `&export=csv`; role-tiered (see Reports section) |
-| Payments (wallet/refund console) | 10 **Live** | `GET /api/admin/wallets/{owner_id}?owner_type=`, `POST .../wallets/{owner_id}/topup` (admin credit, no charge); `GET /api/admin/transactions` (filters), `GET .../transactions/{id}`; `GET /api/admin/refunds` (status filter), `GET .../refunds/{id}`, `POST .../refunds` (submit), `POST .../refunds/{id}/{approve,reject}`; `GET /api/reports/financial/collected?from=&to=` (collected revenue, finance/super_admin) |
+| Setup (config singletons) | 8 **Live** | `GET /api/admin/settings`, `GET/PUT .../settings/{key}` (PUT super_admin; range-validated; non-retroactive). Each `Setting` now carries **`read_only: bool`** — pre-disable read-only rows (`general.timezone`, `general.currency`) instead of failing on save |
+| Reports (7 reports + CSV) | 9 **Live** | `GET /api/reports/{trips/volume,trips/abriyah-performance,trips/cancellations,captains/leaderboard,captains/daily-activation,financial/revenue-by-zone,financial/activation-fees}`; every report takes `?period=&from=&to=` (+ optional `zone_id`/`city_id`/`limit`/`room_type`) and `&export=csv`; role-tiered (see Reports section). **Drill-through ready:** every report row carries its grouping entity id + name — `zone_id`/`zone_name` (volume, abriyah-performance, cancellations, revenue-by-zone), `captain_id`/`captain_name` (leaderboard), `city_id`/`city_name` (daily-activation, activation-fees) — deep-link straight to the entity Detail page |
+| Payments (wallet/refund console) | 10 **Live** | `GET /api/admin/wallets/{owner_id}?owner_type=`, `POST .../wallets/{owner_id}/topup` (admin credit, no charge; **`owner_type` now validated → clean 400, not 500, on a bad value**); `GET /api/admin/transactions` (filters), `GET .../transactions/{id}`; `GET /api/admin/refunds` (status filter), `GET .../refunds/{id}`, `POST .../refunds` (submit), `POST .../refunds/{id}/{approve,reject}`; `GET /api/reports/financial/collected?from=&to=` (collected revenue, finance/super_admin) |
 | Bulk actions (approve / archive / export) | 12 **Live** | `POST /api/admin/bulk/captains/approve` `{captain_ids[],note?}` (max 100), `POST .../bulk/zones/archive` `{zone_ids[]}` (max 50), `POST .../bulk/trips/export` (filterable, ≤10k rows). All return per-row outcomes; see Phase 12 section |
 | Search Command Center (⌘+K) | 12 **Live** | `GET /api/admin/search?q=` → up to 50 merged results across captains/users/trips/zones/rooms, each with a deep-link `url_path` |
-| App preferences (per-admin UI toggles) | 12 **Live** | `GET /api/admin/me/preferences`, `PUT .../me/preferences` `{pref_key,pref_value}`, `DELETE .../me/preferences/{pref_key}` (204). Known keys: `operations.live_rooms.view` (`table`\|`kanban`), `captains.pending.view` (`table`\|`inbox`) |
+| App preferences (per-admin UI toggles) | 12 **Live** | `GET /api/admin/me/preferences`, `PUT .../me/preferences` `{pref_key,pref_value}`, `DELETE .../me/preferences/{pref_key}` (204). **`GET /api/admin/me/preferences/schema`** → `[{pref_key, allowed_values[]}]` — read the allow-list from the backend instead of hardcoding it. Known keys: `operations.live_rooms.view` (`table`\|`kanban`), `captains.pending.view` (`table`\|`inbox`) |
 | Bulk actions + search | 12 | bulk approve/archive/export; search registry |
+| Promo code admin CRUD | feature/promo-codes **Live** | `POST /api/admin/promo-codes` (201, **super_admin**), `PATCH /api/admin/promo-codes/{id}` (200, **super_admin**), `GET /api/admin/promo-codes` (200 array, **any admin role**). See [Promo codes / discounts](#promo-codes--discounts--live) |
 
 ---
 
@@ -198,15 +206,17 @@ PostGIS-backed cities and zones. Admin endpoints require an **admin** Bearer tok
 
 ## Captain Lifecycle (Phase 3 — Live)
 
-State machine: `pending → approved | rejected`; `approved ↔ blocked`; `rejected → pending` (reconsider). All transitions are guarded — an action from the wrong state returns 400 with a clear message.
+State machine: `pending → approved | rejected`; `approved ↔ blocked`; `rejected → pending` (reconsider); **any non-archived status → `archived`** (delete/archive, terminal). All transitions are guarded — an action from the wrong state returns 400 with a clear message.
 
-- **Self-registration (public, no auth):** `POST /api/captains/register` `{ phone, name, name_ar, gender ("m"|"f"), car_make, car_model, car_plate, city_id, car_color?, national_id? }` → 201 `Captain` (status `pending`). Phone and plate are globally unique (409 on dup). Gender is locked after creation.
+- **Self-registration (public):** `POST /api/captains/register` `{ ticket, phone, password, name, name_ar, gender ("m"|"f"), car_make, car_model, car_plate, city_id, car_color?, national_id? }` → 201 `Captain` (status `pending`). Requires a **verified `register` ticket** (run `otp/send` → `otp/verify` `{purpose:"register"}` first to prove the phone) and a `password`. Phone and plate are globally unique (409 on dup); invalid/expired ticket → 401; bad gender → 400; unknown `city_id` → 404. Gender is locked after creation. Still requires admin approval before operational use.
 - **Documents (authenticated):** **5 required types** — `driver_license`, `car_registration`, `captain_selfie`, `national_id_front`, `national_id_back`. `POST /api/captains/{id}/documents` `{ doc_type, url }` upserts (re-upload replaces). `GET .../documents` lists; `GET .../documents/completeness` → `{ complete, uploaded[], missing[] }`. The client uploads the file elsewhere and submits the resulting `url`.
 - **Approval (admin):** `POST /api/captains/{id}/approve` requires **all 5 documents** (else 400). `POST .../reject` `{ reason, comment? }` where `reason ∈ {documents_invalid, vehicle_unfit, identity_mismatch, existing_account, other}`.
 - **Block/unblock/reconsider (super_admin only):** `POST .../block` `{ reason }` (only from approved; force-cancels active trips at Phase 5 and signs the captain out), `.../unblock` (→ approved), `.../reconsider` (rejected → pending).
+- **Delete / archive (super_admin only):** `DELETE /api/captains/{id}` → 200 `Captain` (status `archived`). **Soft-delete** — the captain is referenced by trips/ratings/rooms/reports, so the row is not removed; it is moved to the terminal `archived` status (stamps `archived_at`/`archived_by`) and its history is preserved. Effects: disappears from the default `GET /api/captains` list (still retrievable with `?status=archived`), can no longer log in (login admits only `approved`/`pending`), and in-flight trips are force-cancelled (reason `captain_archived`). Already-archived → 400 (pre-check) / 409 (concurrent). Not found → 404.
+- **Re-registration after delete (since 2026-06-16):** a deleted captain's **phone and car plate are freed** — the same person can register again via `POST /api/captains/register` (or bulk-import) with the same phone/plate. Re-registration creates a **brand-new captain** (new `id`, status `pending`, fresh onboarding); the archived row stays as an audit record. Uniqueness is now enforced only among non-archived captains (partial unique indexes), so phone/plate collide only with a still-active captain.
 - **Queues (admin):** `GET /api/captains` filters `?status=&city_id=&gender=&page=&per_page=` and returns `{ items: CaptainRow[], total, page, per_page }` (each row has `doc_count`). `GET /api/captains/pending` is the review queue, oldest-first.
 - **Bulk import (admin):** `POST /api/captains/bulk-import` `{ rows: [...] }` → `{ accepted, rejected, errors: [{ row (1-based), reason }] }`. Dedups phone and plate within the batch and against the DB; partial-commit.
-- **Events:** `beep.captain.{registered, approved, rejected, blocked}` are published (audit + `rt:captain:*`). FCM pushes are enqueued for approve/reject/block (delivered at Phase 7).
+- **Events:** `beep.captain.{registered, approved, rejected, blocked, archived}` are published (audit + `rt:captain:*`). FCM pushes are enqueued for approve/reject/block/archive (delivered at Phase 7).
 - **Captain object** key fields: `id, phone, name, name_ar, gender, car_make, car_model, car_plate, city_id, status, rejection_reason?, blocked_reason?, approved_by?, approved_at?, avg_rating, trip_count, registered_at, version`. `avg_rating`/`trip_count` stay 0 until Phase 5.
 
 ## Daily Activation Gate (Phase 4 — Live)
@@ -225,28 +235,40 @@ A captain must "activate" once per calendar day (Asia/Baghdad) before they can g
 
 The full regular-trip lifecycle: `requested → accepted → in_progress → completed | cancelled`. Every transition is guarded — an action from the wrong state returns `400` with a clear message; concurrent updates lose a `409` (optimistic lock on `version`). Money is integer IQD. Identity comes from the JWT (`role` + `sub`): a **rider** token's `sub` is the user id, a **captain** token's `sub` is the captain id, admin roles act as `admin`.
 
-- **Fare estimate (public, no auth):** `GET /api/trips/estimate?pickup_lat=&pickup_lng=&dropoff_lat=&dropoff_lng=&zone_id=` → `200 { fare_iqd, distance_km, base_fare_iqd, currency }`. Fare = `base_fare_iqd + round(distance_km × per_km)`; `per_km` is the zone's `abriyah_per_km_iqd` when `zone_id` is given and positive, else the city default. Distance is haversine km. Defaults: base 1000 IQD, per-km 500 IQD (Phase 8 moves these to settings).
-- **Request (rider):** `POST /api/trips` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, zone_id? }` → `201 Trip` (status `requested`, fare/distance computed, `base_fare_iqd` captured immutably). A rider with an active (non-terminal) trip gets `409`. Dispatch fans the offer out to eligible captains on `rt:captain:{id}` and publishes `beep.trip.requested` on `rt:trip:{id}`.
+- **Fare estimate (public, no auth):** `GET /api/trips/estimate?pickup_lat=&pickup_lng=&dropoff_lat=&dropoff_lng=&zone_id=&promo_code=` → `200 { fare_iqd, distance_km, base_fare_iqd, currency, discount_iqd, final_fare_iqd }`. Fare = `base_fare_iqd + round(distance_km × per_km)`; `per_km` is the zone's `abriyah_per_km_iqd` when `zone_id` is given and positive, else the city default. Distance is haversine km. Defaults: base 1000 IQD, per-km 500 IQD (Phase 8 moves these to settings). **Promo code (optional):** when `promo_code` is supplied and the code exists/active/within-window/under-global-cap, `discount_iqd` is the potential discount and `final_fare_iqd = max(0, fare_iqd - discount_iqd)`; an invalid/missing code returns `discount_iqd: 0` and `final_fare_iqd == fare_iqd` (never errors). This is a **potential** estimate only — the unauthenticated endpoint cannot check per-rider-once; `POST /api/trips` enforces all limits atomically.
+- **Request (rider):** `POST /api/trips` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, zone_id?, promo_code? }` → `201 Trip` (status `requested`, fare/distance computed, `base_fare_iqd` captured immutably). **Promo code (optional):** if `promo_code` is supplied and valid, the trip is created with the **already-discounted `fare_iqd`** (net of the discount); `promo_code_id` and `discount_iqd` are set on the Trip object and the redemption is atomically reserved. If the code is invalid, expired, inactive, exhausted, or already used by this rider → **400** `{ "error": "..." }` and the trip is NOT created. Omitting `promo_code` behaves exactly as before. A rider with an active (non-terminal) trip gets `409`. Dispatch fans the offer out to eligible captains on `rt:captain:{id}` and publishes `beep.trip.requested` on `rt:trip:{id}`.
 - **Accept (captain):** `POST /api/trips/{id}/accept` → `200 Trip` (status `accepted`, `captain_id`/`accepted_at` set). Works from `requested` (regular) **and** `matched` (Abriyah, Phase 6) — the handler routes through the state machine. A captain with an active trip gets `409`; a stale accept (someone already took it) gets `409`.
 - **Arrive / Start / Complete (captain):** `POST /api/trips/{id}/arrive` (cue only, no status change), `POST .../start` (`accepted → in_progress`), `POST .../complete` (`in_progress → completed`). Complete writes the per-rider breakdown `fare_per_rider_iqd` / `distance_per_rider_km` as `{ rider_id: value }` (single entry for a regular trip; Phase 6 fills multiple for Abriyah). Events `beep.trip.{accepted,arrived,started,completed}`.
-- **Cancel (rider/captain/admin):** `POST /api/trips/{id}/cancel` `{ reason, comment? }`. Actor derived from the token role. Allowed transitions: rider/captain from `requested`/`accepted`; **only admin** from `in_progress`. Invalid actor/state → `400`. `reason ∈ {changed_mind, wait_too_long, wrong_pickup, captain_late, safety, system_timeout, captain_blocked, other}`. The cascade notifies the other party, re-dispatches if a captain bailed on an accepted trip, and publishes `beep.trip.cancelled`. Blocking a captain (Phase 3) force-cancels their active trip here with `reason=captain_blocked`.
+- **Cancel (rider/captain/admin):** `POST /api/trips/{id}/cancel` `{ reason, comment? }`. Actor derived from the token role. Allowed transitions: rider/captain from `requested`/`accepted`; **only admin** from `in_progress`. Invalid actor/state → `400`. `reason ∈ {changed_mind, wait_too_long, wrong_pickup, captain_late, safety, system_timeout, captain_blocked, other}`. The cascade notifies the other party, re-dispatches if a captain bailed on an accepted trip, and publishes `beep.trip.cancelled`. Blocking a captain (Phase 3) force-cancels their active trip here with `reason=captain_blocked`. **Promo release:** if the trip carried a promo code, the reservation is released on cancel (best-effort) so the rider can reuse the code on a subsequent booking.
 - **Ratings:** after completion, `POST /api/trips/{id}/ratings` `{ stars (1-5), comment? }` → `201 Rating`. A rider rates the captain and vice-versa; the ratee is derived from the trip. One rating per rater per trip (`409` on repeat); non-participants get `403`; rating an incomplete trip → `400`. Edit within **7 days** via `PUT /api/trips/{id}/ratings/{rating_id}` (after the lock cron stamps `locked_at`, edits → `400`). `GET /api/trips/{id}/ratings` lists them.
 - **List / detail:** `GET /api/trips?rider_id=&captain_id=&status=&page=&per_page=` → `{ items: Trip[], total, page, per_page }`. `GET /api/trips/{id}` → `Trip`.
 - **Earnings (captain):** `GET /api/captains/{id}/earnings?period=today|week|month` → `{ gross_iqd, activation_fee_iqd, net_iqd, trip_count, period }` (net = gross − daily activation fee; full per-day fee accounting lands in P10). `GET /api/captains/{id}/earnings/history?period=…` → `{ items: [{ trip_id, fare_iqd, trip_type, completed_at }] }`.
-- **Trip object** key fields: `id, trip_type ("regular"|"abriyah"), status, rider_id, captain_id?, zone_id?, room_id?, pickup_lat/lng, dropoff_lat/lng, fare_iqd, distance_km, base_fare_iqd, currency, fare_per_rider_iqd?, distance_per_rider_km?, cancellation_reason?, cancelled_by?, requested_at, accepted_at?, started_at?, completed_at?, cancelled_at?, version`.
+- **Trip object** key fields: `id, trip_type ("regular"|"abriyah"), status, rider_id, captain_id?, zone_id?, room_id?, pickup_lat/lng, dropoff_lat/lng, fare_iqd, distance_km, base_fare_iqd, currency, fare_per_rider_iqd?, distance_per_rider_km?, promo_code_id?, discount_iqd?, cancellation_reason?, cancelled_by?, requested_at, accepted_at?, started_at?, completed_at?, cancelled_at?, version`. When a promo was applied, `fare_iqd` is already net of the discount; `discount_iqd` is the amount deducted; `promo_code_id` is the UUID of the applied code.
 - **WS channels:** `rt:trip:{id}` (rider + captain follow trip state) and `rt:captain:{id}` (offer push). The real-time **subscriber/push loop lands in Phase 7**; Phase 5 already publishes every event to Redis + writes the audit trail.
 - **Dispatch at v1 is a degraded stub:** offers fan out to all approved + activated-today captains (no geo ranking yet — `captain_locations` + nearest-captain ordering land in Phase 7). The first captain to `accept` wins (optimistic lock). There is no auto-timeout cancel at v1 (it would race the accept); Phase 7 adds the real per-captain 15s window.
 
 ## Abriyah Rooms (Phase 6 — Live)
 
-Abriyah is the zone-shared-ride differentiator: riders heading to the **same dropoff (destination) zone** pool into a **room**; one captain takes the whole room. Rooms are keyed by the **dropoff** zone — pickups may be in any active service zone, so **cross-zone trips are supported** (pickup zone ≠ dropoff zone is fine). Each rider gets an **independent per-rider fare** (`base + round(distance_km × per_km)`) priced from **their own pickup zone** (falls back to the standard fare when the pickup zone isn't Abriyah-priced) — riders do not split a single fare. Women-only eligibility is determined by the **dropoff** zone's setting. Room lifecycle: `open → locked → dispatched | expired`.
+Abriyah is the zone-shared-ride differentiator: riders going to the **same dropoff (destination) zone** pool into a **room**; one captain takes the whole room. **Matching is keyed by the DROPOFF zone, not the pickup zone** (changed). Pickup may be in **any active zone** (regular or Abriyah) and **cross-zone trips** (pickup zone ≠ dropoff zone) are now supported; only the **dropoff** must be in an Abriyah-enabled zone. Each rider gets an **independent per-rider fare**, now priced from the rider's **pickup zone** (`base + round(distance_km × per_km)` using that zone's Abriyah pricing if the pickup zone is Abriyah-enabled, else the global regular-fare settings) — riders do not split a single fare. Room lifecycle: `open → locked → dispatched | expired`.
 
-- **Validate pins (rider, per-drag):** `POST /api/abriyah/validate-pins` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng }` → `200 { valid, dropoff_zone_id?, pickup_zone_id?, message }`. The two ends resolve **independently**: `valid` is true only when the **dropoff** is in an Abriyah-enabled zone AND the **pickup** is in some active zone. Either id may be present even when `valid:false` (e.g. dropoff resolves but pickup doesn't). The request still accepts a `zone_id` but it is **deprecated/ignored**. **Never an HTTP error** — `valid:false` carries a human message. Call on every pin drag for inline feedback before joining.
-- **Join (rider):** `POST /api/abriyah/join` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, room_type ("mixed"|"women_only") }` (request body unchanged) → `201 { room, member, trip_id, fare_iqd, distance_km }`. The backend detects the Abriyah zone from the **dropoff**, keys the room by it (pickup may be in any active zone), prices the per-rider fare from the **pickup** zone, finds an open non-full room of that type in the dropoff zone or opens a new one, adds the rider, and creates a **matched** Abriyah trip. `room.zone_id` is the **dropoff** zone. Errors (all `400` unless noted): dropoff not in an Abriyah zone; pickup not in any active service zone; invalid `room_type`; women-only not allowed in the **dropoff** zone; women-only by a non-female rider → `403`; rider already in a room → `409`.
+- **Validate pins (per-drag, PUBLIC — no auth):** `POST /api/abriyah/validate-pins` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, zone_id? }` → `200 { valid, dropoff_zone_id?, pickup_zone_id?, message }`. **Response shape changed** — it now returns **both** resolved zones (`dropoff_zone_id`, `pickup_zone_id`, either may be `null`) and this **REPLACES the old single `zone_id` field**. `valid:true` only when the **dropoff** is in an Abriyah-enabled zone **AND** the **pickup** is in some active zone. The request body still accepts an optional `zone_id`, but it is now **IGNORED (deprecated)** — drop it from new clients. **Now public** to mirror the public `GET /api/trips/estimate` — call it before login / during map exploration without a token. **Never an HTTP error** — `valid:false` with a human message when a pin is out of range. Call on every pin drag for inline feedback before joining.
+- **Join (rider):** `POST /api/abriyah/join` `{ pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, room_type ("mixed"|"women_only") }` → `201 { room, member, trip_id, fare_iqd, distance_km }`. **Request body is UNCHANGED — no frontend change needed to join.** The backend now detects the **dropoff** Abriyah zone (and matches the rider into the room for that destination zone), resolves the pickup zone independently (any active zone — cross-zone allowed), computes the per-rider fare from the **pickup** zone, finds the oldest open non-full room for that dropoff zone (FIFO) or opens a new one, adds the rider, and creates a **matched** Abriyah trip. Errors: dropoff not in an Abriyah zone → `400`; pickup not in any active zone → `400`; women-only by a non-female rider → `403`; women-only not allowed in zone → `400`; rider already in a room → `409`.
 - **Room detail (rider):** `GET /api/abriyah/rooms/{id}` → `{ room, members: RoomMember[] }`.
 - **Leave (rider):** `DELETE /api/abriyah/leave` → `200 { message }`. Removes the rider from their open/locked room, decrements the count, and cancels their trip. `400` if not in any active room.
 - **Accept (captain):** `POST /api/abriyah/rooms/{id}/accept` → `200 Room` (status `dispatched`). Locks the open room to the captain and immediately dispatches it: **every member trip transitions `matched → accepted`** with the captain assigned. Errors: room not open → `400`; women-only room by a non-female captain → `403`; captain not approved → `403`; captain already in a room → `409`.
-- **Room members (captain, assigned only):** `GET /api/abriyah/rooms/{id}/members` → `{ room_id, dropoff_zone: { zone_id, name, name_ar }, pickup_breakdown: [{ zone_id, name, name_ar, rider_count }], members: [{ rider_id, name, phone, pickup_wkt, dropoff_wkt, fare_iqd, distance_km, joined_at }] }`. `dropoff_zone` is the shared destination; `pickup_breakdown` counts riders per pickup zone (a `zone_id:null` entry groups pickups outside any active zone). `403` for any captain other than the assigned one. (Room-members still returns the raw rider phone; the Phase 11 proxy is a separate per-trip endpoint — `GET /api/captain/trips/{id}/proxy` — for the live 1:1 trip call, not the room roster.)
+- **Room members (captain, assigned only):** `GET /api/abriyah/rooms/{id}/members` → **response shape changed** — it now wraps the roster with the shared **`dropoff_zone`** and a **`pickup_breakdown`** so the captain sees the common destination zone plus how many riders come from each pickup zone:
+  ```json
+  {
+    "room_id": "uuid",
+    "dropoff_zone": { "zone_id": "uuid", "name": "Karrada", "name_ar": "الكرادة" },
+    "pickup_breakdown": [
+      { "zone_id": "uuid", "name": "Mansour", "name_ar": "المنصور", "rider_count": 3 },
+      { "zone_id": null,   "name": null,      "name_ar": null,        "rider_count": 1 }
+    ],
+    "members": [ /* RoomMemberDetail roster — UNCHANGED: rider_id, name, phone, pickup_wkt, dropoff_wkt, fare_iqd, distance_km, joined_at */ ]
+  }
+  ```
+  A `pickup_breakdown` entry with **`zone_id: null`** groups riders whose pickup fell outside all active zones (`name`/`name_ar` also `null`). The `members[]` roster itself is unchanged. `403` for any captain other than the assigned one. (Room-members still returns the raw rider phone; the Phase 11 proxy is a separate per-trip endpoint — `GET /api/captain/trips/{id}/proxy` — for the live 1:1 trip call, not the room roster.)
 - **Admin:** `GET /api/admin/rooms?status=&zone_id=` → `{ items: Room[] }` (Live Rooms Kanban); `GET /api/admin/rooms/{id}` → `{ room, members }`.
 - **Auto-fill / auto-dispatch:** a room that fills to `max_riders` while still `open` (no captain) **stays open** and waits for a captain — dispatch requires a captain. Dispatch happens on captain-accept. A room that no captain accepts before `expires_at` (zone's `room_max_wait_seconds`) is swept to `expired` every ~30s and all member trips are cancelled (`reason=system_timeout`).
 - **Room object** key fields: `id, zone_id, room_type, status, max_riders, rider_count, captain_id?, expires_at, dispatched_at?, created_at, updated_at`. **RoomMember**: `id, room_id, rider_id, trip_id?, distance_km, fare_iqd, joined_at`.
@@ -277,7 +299,7 @@ The full admin operational surface — 28 endpoints under `/api/admin`. All requ
 - **Needs Action (4 tabs + counts):** `GET .../needs-action/counts` → `{ pending_captains, flagged_trips, expired_rooms, stuck_items, any_sla_breach }` (badge counts; `any_sla_breach` = a pending captain > 24h). Tab lists: `.../pending-captains` (`PendingCaptainRow` with `age_hours`, `documents_complete`, `sla_breached`), `.../flagged-trips` (in-progress > 2h / captain-late cancels / ≤2-star ratings, with `flag_reason`), `.../expired-rooms` (24h), `.../stuck-items` (idle captains, no-ping trips, locked rooms past `expires_at`). `POST .../needs-action/dismiss` `{ item_type, item_id }` hides a row **per-admin** (`item_type ∈ flagged_trip|expired_room|stuck_item`).
 - **Operations:** `GET /api/admin/operations/trips?status=&type=&zone_id=` → `LiveTripPin[]` (with `captain_lat/lng` from `captain_locations`, `status_duration_min`); `status` is comma-separated (default `requested,matched,accepted,in_progress`). `GET .../operations/rooms?status=&zone_id=&room_type=` → `LiveRoomCard[]` (`rider_count/max_riders`, `wait_elapsed_sec/max_wait_sec`).
 - **Force-actions (super_admin):** `POST .../operations/trips/{id}/force-cancel` `{ reason }` (reason validated against the cancellation_reason enum) — cancels via the cascade **as actor `admin`** (the state machine forbids `system` from cancelling accepted trips). `POST .../operations/rooms/{id}/force-dispatch` (room must be `locked`). `POST .../operations/rooms/{id}/force-expire` `{ reason }` (room `open`/`locked`).
-- **Customers:** `GET /api/admin/customers?phone=&blocked=&page=&per_page=` → `{ items: CustomerRow[], page, per_page }` (`total_trips`, `cancellation_count`, `blocked`). `GET .../customers/{id}` → `CustomerDetail` (+ `avg_rating_received/given`, `blocked_reason`). `GET .../customers/{id}/history` → audit `ActivityHighlight[]`. **Super_admin writes:** `POST .../{id}/block` `{ reason }` (**reason ≥ 10 chars** else 400; already-blocked → 409; **does NOT cancel in-flight trips** — the block bites at next OTP login), `POST .../{id}/unblock`, `PUT .../{id}/gender` `{ gender: "m"|"f"|"unset" }` (audited before/after).
+- **Customers:** `GET /api/admin/customers?phone=&blocked=&page=&per_page=` → `{ items: CustomerRow[], page, per_page }` (`total_trips`, `cancellation_count`, `blocked`). `GET .../customers/{id}` → `CustomerDetail` (+ `avg_rating_received/given`, `blocked_reason`). `GET .../customers/{id}/history` → audit `ActivityHighlight[]`. **Super_admin writes:** `POST .../{id}/block` `{ reason }` (**reason ≥ 10 chars** else 400; already-blocked → 409; **does NOT cancel in-flight trips** — the block bites at next login), `POST .../{id}/unblock`, `PUT .../{id}/gender` `{ gender: "m"|"f"|"unset" }` (audited before/after).
 - **Admin users (super_admin):** `GET /api/admin/users` → `{ items: AdminUserRow[] }` (`role`, `status (active|invited)`, `disabled`, `last_login_at`). `POST /api/admin/users` `{ email, name, role, send_invite? (default true) }` → 201 `AdminUserRow` (status `invited`; if `send_invite` an invite email is queued — Mock logs it until SMTP is wired). `POST .../{id}/resend-invite` (target must be `invited` else 409). `PUT .../{id}/role` `{ role, confirm_self_demotion? }` — **last active super_admin cannot be demoted** (409); **self-demotion needs `confirm_self_demotion: true`** (else 400); a **downgrade revokes the target's existing tokens**. `POST .../{id}/{disable,enable}` (disabling the last super_admin → 409; disabling also revokes tokens).
 - **Token revocation (gap 6.4):** a role **downgrade** (super_admin→operator/finance, operator→finance) or an account **disable** stamps `admin_users.tokens_valid_after = NOW()`. The admin auth middleware rejects (**401**) any admin token whose `iat` predates that watermark — so a mid-session demotion invalidates the old session immediately. No client action needed beyond re-login.
 
@@ -300,7 +322,7 @@ Seven read-only historical reports for the **Admin Dashboard**, backed by pre-ag
 - **CSV export:** add `&export=csv` → `Content-Type: text/csv; charset=utf-8` + `Content-Disposition: attachment; filename="<report>.csv"`. Columns match the table view (display names, not raw IDs).
 - **Row shapes (key metric columns):**
   - **Trip Volume:** `zone_name, trip_type (regular|abriyah), room_type (n/a|mixed|women_only), total_trips, completed, cancelled, total_fare_iqd, avg_fare_iqd`.
-  - **Abriyah Performance:** `zone_name, rooms_opened, rooms_dispatched, rooms_expired, fill_rate_pct, avg_wait_seconds, women_only_rooms, women_only_share_pct`. Wait = `dispatched_at − opened_at` (seconds); **expired rooms are excluded from the wait average** but counted in `rooms_opened`/`rooms_expired`.
+  - **Abriyah Performance:** `zone_name, rooms_opened, rooms_dispatched, rooms_expired, fill_rate_pct, avg_wait_seconds, women_only_rooms, women_only_share_pct`. **`zone_name` is now the DROPOFF (destination) zone** — the rollup is dimensioned by the room's dropoff zone, not the pickup zone (matches the dropoff-zone matching model). Wait = `dispatched_at − opened_at` (seconds); **expired rooms are excluded from the wait average** but counted in `rooms_opened`/`rooms_expired`.
   - **Cancellation Analysis:** `zone_name, cancellation_reason, count`.
   - **Captain Leaderboard:** `captain_name, trip_count, completed_trips, total_fare_iqd, avg_rating` (ordered by completed_trips, then earnings).
   - **Daily Activation:** `city_name, approved_captain_count, activated_captain_count, activation_rate_pct`.
@@ -326,6 +348,23 @@ Wallet, card-on-file, transaction ledger, and refunds behind a `PaymentGateway` 
 - **Events** (Redis `rt:payment:{owner_id}` / `rt:payment:refund:{id}`, best-effort for live balance refresh): `beep.payment.{topup_succeeded, topup_failed, fare_collected, refund_requested, refund_processed, penalty_applied}`.
 - **Trip-flow charging (now wired, post-deployment-hardening):** `POST /api/trips/{id}/complete` charges the rider wallet for `fare_iqd` (best-effort: a debit failure is logged + recorded as a `failed` ledger row but never blocks completion). `POST /api/trips/{id}/cancel` by a **rider after a captain accepted** applies the flat `trip.cancellation_penalty_iqd` penalty (default 2000). See the Customer App table for the rider-facing contract. (This supersedes the earlier P10 note that these were unwired; the captain token issuer is also live now — see the Auth model section.)
 
+### QiCard checkout (hosted-form card payment) — Live
+
+A redirect/hosted-form card-payment flow that sits **alongside** the wallet model above. The payer pays on QiCard's own form (we never collect card data); on SUCCESS we fulfil the order. This is what lets a rider/captain pay by card now, with a one-flag switch from sandbox to live.
+
+- **Sandbox vs live (server `QI_SANDBOX`, no client change):** In **sandbox auto-confirm** (default) a checkout still calls QiCard to create a real payment (real `form_url` + `payment_id` come back), but the order is **also marked `paid` and fulfilled immediately** — the response has `status:"paid"`, `paid:true`, `sandbox:true`, so the app can proceed without waiting for the redirect/webhook. In **live** mode (`QI_SANDBOX=false`) the response is `status:"created"`, `paid:false`, `sandbox:false`; the client opens `form_url` and the order settles when QiCard webhooks us (or the client polls — see refresh below).
+- **Self-scoped (rider/captain), `require_auth`:**
+  - `POST /api/payments/checkout` `{ purpose, amount_iqd, target_id? }` → `CheckoutResponse { order_id, payment_id?, form_url?, status, paid, sandbox }`.
+    - `purpose`: `wallet_topup` (no `target_id`; credits the caller's wallet), `trip_fare` (`target_id` = trip id), `daily_fee` (`target_id` = captain activation id). `amount_iqd > 0`. Wrong/missing pairing → 400; QiCard error in **live** mode → 500.
+  - `GET /api/payments/orders?limit=&offset=` → `[PaymentOrder]` (caller's own, newest first).
+  - `GET /api/payments/orders/{id}` → `PaymentOrder` (404 if not the caller's). **Poll this after opening `form_url`** to learn when `status` flips to `paid`.
+  - `POST /api/payments/orders/{id}/refresh` → `PaymentOrder` — polls QiCard for the live status and settles/fails the order (webhook fallback). No-op once terminal.
+- **Webhook (no auth, QiCard → us):** `POST /api/payments/qicard/webhook` (full QiCard payment object). Always returns 200 (so QiCard stops retrying). On `SUCCESS` the order settles + fulfils **idempotently** (a duplicate or racing webhook never double-credits — settlement claims the order atomically before crediting). The webhook is hardened: the RSA `X-Signature` header is verified against QiCard's public key when `QI_CARD_PG_PUBLIC_KEY_PATH` is set (a forged/invalid signature is ignored), and the QiCard-reported `amount` must match the order amount before settling. On a terminal failure the order is marked `failed`. Set the public HTTPS URL of this route as `QI_CARD_NOTIFICATION_URL`.
+- **Ownership + amount are server-enforced (important for the apps):** for `trip_fare` the caller must be the trip's **rider** and `amount_iqd` must equal the trip's `fare_iqd`; for `daily_fee` the caller must be the **captain** who owns the activation and `amount_iqd` must equal its `fee_amount_iqd`. A wrong amount → 400; a foreign/unknown target → 403/404. So the client must send the real fare/fee, not an arbitrary number. `wallet_topup` amount stays the payer's choice.
+- **`PaymentOrder`** shape: `{ id, owner_id, owner_type, purpose, target_id?, amount_iqd, currency:"IQD", status, request_id, gateway_payment_id?, form_url?, sandbox_autoconfirmed, transaction_id?, failure_reason?, paid_at?, created_at, updated_at }`. `status`: `created | paid | failed | cancelled | refunded`.
+- **Fulfilment:** on settle the order writes a `succeeded` ledger `Transaction` (`tx_type` matches the purpose: `topup`/`trip_fare`/`daily_fee`, `gateway_ref` = QiCard `paymentId`) and links it as `transaction_id`. `wallet_topup` also credits the wallet; `daily_fee` also flips the captain activation to `paid`. So a card payment shows up in `GET /api/me/transactions` and the collected-revenue report exactly like a wallet charge.
+- **Events** (Redis `rt:payment:{owner_id}`, best-effort): `beep.payment.order_paid` with `{ order_id, purpose, amount_iqd, status, sandbox_autoconfirmed }`.
+
 ## Privacy, Scheduling, Multi-City (Phase 11 — Live)
 
 ### Scheduled trips (Customer App, `require_role "rider"`)
@@ -336,6 +375,7 @@ Wallet, card-on-file, transaction ledger, and refunds behind a `PaymentGateway` 
 
 ### Multi-stop (regular trips)
 - `POST /api/rider/trips/{id}/stops` `{ lat, lng, address? }` → 201 `TripStop` (`seq` auto 1..3). **Max 3 stops** (4th → 409); trip must be `regular` + `accepted`/`in_progress` (else 400); rider must own the trip (else 403). `GET /api/rider/trips/{id}/stops` lists them.
+- **`GET /api/captain/trips/{trip_id}/stops`** → `TripStop[]` (the assigned captain's view, so the Captain App can enumerate the `stop_id`s it then reaches). Assigned-captain-only (403 otherwise); 404 if no such trip. Mirrors the rider list with captain scoping.
 - `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach` `{ reached_at? }` → `TripStop` `status:"reached"`. Captain on the trip only (403 otherwise); pending stops only (already-reached → 409).
 
 ### Proxy numbers (privacy)
@@ -364,9 +404,38 @@ Cross-cutting **Admin Dashboard** tooling. No new business entity beyond per-adm
 - **Offline ping flush:** a 5s worker drains the Redis `queue:ping_flush` buffer into `captain_locations` (UNNEST batch upsert, last-write-wins per captain). The Phase 7 captain location handler now buffers a ping to that list on a Postgres write failure so no position update is silently dropped — transparent to the Captain App.
 - **SQLx offline data committed:** `.sqlx/` is now checked in; CI builds with `SQLX_OFFLINE=true` (and verifies `cargo sqlx prepare --check`), so a live database is no longer required to compile.
 
+## Promo codes / discounts — Live
+
+Riders can apply a discount code to a trip booking. The server owns the fare computation; the client's job is to call the validate endpoint for immediate UI feedback, then pass the code into the booking call. The discount is atomically reserved at trip creation and released on cancel.
+
+### Rider-facing
+
+- **Pre-check (never HTTP-errors):** `POST /api/rider/promo/validate` (rider Bearer) — body `{ "code": "SUMMER10", "fare_iqd": 4500 }` → `200 { valid, kind?, value?, discount_iqd?, message }`. `valid: false` for any of: code unknown, inactive, outside active window, global cap exhausted, already used by this rider. When `fare_iqd` is supplied and the code is valid, `discount_iqd` is the exact computed discount. `kind` is `"percent"` or `"fixed"`; `value` is the percent (1–100) or the fixed IQD amount. Mirror the `POST /api/abriyah/validate-pins` pattern — build the validate call into the promo-card UI, never pre-reject client-side.
+- **Fare estimate with promo:** `GET /api/trips/estimate?...&promo_code=SUMMER10` returns the **potential** discount in `discount_iqd` and `final_fare_iqd`. This is indicative only (unauthenticated; cannot check per-rider-once). Show it as a preview; the binding discount is confirmed at `POST /api/trips`.
+- **Apply at booking:** pass `"promo_code": "SUMMER10"` in the `POST /api/trips` body. On success the returned Trip has `fare_iqd` already net of the discount, plus `promo_code_id` and `discount_iqd`. On failure (code invalid/inactive/expired/exhausted/already-used-by-this-rider) the server returns **400** `{ "error": "..." }` and the trip is NOT created — show the message and let the rider remove the code.
+- **Auto-release on cancel:** `POST /api/trips/{id}/cancel` releases any promo reservation so the rider can reuse the code.
+
+**App-team integration note:** wire the inert Apply button in `promo-card.tsx` to `POST /api/rider/promo/validate`, display the returned `discount_iqd` as a preview, then pass `promo_code` into the booking call. Read `trip.promo_code_id` + `trip.discount_iqd` from the Trip response to confirm and display the applied discount on the booking confirmation screen.
+
+### Admin dashboard (promo management)
+
+All three endpoints are under `/api/admin/promo-codes`.
+
+- **List:** `GET /api/admin/promo-codes` (any admin role) → `200 [PromoCode]`. Includes `redemption_count` and `max_redemptions` for capacity tracking.
+- **Create:** `POST /api/admin/promo-codes` (**super_admin only**) — body `{ "code", "kind" ("percent"|"fixed"), "value", "active_from"?, "expires_at"?, "max_redemptions"? }` → `201 PromoCode`. Validation: percent `value` must be 1–100; fixed `value` must be > 0 (else 400). Duplicate code string → **409**.
+- **Update / toggle:** `PATCH /api/admin/promo-codes/{id}` (**super_admin only**) — body any subset of `{ "active"?, "value"?, "active_from"?, "expires_at"?, "max_redemptions"? }` → `200 PromoCode`. Use `{ "active": false }` to disable a code immediately. → `404` if not found.
+
+**PromoCode object** fields: `id, code, kind ("percent"|"fixed"), value, active, active_from?, expires_at?, max_redemptions?, redemption_count, created_at, updated_at`.
+
+Limits enforced per code: per-rider-once (same rider cannot redeem twice), validity window (`active_from` / `expires_at`), global cap (`max_redemptions`, atomically checked), and the `active` toggle. All four are checked atomically at trip creation.
+
+---
+
 ## Captain document upload (IMPORTANT for the Captain App)
 
 The backend **owns document storage** (a private S3-compatible MinIO bucket). Sensitive ID images (national ID, licence, selfie) never go through the API process and are never publicly reachable — the client uploads **directly** to storage via a short-lived presigned URL, and admins review via a short-lived presigned GET. The Captain App flow:
+
+> **Onboarding auth (phone + password) — UPDATED 2026-06-16.** **`POST /api/captains/register` now returns an onboarding token directly in its 201 body.** The body is the `Captain` object (status `pending`) **plus a `token` field** (`{ ...captain, token }`) — a captain JWT for this pending captain. So the flow is now: `otp/send` → `otp/verify` `{purpose:"register"}` → `{ticket}` → `POST /api/captains/register` `{ticket,...,password}` → **201 `{ ...captain, token }`** → upload the 5 docs with that `token` → poll `GET /api/captains/{id}` until `approved`. **No separate login round-trip is needed for onboarding.** (`POST /api/auth/captain/login` `{phone,password}` also still issues a token for `pending` captains — use it on app relaunch when you only have phone+password, not the register response. It 403s for `rejected`/`blocked`, 404 for unknown.) **Ownership is enforced:** a captain token may only read/write **its own** captain id (token `sub` == `{id}`); using another captain's id → **403**. Admin tokens may access any captain. A `pending` token grants ONLY this self-service onboarding + status-poll — every operational endpoint (go online, trip-queue, accept/start/complete, location ping, proxy, multi-stop) independently requires `approved` and returns **403** for a pending captain.
 
 1. The captain picks/captures the image in-app.
 2. **Request an upload target:** `POST /api/captains/{id}/documents/upload-url` `{ "doc_type": "national_id_front" }` → `200 { "upload_url", "object_key", "expires_in" }` (`expires_in` ~300s).
@@ -379,25 +448,53 @@ The backend **owns document storage** (a private S3-compatible MinIO bucket). Se
 - **Bring-your-own fallback (legacy):** `POST .../documents` also still accepts `{ "doc_type", "url": "https://..." }` (a full URL you host yourself) instead of `object_key`. The presigned-upload flow above is strongly preferred; the URL fallback has no access control. Exactly one of `object_key`/`url` must be present (else 400).
 - **Dev note:** when the backend runs without storage configured (local dev), the presign endpoints return deterministic `https://mock-storage.local/...` URLs you can stub against; the contract shape is identical.
 
+## Rider profile photo upload
+
+Rider avatars use the same private-storage presigned flow as captain documents (no image bytes through the API):
+
+1. **Request an upload target:** `POST /api/riders/me/photo/upload-url` (bearer = rider token, no body) → `200 { "upload_url", "object_key", "expires_in" }` (`expires_in` ~300s). The `object_key` is per-rider, so a re-upload overwrites the previous avatar in place.
+2. **Upload the file directly:** HTTP **PUT** the raw image bytes to `upload_url` (no Authorization header — the URL is pre-authorized). Bypasses the API body limit.
+3. **Persist it:** `PATCH /api/riders/me` `{ "photo_url": "<object_key from step 1>" }`.
+4. **Read it back:** `GET /api/riders/me` returns `photo_url` as a short-lived presigned **GET** URL (the backend swaps the stored key for a viewable URL on read). Don't cache it long-term.
+
+- **Bring-your-own fallback:** `PATCH /api/riders/me` still accepts a full `https://...` URL in `photo_url` (hosted yourself); it's stored and returned as-is.
+- **Dev note:** with unmanaged (mock) storage the URLs are deterministic placeholders; the contract shape is identical.
+
 ## Example payloads (copy-paste)
 
 Concrete JSON for the most-used flows. Field-level truth is in Swagger; these are representative shapes.
 
-**OTP verify (rider) — `POST /api/auth/otp/verify`**
+**OTP verify → ticket — `POST /api/auth/otp/verify`**
 ```json
 // request
-{ "phone": "9647501234567", "code": "123456", "name": "Sara" }
+{ "phone": "9647501234567", "code": "123456", "purpose": "register" }
+// response 200 (a short-lived ticket; does NOT log you in)
+{ "ticket": "9b1c4f2e-3a6d-4e88-bf01-2c7a9d6e0f33", "purpose": "register" }
+```
+
+**Rider register — `POST /api/auth/register`**
+```json
+// request (redeem a "register" ticket)
+{ "ticket": "9b1c4f2e-...", "phone": "9647501234567", "password": "hunter2pass", "name": "Sara" }
 // response 200
 { "token": "eyJhbGciOiJIUzI1NiII...", "user_id": "7c3e0b2a-1f4d-4a6e-9b21-2c9d8e5f0a11" }
 ```
 
-**Captain verify — `POST /api/auth/captain/otp/verify`**
+**Rider login — `POST /api/auth/login`**
 ```json
 // request
-{ "phone": "9647509998888", "code": "654321" }
+{ "phone": "9647501234567", "password": "hunter2pass" }
+// response 200
+{ "token": "eyJhbGciOiJIUzI1NiII...", "user_id": "7c3e0b2a-1f4d-4a6e-9b21-2c9d8e5f0a11" }
+```
+
+**Captain login — `POST /api/auth/captain/login`**
+```json
+// request
+{ "phone": "9647509998888", "password": "drivepass1" }
 // response 200 (role "captain"; user_id is the CAPTAIN id)
 { "token": "eyJhbGciOiJIUzI1NiII...", "user_id": "b91f7d52-0c3a-4e88-9f10-7a2b4c6d8e90" }
-// 404 if no captain for that phone; 403 if not yet admin-approved
+// 404 unknown phone; 403 not approved; 429 locked
 ```
 
 **Trip object — returned by `POST /api/trips`, `GET /api/trips/{id}`**
@@ -412,10 +509,12 @@ Concrete JSON for the most-used flows. Field-level truth is in Swagger; these ar
   "room_id": null,
   "pickup_lat": 33.3152, "pickup_lng": 44.3661,
   "dropoff_lat": 33.3400, "dropoff_lng": 44.4000,
-  "fare_iqd": 4500,
+  "fare_iqd": 4050,
   "distance_km": 7.0,
   "base_fare_iqd": 1000,
   "currency": "IQD",
+  "promo_code_id": "c1d2e3f4-...",
+  "discount_iqd": 450,
   "fare_per_rider_iqd": null,
   "distance_per_rider_km": null,
   "cancellation_reason": null,
@@ -425,8 +524,9 @@ Concrete JSON for the most-used flows. Field-level truth is in Swagger; these ar
   "version": 1
 }
 ```
+Note: `fare_iqd` is already net of `discount_iqd` (4500 − 450 = 4050). When no promo was applied both fields are `null`.
 
-**Abriyah join — `POST /api/abriyah/join` response 201**
+**Abriyah join — `POST /api/abriyah/join` response 201** (request body UNCHANGED; `room.zone_id` is the **dropoff** zone the room is keyed on)
 ```json
 {
   "room": {
@@ -439,6 +539,53 @@ Concrete JSON for the most-used flows. Field-level truth is in Swagger; these ar
               "trip_id": "f0e1d2c3-...", "distance_km": 5.2, "fare_iqd": 3600, "joined_at": "2026-06-03T09:15:00Z" },
   "trip_id": "f0e1d2c3-...", "fare_iqd": 3600, "distance_km": 5.2
 }
+```
+
+**Abriyah room members — `GET /api/abriyah/rooms/{id}/members` response 200** (captain; new `dropoff_zone` + `pickup_breakdown` wrapper)
+```json
+{
+  "room_id": "1a2b3c4d-...",
+  "dropoff_zone": { "zone_id": "a1b2c3d4-...", "name": "Karrada", "name_ar": "الكرادة" },
+  "pickup_breakdown": [
+    { "zone_id": "b2c3d4e5-...", "name": "Mansour", "name_ar": "المنصور", "rider_count": 3 },
+    { "zone_id": null,           "name": null,      "name_ar": null,        "rider_count": 1 }
+  ],
+  "members": [
+    { "rider_id": "7c3e0b2a-...", "name": "Sara", "phone": "9647501234567",
+      "pickup_wkt": "POINT(44.36 33.31)", "dropoff_wkt": "POINT(44.40 33.34)",
+      "fare_iqd": 3600, "distance_km": 5.2, "joined_at": "2026-06-03T09:15:00Z" }
+  ]
+}
+```
+
+**Promo validate — `POST /api/rider/promo/validate`** (rider Bearer; NEVER an HTTP error)
+```json
+// request
+{ "code": "SUMMER10", "fare_iqd": 4500 }
+// response 200 — valid percent code
+{ "valid": true, "kind": "percent", "value": 10, "discount_iqd": 450, "message": "Promo applied" }
+// response 200 — invalid/exhausted/already-used (same 200 status, valid:false)
+{ "valid": false, "message": "Promo code has already been used" }
+```
+
+**Create promo code — `POST /api/admin/promo-codes`** (super_admin Bearer)
+```json
+// request — percent discount, time-bounded, capped
+{ "code": "SUMMER10", "kind": "percent", "value": 10, "active_from": "2026-06-15T00:00:00Z", "expires_at": "2026-07-01T00:00:00Z", "max_redemptions": 500 }
+// response 201
+{
+  "id": "c1d2e3f4-...", "code": "SUMMER10", "kind": "percent", "value": 10,
+  "active": true, "active_from": "2026-06-15T00:00:00Z", "expires_at": "2026-07-01T00:00:00Z",
+  "max_redemptions": 500, "redemption_count": 0,
+  "created_at": "2026-06-15T08:00:00Z", "updated_at": "2026-06-15T08:00:00Z"
+}
+// request — fixed IQD discount, unlimited, always-on
+{ "code": "FLAT500", "kind": "fixed", "value": 500 }
+```
+
+**Abriyah validate-pins — `POST /api/abriyah/validate-pins` response 200** (now dual-end; replaces old single `zone_id`)
+```json
+{ "valid": true, "dropoff_zone_id": "a1b2c3d4-...", "pickup_zone_id": "b2c3d4e5-...", "message": "ok" }
 ```
 
 **WebSocket trip frame** (received on `rt:trip:{id}` via `GET /ws/subscribe?token=...&channel=rt:trip:{id}`)

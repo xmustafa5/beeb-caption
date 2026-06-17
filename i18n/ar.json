@@ -322,7 +322,10 @@
       "confirmTopUp": "اشحن",
       "activateFailed": "تعذّر التفعيل. حاول مرة أخرى.",
       "topUpFailed": "فشل الشحن. حاول مرة أخرى.",
-      "amountInvalid": "أدخل مبلغًا صحيحًا"
+      "amountInvalid": "أدخل مبلغًا صحيحًا",
+      "payByCard": "ادفع {{fee}} بالبطاقة",
+      "cardPaymentFailed": "فشل الدفع بالبطاقة. حاول مرة أخرى.",
+      "cardPaymentPending": "جارٍ معالجة الدفع. اسحب للتحديث بعد لحظات."
     },
     "online": {
       "toggleLabel": "ابدأ الاتصال",

@@ -11,8 +11,9 @@ import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
 import { TopUpSheet } from '@/components/captain/top-up-sheet'
 import { useActivation } from '@/hooks/use-activation'
-import { DEFAULT_DAILY_FEE_IQD } from '@/services/activation'
+import { DEFAULT_DAILY_FEE_IQD, getTodayActivation } from '@/services/activation'
 import { getWallet } from '@/services/wallet'
+import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
 import { formatIqd } from '@/lib/format-currency'
 import { parseApiError, apiErrorKey } from '@/lib/api'
 
@@ -24,11 +25,13 @@ export default function HomeScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { query, activate } = useActivation()
+  const { checkout } = useQiCardCheckout()
 
   const [error, setError] = useState<string | null>(null)
   const [showTopUp, setShowTopUp] = useState(false)
   const [insufficient, setInsufficient] = useState(false)
   const [balanceIqd, setBalanceIqd] = useState(0)
+  const [payingCard, setPayingCard] = useState(false)
 
   const activation = query.data?.activation ?? null
   const feeIqd = activation?.feeAmountIqd ?? DEFAULT_DAILY_FEE_IQD
@@ -52,6 +55,47 @@ export default function HomeScreen() {
       } else {
         setError(t(apiErrorKey(err, 'captain.activate.activateFailed')))
       }
+    }
+  }
+
+  // Pay the daily activation fee directly by card (QiCard), skipping the wallet.
+  // daily_fee checkout needs the activation id as target_id and the exact fee as
+  // the amount — both server-enforced. The activate POST is idempotent and returns
+  // the row even when the wallet charge failed (402), so we use it to resolve the id.
+  async function payDailyFeeByCard() {
+    setError(null)
+    setPayingCard(true)
+    try {
+      let target = activation
+      if (!target) {
+        // No row yet (or stale): create/fetch it. A 402 still yields a row to pay.
+        try {
+          target = await activate.mutateAsync()
+        } catch {
+          target = (await getTodayActivation()).activation
+        }
+      }
+      if (!target) {
+        setError(t('captain.activate.activateFailed'))
+        return
+      }
+      const outcome = await checkout('daily_fee', target.feeAmountIqd, target.id)
+      if (outcome.kind === 'paid') {
+        // Settling flips the activation to paid server-side; refetch the gate.
+        setInsufficient(false)
+        await query.refetch()
+      } else if (outcome.kind === 'failed') {
+        setError(t('captain.activate.cardPaymentFailed'))
+      } else if (outcome.kind === 'pending') {
+        // Live mode, not settled yet — tell the captain to check back.
+        setError(t('captain.activate.cardPaymentPending'))
+        query.refetch()
+      }
+      // 'cancelled' → silent; the captain dismissed the form.
+    } catch (err) {
+      setError(t(apiErrorKey(err, 'captain.activate.cardPaymentFailed')))
+    } finally {
+      setPayingCard(false)
     }
   }
 
@@ -153,6 +197,16 @@ export default function HomeScreen() {
               onPress={runActivate}
             />
           )}
+
+          {/* Pay the daily fee directly by card (QiCard hosted form) — works
+              whether or not the wallet has funds. */}
+          <Button
+            label={t('captain.activate.payByCard', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
+            variant="secondary"
+            loading={payingCard}
+            onPress={payDailyFeeByCard}
+            leading={<Icon name="card-outline" size={18} color={colors.text} />}
+          />
         </View>
       )}
 
