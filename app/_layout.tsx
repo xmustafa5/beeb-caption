@@ -114,15 +114,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const isPendingLike =
     (!!token && !!captain && captain.status !== 'approved') || !!pendingCaptainId
 
-  if (__DEV__) {
-    console.log('🔐 AuthGate', JSON.stringify({
-      hasToken: !!token,
-      status: captain?.status ?? null,
-      pendingCaptainId,
-      seg: segments.join('/') || '(root)',
-    }))
-  }
-
   let target: Href | null = null
   if (isApproved) {
     if (inAuthGroup) target = '/(tabs)'
