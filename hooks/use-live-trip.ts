@@ -12,6 +12,7 @@ import {
   type CancelReason,
 } from '@/services/captain-trips'
 import { useCaptainPresence } from '@/providers/captain-presence'
+import { ACTIVE_TRIP_KEY } from '@/hooks/use-active-trip'
 
 /**
  * Live trip state for the driving screen. GET on mount is the source of truth;
@@ -51,15 +52,21 @@ export function useLiveTrip(id: string) {
     onSuccess: () => patchStatus('in_progress'),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   })
+  // Ending the trip also clears the home-screen "resume trip" banner immediately
+  // (otherwise it lingers until the active-trip poll catches up).
+  const endTrip = (status: TripStatus) => {
+    patchStatus(status)
+    queryClient.invalidateQueries({ queryKey: ACTIVE_TRIP_KEY })
+  }
   const completeM = useMutation({
     mutationFn: () => completeTrip(id),
-    onSuccess: () => patchStatus('completed'),
+    onSuccess: () => endTrip('completed'),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   })
   const cancelM = useMutation({
     mutationFn: ({ reason, comment }: { reason: CancelReason; comment?: string }) =>
       cancelTrip(id, reason, comment),
-    onSuccess: () => patchStatus('cancelled'),
+    onSuccess: () => endTrip('cancelled'),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   })
 

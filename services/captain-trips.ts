@@ -69,6 +69,26 @@ export async function getTrip(id: string): Promise<Trip> {
   return toTrip(data)
 }
 
+/** The captain's in-flight statuses — a trip in either is "on the road right now". */
+const ACTIVE_TRIP_STATUSES: TripStatus[] = ['accepted', 'in_progress']
+
+/**
+ * The captain's current active trip, or null. Used to resume the live-trip screen
+ * after a relaunch. There's no dedicated "my active trip" endpoint, so we filter
+ * the trips list by captain + each active status (server is the source of truth:
+ * a trip completed/cancelled while the app was closed simply isn't returned).
+ */
+export async function getActiveCaptainTrip(captainId: string): Promise<Trip | null> {
+  for (const status of ACTIVE_TRIP_STATUSES) {
+    const { data } = await api.get<{ items: BackendTrip[] }>('/api/trips', {
+      params: { captain_id: captainId, status, per_page: 1 },
+    })
+    const first = data.items?.[0]
+    if (first) return toTrip(first)
+  }
+  return null
+}
+
 /** Cue at pickup — no status change. */
 export async function arriveTrip(id: string): Promise<void> {
   await api.post(`/api/trips/${id}/arrive`)

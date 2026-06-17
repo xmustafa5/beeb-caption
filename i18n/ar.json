@@ -394,7 +394,9 @@
       "distanceLabel": "{{km}} كم",
       "legFailed": "تعذّر تحديث الرحلة. حاول مرة أخرى.",
       "cancelFailed": "تعذّر الإلغاء. حاول مرة أخرى.",
-      "callUnavailable": "الاتصال غير متاح حاليًا."
+      "callUnavailable": "الاتصال غير متاح حاليًا.",
+      "resumeTitle": "رحلة قيد التنفيذ",
+      "resumeSubtitle": "اضغط للعودة إلى رحلتك الحالية"
     },
     "earnings": {
       "tabLabel": "الأرباح",

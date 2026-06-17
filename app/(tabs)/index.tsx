@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { View, Text, ActivityIndicator, ScrollView, RefreshControl, I18nManager, Switch } from 'react-native'
+import { View, Text, ActivityIndicator, ScrollView, RefreshControl, I18nManager, Switch, TouchableOpacity } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useCaptainPresence, type ConnectionHealth } from '@/providers/captain-presence'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +12,7 @@ import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
 import { TopUpSheet } from '@/components/captain/top-up-sheet'
 import { useActivation } from '@/hooks/use-activation'
+import { useActiveTrip } from '@/hooks/use-active-trip'
 import { DEFAULT_DAILY_FEE_IQD, getTodayActivation } from '@/services/activation'
 import { getWallet } from '@/services/wallet'
 import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
@@ -137,6 +139,8 @@ export default function HomeScreen() {
         {t('captain.activate.homeTitle')}
       </Text>
 
+      <ActiveTripBanner />
+
       {activated ? (
         <View
           style={{
@@ -221,6 +225,49 @@ export default function HomeScreen() {
         }}
       />
     </ScrollView>
+  )
+}
+
+// Persistent "you have a trip in progress" banner. Visible on the home screen
+// whenever the captain has an active trip, so they can return to the live-trip
+// screen after navigating away. Clears itself when the trip ends (the query polls).
+function ActiveTripBanner() {
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
+  const colors = useThemeColors()
+  const router = useRouter()
+  const { data: trip } = useActiveTrip()
+
+  if (!trip) return null
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => router.push(`/(trip)/${trip.id}`)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        backgroundColor: colors.tint,
+        borderRadius: 18,
+        borderCurve: 'continuous',
+        padding: Spacing.lg,
+        boxShadow: '0px 6px 18px rgba(0, 0, 0, 0.12)',
+      }}
+    >
+      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ffffff22', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="navigate" size={20} color={colors.onTint} />
+      </View>
+      <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+        <Text style={{ ...Typography['body-md'], color: colors.onTint, textAlign: isRTL ? 'right' : 'left' }}>
+          {t('captain.live.resumeTitle')}
+        </Text>
+        <Text style={{ ...Typography['caption-sm'], color: colors.onTint, opacity: 0.85, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          {t('captain.live.resumeSubtitle')}
+        </Text>
+      </View>
+      <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.onTint} />
+    </TouchableOpacity>
   )
 }
 

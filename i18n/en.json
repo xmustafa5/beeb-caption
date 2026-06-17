@@ -394,7 +394,9 @@
       "distanceLabel": "{{km}} km",
       "legFailed": "Couldn't update the trip. Please try again.",
       "cancelFailed": "Couldn't cancel. Please try again.",
-      "callUnavailable": "Calling isn't available right now."
+      "callUnavailable": "Calling isn't available right now.",
+      "resumeTitle": "Trip in progress",
+      "resumeSubtitle": "Tap to return to your active trip"
     },
     "earnings": {
       "tabLabel": "Earnings",

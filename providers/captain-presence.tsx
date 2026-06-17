@@ -166,8 +166,18 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
     return () => { cancelled = true }
   }, [token, isApproved, startSession])
 
-  // Cleanup on unmount.
-  useEffect(() => () => stopSession(), [stopSession])
+  // Tear down when the session ends. The provider now lives at the app root
+  // (so the live-trip screen shares it), so it no longer unmounts on logout —
+  // explicitly stop the socket + ping loop and reset presence when the token
+  // clears, then clean up on unmount.
+  useEffect(() => {
+    if (!token) {
+      stopSession()
+      setOnlineState(false)
+      setConnection('offline')
+    }
+    return () => stopSession()
+  }, [token, stopSession])
 
   return (
     <Ctx.Provider value={{ online, connection, goingOnline, error, setOnline, lastTripUpdate, lastOffer }}>
