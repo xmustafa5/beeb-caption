@@ -61,7 +61,7 @@
     "greetingDefault": "Welcome",
     "whereTo": "Where to?",
     "rideTypeRegular": "Beeb",
-    "rideTypeAbriyah": "عبريه",
+    "rideTypeAbriyah": "Nafarat",
     "subtitle": "Your. Ride. Our. beep.",
     "setPickup": "Set pickup",
     "confirmPickup": "Confirm pickup"
@@ -135,10 +135,10 @@
     "vehicleBeebXL": "Beeb XL"
   },
   "abriyah": {
-    "introTitle": "What is عبريه?",
+    "introTitle": "What is Nafarat?",
     "introBody": "Share a ride with up to 4 riders inside the same neighborhood. Cheaper for everyone, distance-based fare.",
     "introCta": "Got it",
-    "outsideZone": "عبريه is not available in this area.",
+    "outsideZone": "Nafarat is not available in this area.",
     "outsideZoneNotice": "Your current location is outside {{zone}}. We set your pickup to the zone center — tap From to adjust.",
     "youreInZone": "You're in {{zone}}",
     "zoneSelectCta": "Continue",
@@ -157,7 +157,7 @@
     "roomDispatched": "Driver assigned",
     "roomExpired": "No driver was found in time. Try again.",
     "noZonesTitle": "No service areas yet",
-    "noZonesBody": "Abriyah zones aren’t available in your area right now.",
+    "noZonesBody": "Nafarat zones aren’t available in your area right now.",
     "pickZoneManually": "Pick a zone to start:",
     "zoneNotFound": "Zone not found.",
     "joinFailed": "Couldn’t join a room",
@@ -347,7 +347,7 @@
       "emptyTitle": "Waiting for trips…",
       "emptyBody": "New trips in your area will appear here.",
       "newTrip": "New trip",
-      "newRoom": "Abriyah room",
+      "newRoom": "Nafarat room",
       "kmAway": "{{km}} km away",
       "tripDistance": "{{km}} km trip",
       "roomMixed": "Mixed",
@@ -411,7 +411,7 @@
       "history": "Trip history",
       "historyEmpty": "No completed trips yet.",
       "tripRegular": "Regular",
-      "tripAbriyah": "Abriyah",
+      "tripAbriyah": "Nafarat",
       "loadFailed": "Couldn't load earnings. Pull to refresh."
     },
     "register": {

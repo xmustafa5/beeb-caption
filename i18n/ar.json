@@ -61,7 +61,7 @@
     "greetingDefault": "أهلًا بك",
     "whereTo": "وين رايح؟",
     "rideTypeRegular": "بيب",
-    "rideTypeAbriyah": "عبريه",
+    "rideTypeAbriyah": "نفرات",
     "subtitle": "رحلتك. صوتنا. بيب.",
     "setPickup": "حدد نقطة الانطلاق",
     "confirmPickup": "تأكيد نقطة الانطلاق"
@@ -135,10 +135,10 @@
     "vehicleBeebXL": "بيب إكس إل"
   },
   "abriyah": {
-    "introTitle": "شنو عبريه؟",
+    "introTitle": "شنو نفرات؟",
     "introBody": "شارك الرحلة مع 4 ركاب داخل نفس المنطقة. أرخص للجميع، الأجرة حسب المسافة.",
     "introCta": "فهمت",
-    "outsideZone": "عبريه غير متوفرة في هذه المنطقة.",
+    "outsideZone": "نفرات غير متوفرة في هذه المنطقة.",
     "outsideZoneNotice": "موقعك الحالي خارج {{zone}}. حددنا نقطة انطلاقك في وسط المنطقة — اضغط على «من» لتعديلها.",
     "youreInZone": "أنت في {{zone}}",
     "zoneSelectCta": "متابعة",
@@ -157,7 +157,7 @@
     "roomDispatched": "تم تعيين السائق",
     "roomExpired": "ما حصلنا سائق بالوقت المحدد. حاول مرة أخرى.",
     "noZonesTitle": "لا توجد مناطق خدمة بعد",
-    "noZonesBody": "مناطق عبرية غير متوفرة في منطقتك حالياً.",
+    "noZonesBody": "مناطق نفرات غير متوفرة في منطقتك حالياً.",
     "pickZoneManually": "اختر منطقة للبدء:",
     "zoneNotFound": "المنطقة غير موجودة.",
     "joinFailed": "تعذّر الانضمام إلى غرفة",
@@ -347,7 +347,7 @@
       "emptyTitle": "في انتظار الرحلات…",
       "emptyBody": "ستظهر الرحلات الجديدة في منطقتك هنا.",
       "newTrip": "رحلة جديدة",
-      "newRoom": "غرفة عبريّة",
+      "newRoom": "غرفة نفرات",
       "kmAway": "على بُعد {{km}} كم",
       "tripDistance": "رحلة {{km}} كم",
       "roomMixed": "مختلط",
@@ -411,7 +411,7 @@
       "history": "سجل الرحلات",
       "historyEmpty": "لا توجد رحلات مكتملة بعد.",
       "tripRegular": "عادي",
-      "tripAbriyah": "عبريّة",
+      "tripAbriyah": "نفرات",
       "loadFailed": "تعذّر تحميل الأرباح. اسحب للتحديث."
     },
     "register": {
