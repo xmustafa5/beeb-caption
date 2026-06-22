@@ -65,7 +65,7 @@ export default function PersonalStep() {
           }}
         >
           <WizardProgress current={2} total={3} />
-          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: 'left' }}>
             {t('captain.register.personalTitle')}
           </Text>
         </View>
@@ -81,7 +81,7 @@ export default function PersonalStep() {
                 error={errors.nameAr ? t(errors.nameAr.message ?? '') : undefined} />
             )} />
             <View style={{ gap: Spacing.sm }}>
-              <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.gender')}</Text>
+              <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: 'left' }}>{t('captain.register.gender')}</Text>
               {/* native forceRTL mirrors this row in AR — no manual flip */}
               <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
                 {(['male', 'female'] as CaptainGender[]).map((g) => {
@@ -100,7 +100,7 @@ export default function PersonalStep() {
                   )
                 })}
               </View>
-              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{t('captain.register.genderNote')}</Text>
+              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>{t('captain.register.genderNote')}</Text>
             </View>
             {/* National ID is numeric: normalize Arabic-Indic/Persian digits to ASCII before the \D strip
                 (a bare \D strip would delete Arabic digits the AR keyboard produces). numeric keeps the ID LTR. */}

@@ -1,13 +1,11 @@
 // components/captain/document-row.tsx
-import { View, Text, TouchableOpacity, ActivityIndicator, I18nManager } from 'react-native'
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import type { DocType } from '@/services/captain-documents'
-
-const isRTL = I18nManager.isRTL
 
 export type DocState = 'empty' | 'uploading' | 'uploaded' | 'failed'
 
@@ -73,11 +71,11 @@ export function DocumentRow({ docType, state, onPress }: DocumentRowProps) {
       >
         <Icon name={ICONS[docType]} size={20} color={colors.subtle} />
       </View>
-      <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: 'left' }}>
           {t(`captain.documents.${docType}`)}
         </Text>
-        <Text style={{ ...Typography['caption-sm'], color: statusColor, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+        <Text style={{ ...Typography['caption-sm'], color: statusColor, fontStyle: 'normal', textAlign: 'left' }}>
           {statusText}
         </Text>
       </View>

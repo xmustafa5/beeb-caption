@@ -26,14 +26,15 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   return (
     <View style={{ gap: Spacing.xs + 1 }}>
       {label && (
-        <Text style={{ ...Typography['input-label'], color: colors.subtle }}>
+        // Reading-start: visual left in EN, visual right in AR (native RTL swaps it).
+        <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: 'left' }}>
           {label}
         </Text>
       )}
       <View style={{
-        // Literal 'row' is NOT auto-mirrored by RN under RTL, so the leading slot stays
-        // on the left and the TextInput to its right in both languages. For numeric
-        // fields the TextInput's textAlign:'left' + writingDirection:'ltr' keep digits LTR.
+        // Native forceRTL mirrors a literal 'row' in AR, so leading/TextInput/trailing
+        // flip to the reading order automatically — no manual flip. For numeric fields the
+        // TextInput's textAlign:'left' + writingDirection:'ltr' keep digits Western-LTR.
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.surface,
@@ -63,7 +64,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         {trailing}
       </View>
       {error && (
-        <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal' }}>
+        <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'left' }}>
           {error}
         </Text>
       )}

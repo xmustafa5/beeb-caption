@@ -72,7 +72,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
-          <Text style={{ ...Typography['heading-lg'], fontSize: 24, color: colors.text, alignSelf: 'stretch', textAlign: isRTL ? 'right' : 'left' }} numberOfLines={1}>
+          <Text style={{ ...Typography['heading-lg'], fontSize: 24, color: colors.text, alignSelf: 'stretch', textAlign: 'center' }} numberOfLines={1}>
             {captain.name || '—'}
           </Text>
           <Text
@@ -131,11 +131,11 @@ export default function ProfileScreen() {
               <Icon name="car-sport" size={22} color={colors.tint} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }} numberOfLines={1}>
+              <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }} numberOfLines={1}>
                 {car || '—'}
               </Text>
               {/* Plate is a Western-digit ID — lock LTR so it isn't reordered under native forceRTL */}
-              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: isRTL ? 'right' : 'left' }} selectable>
+              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: 'left' }} selectable>
                 {captain.carPlate}
               </Text>
             </View>
@@ -167,7 +167,7 @@ export default function ProfileScreen() {
           }}>
             <Icon name="document-text-outline" size={18} color={colors.tint} />
           </View>
-          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: 'left' }}>
             {t('profile.documents')}
           </Text>
           <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.subtle} />
@@ -213,7 +213,7 @@ export default function ProfileScreen() {
           }}>
             <Icon name="log-out-outline" size={18} color={colors.destructive} />
           </View>
-          <Text style={{ ...Typography['body-md'], color: colors.destructive, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['body-md'], color: colors.destructive, flex: 1, textAlign: 'left' }}>
             {t('profile.logout')}
           </Text>
         </TouchableOpacity>
@@ -236,7 +236,8 @@ function sectionLabel(colors: ReturnType<typeof useThemeColors>) {
     letterSpacing: 0.6,
     marginBottom: Spacing.sm,
     paddingHorizontal: Spacing.xs,
-    textAlign: (isRTL ? 'right' : 'left') as 'right' | 'left',
+    // Reading-start: visual left in EN, visual right in AR (native RTL swaps it).
+    textAlign: 'left' as const,
   }
 }
 
@@ -341,8 +342,8 @@ function ThemeRow<T extends string>({ label, value, onChange, options, colors }:
         <Icon name="contrast-outline" size={18} color={colors.tint} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>{label}</Text>
-        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>{activeLabel}</Text>
+        <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }}>{label}</Text>
+        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>{activeLabel}</Text>
       </View>
       <View style={{
         // native forceRTL mirrors this row in AR — no manual flip

@@ -151,10 +151,18 @@ interface AuthFieldProps extends Omit<TextInputProps, 'style'> {
   trailing?: React.ReactNode
   leading?: React.ReactNode
   numeric?: boolean
+  /**
+   * Pin the input row to LTR regardless of app direction. Native RTL mirrors a
+   * literal `flexDirection: 'row'`, which would push a leading prefix (e.g. the
+   * +964 dial code) to the visual right in AR. Setting `direction: 'ltr'` on the
+   * row keeps the leading slot on the visual LEFT and the digits flowing after
+   * it in both languages — the desired layout for a phone field.
+   */
+  pinLtrRow?: boolean
 }
 
 export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthField(
-  { label, error, trailing, leading, numeric, ...props },
+  { label, error, trailing, leading, numeric, pinLtrRow, ...props },
   ref,
 ) {
   const colors = useThemeColors()
@@ -166,13 +174,17 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
         style={{
           ...Typography['input-label'],
           color: colors.subtle,
-          textAlign: isRTL ? 'right' : 'left',
+          // Reading-start: visual left in EN, visual right in AR (native RTL swaps it).
+          textAlign: 'left',
         }}
       >
         {label}
       </Text>
       <View
         style={{
+          // pinLtrRow forces the row LTR so a leading prefix (the +964 dial code)
+          // stays on the visual LEFT in AR too; otherwise native RTL mirrors the row.
+          ...(pinLtrRow ? { direction: 'ltr' as const } : null),
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: colors.surface,
@@ -218,7 +230,7 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
             ...Typography['caption-sm'],
             color: colors.destructive,
             fontStyle: 'normal',
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
           }}
         >
           {error}
@@ -263,19 +275,20 @@ export const PhoneField = forwardRef<TextInput, Omit<AuthFieldProps, 'leading' |
         ref={ref}
         keyboardType="phone-pad"
         numeric
+        pinLtrRow
         maxLength={11}
         {...props}
         leading={
           <View
             style={{
-              // LTR-locked: flag + dial code read visually LTR in AR too.
-              flexDirection: isRTL ? 'row-reverse' : 'row',
+              // Row is pinned LTR by pinLtrRow, so flag + dial code stay on the
+              // visual LEFT with the divider on their trailing (right) edge in
+              // both EN and AR — no per-language flipping needed.
+              flexDirection: 'row',
               alignItems: 'center',
               gap: 6,
-              paddingRight: isRTL ? 0 : Spacing.sm,
-              paddingLeft: isRTL ? Spacing.sm : 0,
-              borderRightWidth: isRTL ? 0 : 1,
-              borderLeftWidth: isRTL ? 1 : 0,
+              paddingRight: Spacing.sm,
+              borderRightWidth: 1,
               borderColor: colors.border,
             }}
           >

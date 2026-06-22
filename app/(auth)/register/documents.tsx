@@ -6,7 +6,7 @@
 //    onboarding-scoped captain JWT that /api/captains/register now returns.
 //  - Profile (no flag): an approved/pending captain re-uploads; returns back.
 import { useState } from 'react'
-import { View, Text, ScrollView, ActionSheetIOS, Alert, Platform, I18nManager } from 'react-native'
+import { View, Text, ScrollView, ActionSheetIOS, Alert, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -18,8 +18,6 @@ import { Button } from '@/components/ui/button'
 import { DocumentRow, type DocState } from '@/components/captain/document-row'
 import { DOC_TYPES, uploadDocument, type DocType } from '@/services/captain-documents'
 import { useAuthStore } from '@/store/auth-store'
-
-const isRTL = I18nManager.isRTL
 
 type StateMap = Record<DocType, DocState>
 const INITIAL: StateMap = {
@@ -110,11 +108,11 @@ export default function DocumentsStep() {
             gap: Spacing.lg,
           }}
         >
-          <View style={{ gap: Spacing.xs, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-            <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
+          <View style={{ gap: Spacing.xs, alignSelf: 'stretch' }}>
+            <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: 'left' }}>
               {t('captain.register.documentsTitle')}
             </Text>
-            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
               {t('captain.documents.subtitle', { uploaded: uploadedCount, total: DOC_TYPES.length })}
             </Text>
           </View>

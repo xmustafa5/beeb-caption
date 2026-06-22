@@ -111,10 +111,10 @@ export default function AccountStep() {
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + Spacing.xl }}>
         <View style={{ paddingTop: insets.top + Spacing.xl, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg, gap: Spacing.lg }}>
           <WizardProgress current={1} total={3} />
-          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: 'left' }}>
             {step === 'phone' ? t('captain.auth.accountTitle') : step === 'otp' ? t('auth.otpTitle') : t('captain.auth.setPasswordTitle')}
           </Text>
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
             {step === 'phone' ? t('captain.auth.accountSubtitle') : step === 'otp' ? t('auth.otpSubtitle', { phone }) : t('captain.auth.setPasswordSubtitle')}
           </Text>
         </View>
