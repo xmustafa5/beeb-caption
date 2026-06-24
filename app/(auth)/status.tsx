@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon'
 import { useAuthStore } from '@/store/auth-store'
 import { useRegistrationStore } from '@/store/registration-store'
 import { getCaptain } from '@/services/captain-auth'
+import { parseApiError } from '@/lib/api'
 
 // Ops support line. Set EXPO_PUBLIC_SUPPORT_WHATSAPP_URL in env; the fallback is a
 // placeholder until the real captain-support number is provided.
@@ -51,6 +52,17 @@ export default function StatusScreen() {
       useAuthStore.getState().updateCaptain(captain)
       if (captain.status !== 'approved') setNote(t('captain.status.stillPending'))
       // AuthGate routes to (tabs) automatically once status === 'approved'.
+    } catch (err) {
+      // A 404 means the captain record is gone (e.g. a staging DB reset) and a
+      // 403 means access was revoked: the session is dead, so clear it and let
+      // AuthGate route back to login instead of polling a ghost id on every
+      // focus/foreground. Network/other errors keep the session and just note.
+      const info = parseApiError(err)
+      if (info.status === 404 || info.status === 403) {
+        useAuthStore.getState().clear()
+        return
+      }
+      setNote(t(info.isNetwork ? 'common.networkError' : 'captain.status.stillPending'))
     } finally {
       setChecking(false)
     }
