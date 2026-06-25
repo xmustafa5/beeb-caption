@@ -93,6 +93,7 @@
     "searchResults": "النتائج",
     "noResults": "لا توجد نتائج. جرّب بحث آخر.",
     "locating": "نحدد موقعك…",
+    "recenter": "موقعي",
     "useMap": "اختر من الخريطة",
     "rideOptionsTitle": "اختر نوع الرحلة",
     "bookCta": "احجز {{type}}",
