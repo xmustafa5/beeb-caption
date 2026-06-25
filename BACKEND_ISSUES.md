@@ -328,6 +328,22 @@ change is to read the token from the `register` response instead of from `verify
 
 ---
 
+## 8. `/api/places/nearby` is undocumented in the OpenAPI spec — ⏳ **OPEN (raised 2026-06-25)**
+
+`services/places-nearby.ts` depends on `GET /api/places/nearby`, but the endpoint
+is absent from both the committed `docs/openapi.json` and the live spec at
+`https://beeb.madebyhaithem.com/api-docs/openapi.json` (verified 2026-06-25).
+
+Reverse-engineered contract:
+- `bbox` mode: `?bbox=minLng,minLat,maxLng,maxLat&per_page=100&page=N[&category=...]`
+- `radius` mode: `?lat=&lng=&radius_m=<=50000&per_page=100&page=N`
+- Response: `{ items: BackendPlace[], total, page, per_page }`, `total` capped ~1000/viewport.
+- Auth: assumed public (no token) — inferred from the public sibling `/api/zones`; not confirmed.
+
+Action: ask backend to add this path to the OpenAPI spec and confirm the auth tier.
+
+---
+
 ## 7. Captain can't list a trip's stops (multi-stop "reach" unusable from the captain side) — ⏳ **OPEN (raised 2026-06-11)**
 
 **Found:** 2026-06-11 (Captain App, Area 5 live-trip) · **Status:** awaiting backend

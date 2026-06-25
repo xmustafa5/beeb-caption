@@ -93,6 +93,7 @@
     "searchResults": "Results",
     "noResults": "No matching places. Try another search.",
     "locating": "Finding your location…",
+    "recenter": "My location",
     "useMap": "Pick on map instead",
     "rideOptionsTitle": "Choose a ride",
     "bookCta": "Book {{type}}",

@@ -54,7 +54,8 @@
           "cameraPermission": "Beeb needs camera access to capture your captain documents."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,
