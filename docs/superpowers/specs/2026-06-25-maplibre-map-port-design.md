@@ -109,7 +109,10 @@ and `react-native-worklets`, so it already requires a dev build today.
 | --- | --- |
 | `hooks/use-current-location.ts` | `LatLng` type is byte-identical, so type-safe as-is. Beeb's version adds a `lastFix` cache + `getLastKnownPositionAsync()` fast path that makes recenter feel instant. **Port that additive enhancement** into caption's hook for recenter parity. Without it, recenter UX is degraded but functional. |
 | `i18n/en.json` + `i18n/ar.json` | Add `booking.recenter` (confirmed missing; used by `recenter-button`). Other keys used by the ported components (`booking.searchPlaceholder/popularPlaces/locating/fromLabel/toLabel/noResults/searchResults`, `abriyah.pinOutsideZone`, `common.back/error/networkError/rateLimited`) are confirmed present. Verify the full set during implementation and add any other gaps surfaced. |
-| `lib/api.ts` | **Optional, dev-only.** Beeb's `api.ts` collapses large arrays in its request/response logger specifically because `/api/places/nearby` returns hundreds of POIs per page and floods Metro. Caption's older `api.ts` lacks this. Either port just the log-summarization, or accept console noise in dev. Do **not** overwrite (auth wiring + `auth-store` differ). Recommended: port the log summarizer; low effort, dev-only. |
+
+`lib/api.ts` is **not** touched. Beeb's `api.ts` has a dev-only logger that collapses
+large POI arrays; caption's lacks it. Per decision, we leave caption's `api.ts` unmodified
+and accept noisier dev-console output on POI fetches (no production impact).
 
 ### LEAVE — already present in caption, identical or compatible (do nothing)
 
@@ -168,7 +171,7 @@ aren't silently lost.
 | Forgetting `npx expo prebuild --clean` after adding the plugin. | Medium | Hard step in sequencing, not a note. |
 | `/api/places/nearby` undocumented in OpenAPI → contract could drift; public-auth assumption unconfirmed. | Medium | Log to `BACKEND_ISSUES.md`; document the reverse-engineered contract here. |
 | Missing `booking.recenter` → raw key shown. | Low | Added in i18n step. |
-| POI viewport fetch floods Metro console on caption's older `api.ts` logger. | Low (dev-only) | Port beeb's log-summarization (optional ADAPT). |
+| POI viewport fetch floods Metro console on caption's `api.ts` logger. | Low (dev-only) | Accepted — caption's `api.ts` left unmodified; no production impact. |
 | `use-current-location` lacks `lastFix` → recenter not instant. | Low | Port the additive `lastFix` fast path (ADAPT). |
 | 17 glyph PNGs are runtime `require()`s → silent no-render if missed. | Low | Explicit asset-copy checklist item; keys synced to `POI_GLYPH_NAMES`. |
 
@@ -177,7 +180,7 @@ aren't silently lost.
 1. **Deps & config:** add the 3 packages, remove `react-native-maps`, append the app.json
    plugin, `npx expo install`.
 2. **Add new modules** (the ADD table) + **copy the 17 glyph assets** + **add `booking.recenter`** i18n keys.
-3. **ADAPT** caption's `use-current-location.ts` (lastFix) and optionally `api.ts` (logger).
+3. **ADAPT** caption's `use-current-location.ts` (add the `lastFix` fast-path for recenter parity).
 4. **Overwrite** the 3 targets (`trip-map.tsx`, `location-picker.tsx`, `places.ts`).
 5. **`npx expo prebuild --clean`** + reinstall native deps.
 6. **Verify** (below).
