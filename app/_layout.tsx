@@ -4,6 +4,7 @@ import { Stack, useRouter, useSegments, type Href } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import * as SplashScreen from 'expo-splash-screen'
@@ -77,22 +78,24 @@ export default function RootLayout() {
       <I18nextProvider i18n={i18n}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
-            <AuthGate>
-              {/* Presence spans the whole authenticated surface (tabs + the live
-                  trip screen) so the driving screen gets live WS trip updates.
-                  It self-gates on token + approval, so it no-ops on auth screens. */}
-              <CaptainPresenceProvider>
-                <Stack screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.background },
-                }}>
-                  <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="(trip)" />
-                </Stack>
-              </CaptainPresenceProvider>
-              <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-            </AuthGate>
+            <BottomSheetModalProvider>
+              <AuthGate>
+                {/* Presence spans the whole authenticated surface (tabs + the live
+                    trip screen) so the driving screen gets live WS trip updates.
+                    It self-gates on token + approval, so it no-ops on auth screens. */}
+                <CaptainPresenceProvider>
+                  <Stack screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.background },
+                  }}>
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="(trip)" />
+                  </Stack>
+                </CaptainPresenceProvider>
+                <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+              </AuthGate>
+            </BottomSheetModalProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </I18nextProvider>

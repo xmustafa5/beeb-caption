@@ -1,11 +1,12 @@
+import { useRef } from 'react'
 import { ScrollView, View, Text, TouchableOpacity, I18nManager, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
-import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
+import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
@@ -16,11 +17,11 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
-  const router = useRouter()
   const captain = useAuthStore((s) => s.captain)
   const lang = i18n.language as 'en' | 'ar'
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
+  const langSheetRef = useRef<OptionSheetRef>(null)
 
   if (!captain) return null
 
@@ -33,6 +34,15 @@ export default function ProfileScreen() {
     .toUpperCase() || '?'
 
   const languageLabel = lang === 'ar' ? 'العربية' : 'English'
+  const languageOptions: Option<'en' | 'ar'>[] = [
+    { value: 'en', label: 'English', icon: 'language-outline' },
+    { value: 'ar', label: 'العربية', icon: 'language-outline' },
+  ]
+  // Apply a language choice immediately (a real change flips RTL → app restart).
+  const onSelectLanguage = (next: 'en' | 'ar') => {
+    langSheetRef.current?.dismiss()
+    if (next !== lang) changeLanguage(next)
+  }
   const car = [captain.carColor, `${captain.carMake} ${captain.carModel}`].filter(Boolean).join(' · ')
 
   const onLogout = () => {
@@ -86,7 +96,7 @@ export default function ProfileScreen() {
           {/* Inline chips: language + status */}
           {/* native forceRTL mirrors this row in AR — no manual flip */}
           <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs }}>
-            <Chip icon="language-outline" label={languageLabel} onPress={() => changeLanguage(lang === 'en' ? 'ar' : 'en')} colors={colors} />
+            <Chip icon="language-outline" label={languageLabel} onPress={() => langSheetRef.current?.present()} colors={colors} />
             <StatusChip status={captain.status} colors={colors} />
           </View>
         </View>
@@ -142,37 +152,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── Documents ── */}
-        <TouchableOpacity
-          onPress={() => router.push('/(auth)/register/documents')}
-          activeOpacity={0.85}
-          style={{
-            // native forceRTL mirrors this row in AR — no manual flip
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Spacing.md,
-            marginTop: Spacing.lg,
-            backgroundColor: colors.card,
-            borderRadius: 16,
-            borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: Spacing.lg,
-          }}
-        >
-          <View style={{
-            width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
-            backgroundColor: colors.tint + '1A',
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon name="document-text-outline" size={18} color={colors.tint} />
-          </View>
-          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: 'left' }}>
-            {t('profile.documents')}
-          </Text>
-          <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.subtle} />
-        </TouchableOpacity>
-
         {/* ── Theme switch ── */}
         <View style={{ marginTop: Spacing.xl }}>
           <ThemeRow
@@ -222,6 +201,15 @@ export default function ProfileScreen() {
           Beeb Captain · 1.0.0
         </Text>
       </ScrollView>
+
+      {/* Language picker */}
+      <OptionSheet
+        ref={langSheetRef}
+        title={t('profile.languageLabel')}
+        options={languageOptions}
+        selected={lang}
+        onSelect={onSelectLanguage}
+      />
     </View>
   )
 }
