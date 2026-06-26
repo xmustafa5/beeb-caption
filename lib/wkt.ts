@@ -47,3 +47,17 @@ export function polygonCenter(polygon: LatLng[]): LatLng {
     longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
   }
 }
+
+/** Parse a WKT point `POINT(lng lat)` (lng-first, SRID 4326) into LatLng. Null on anything unparseable. */
+export function parsePointWkt(wkt: string): LatLng | null {
+  if (!wkt) return null
+  const open = wkt.indexOf('(')
+  const close = wkt.indexOf(')')
+  if (open === -1 || close === -1 || close <= open) return null
+  const parts = wkt.slice(open + 1, close).trim().split(/\s+/)
+  if (parts.length < 2) return null
+  const lng = Number(parts[0])
+  const lat = Number(parts[1])
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+  return { latitude: lat, longitude: lng }
+}
