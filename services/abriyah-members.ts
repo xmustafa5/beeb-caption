@@ -1,9 +1,14 @@
 // services/abriyah-members.ts
 import { api } from '@/lib/api'
+import { parsePointWkt } from '@/lib/wkt'
+import type { LatLng } from '@/hooks/use-current-location'
 
 export interface RoomMember {
   riderId: string
   name: string
+  phone: string
+  pickup: LatLng
+  dropoff: LatLng
   fareIqd: number
   distanceKm: number
 }
@@ -37,6 +42,9 @@ export interface RoomMembersData {
 interface BackendMember {
   rider_id: string
   name: string
+  phone: string
+  pickup_wkt: string
+  dropoff_wkt: string
   fare_iqd: number
   distance_km: number
 }
@@ -78,6 +86,9 @@ export async function getRoomMembers(roomId: string): Promise<RoomMembersData> {
     members: (data.members ?? []).map((m) => ({
       riderId: m.rider_id,
       name: m.name,
+      phone: m.phone,
+      pickup: parsePointWkt(m.pickup_wkt) ?? { latitude: 0, longitude: 0 },
+      dropoff: parsePointWkt(m.dropoff_wkt) ?? { latitude: 0, longitude: 0 },
       fareIqd: m.fare_iqd,
       distanceKm: m.distance_km,
     })),
