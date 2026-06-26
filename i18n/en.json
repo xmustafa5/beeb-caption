@@ -399,6 +399,16 @@
       "resumeTitle": "Trip in progress",
       "resumeSubtitle": "Tap to return to your active trip"
     },
+    "nafarat": {
+      "title": "Nafarat ride",
+      "progress": "{{done}}/{{total}} dropped off",
+      "call": "Call",
+      "pickUp": "Pick up",
+      "dropOff": "Drop off",
+      "dropped": "Dropped off",
+      "allDoneTitle": "All riders dropped off",
+      "loadError": "Couldn't load this ride."
+    },
     "earnings": {
       "tabLabel": "Earnings",
       "title": "Earnings",

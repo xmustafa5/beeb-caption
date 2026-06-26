@@ -399,6 +399,16 @@
       "resumeTitle": "رحلة قيد التنفيذ",
       "resumeSubtitle": "اضغط للعودة إلى رحلتك الحالية"
     },
+    "nafarat": {
+      "title": "رحلة نفرات",
+      "progress": "تم إنزال {{done}} من {{total}}",
+      "call": "اتصال",
+      "pickUp": "صعود",
+      "dropOff": "إنزال",
+      "dropped": "تم الإنزال",
+      "allDoneTitle": "تم إنزال جميع الركاب",
+      "loadError": "تعذّر تحميل الرحلة."
+    },
     "earnings": {
       "tabLabel": "الأرباح",
       "title": "الأرباح",
