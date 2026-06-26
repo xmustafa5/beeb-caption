@@ -49,7 +49,7 @@ export default function QueueScreen() {
     setError(null)
     try {
       await accept(offer)
-      router.push(`/(trip)/${offer.id}`)
+      router.push(offer.offerType === 'room' ? `/(trip)/room/${offer.id}` : `/(trip)/${offer.id}`)
     } catch (err) {
       const info = parseApiError(err)
       if (info.status === 409) setError(t('captain.queue.taken'))

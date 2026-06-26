@@ -25,6 +25,6 @@ export function useResumeActiveTrip() {
     if (!captainId || !trip) return
     if (resumedFor.current === captainId) return
     resumedFor.current = captainId
-    router.push(`/(trip)/${trip.id}`)
+    router.push(trip.tripType === 'abriyah' && trip.roomId ? `/(trip)/room/${trip.roomId}` : `/(trip)/${trip.id}`)
   }, [captainId, trip, router])
 }

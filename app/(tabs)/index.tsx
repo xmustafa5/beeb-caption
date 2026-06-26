@@ -243,7 +243,7 @@ function ActiveTripBanner() {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      onPress={() => router.push(`/(trip)/${trip.id}`)}
+      onPress={() => router.push(trip.tripType === 'abriyah' && trip.roomId ? `/(trip)/room/${trip.roomId}` : `/(trip)/${trip.id}`)}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
