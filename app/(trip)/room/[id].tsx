@@ -23,7 +23,7 @@ export default function NafaratRoomScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { room, dropoffZone, pickupBreakdown, seats, isLoading, isError, pickup, dropoff, busy } = useNafaratRoom(id)
+  const { room, dropoffZone, pickupBreakdown, seats, isLoading, isError, pickup, dropoff, busyTripId } = useNafaratRoom(id)
 
   // Loading (first load)
   if (isLoading && seats.length === 0 && !room) {
@@ -116,7 +116,7 @@ export default function NafaratRoomScreen() {
             <RiderSeatCard
               key={s.riderId}
               seat={s}
-              busy={busy}
+              busy={busyTripId === s.tripId}
               onPickup={() => { if (s.tripId) pickup(s.tripId).catch(() => {}) }}
               onDropoff={() => { if (s.tripId) dropoff(s.tripId).catch(() => {}) }}
             />

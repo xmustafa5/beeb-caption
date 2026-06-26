@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth-store'
 import { getRoomMembers, type DropoffZone, type PickupZoneCount } from '@/services/abriyah-members'
 import { getRoom, type Room } from '@/services/abriyah-rooms'
-import { getRoomTrips, startTrip, completeTrip, type TripStatus } from '@/services/captain-trips'
+import { getRoomTrips, startTrip, completeTrip, type Trip, type TripStatus } from '@/services/captain-trips'
 import type { LatLng } from '@/hooks/use-current-location'
 
 export interface RiderSeat {
@@ -27,7 +27,7 @@ export interface NafaratRoom {
   isError: boolean
   pickup: (tripId: string) => Promise<void>
   dropoff: (tripId: string) => Promise<void>
-  busy: boolean
+  busyTripId: string | null
 }
 
 /**
@@ -77,6 +77,21 @@ export function useNafaratRoom(roomId: string): NafaratRoom {
   const advance = useMutation({
     mutationFn: ({ tripId, action }: { tripId: string; action: 'pickup' | 'dropoff' }) =>
       action === 'pickup' ? startTrip(tripId) : completeTrip(tripId),
+    // Optimistically bump the acted-on rider's trip status so the card flips instantly;
+    // reconcile (or roll back) on settle.
+    onMutate: async ({ tripId, action }) => {
+      await qc.cancelQueries({ queryKey: tripsKey })
+      const prev = qc.getQueryData<Trip[]>(tripsKey)
+      qc.setQueryData<Trip[]>(tripsKey, (old) =>
+        (old ?? []).map((tp) =>
+          tp.id === tripId ? { ...tp, status: action === 'pickup' ? 'in_progress' : 'completed' } : tp,
+        ),
+      )
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(tripsKey, ctx.prev)
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: tripsKey }),
   })
 
@@ -89,6 +104,6 @@ export function useNafaratRoom(roomId: string): NafaratRoom {
     isError: roomQ.isError || membersQ.isError,
     pickup: (tripId) => advance.mutateAsync({ tripId, action: 'pickup' }).then(() => undefined),
     dropoff: (tripId) => advance.mutateAsync({ tripId, action: 'dropoff' }).then(() => undefined),
-    busy: advance.isPending,
+    busyTripId: advance.isPending ? (advance.variables?.tripId ?? null) : null,
   }
 }

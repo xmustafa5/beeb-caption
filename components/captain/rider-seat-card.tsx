@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Linking, I18nManager } from 'react-native'
+import { View, Text, TouchableOpacity, Linking } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { formatIqd } from '@/lib/format-currency'
 import type { RiderSeat } from '@/hooks/use-nafarat-room'
 
-const isRTL = I18nManager.isRTL
 
 interface RiderSeatCardProps {
   seat: RiderSeat
@@ -46,7 +45,7 @@ export function RiderSeatCard({ seat, busy, onPickup, onDropoff }: RiderSeatCard
 
         <View style={{ flex: 1 }}>
           {status === 'completed' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isRTL ? 'flex-start' : 'flex-end', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
               <Icon name="checkmark-circle" size={18} color={colors.success} />
               <Text style={{ ...Typography['caption-sm'], color: colors.success, fontStyle: 'normal' }}>{t('captain.nafarat.dropped')}</Text>
             </View>
