@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { formatIqd } from '@/lib/format-currency'
 import { haversineKm } from '@/hooks/use-distance'
+import { usePlaceName } from '@/hooks/use-place-name'
 import type { LatLng } from '@/hooks/use-current-location'
 import type { CaptainOffer } from '@/services/captain-queue'
 
@@ -18,6 +19,21 @@ interface OfferCardProps {
   captainLocation: LatLng | null
   onAccept: () => void
   accepting: boolean
+}
+
+function PlaceRow({ icon, color, name, loading }: { icon: React.ComponentProps<typeof Icon>['name']; color: string; name: string | null; loading: boolean }) {
+  const colors = useThemeColors()
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+      <Icon name={icon} size={15} color={color} />
+      <Text
+        numberOfLines={1}
+        style={{ ...Typography['caption-sm'], color: colors.text, flex: 1, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}
+      >
+        {name ?? (loading ? '…' : '—')}
+      </Text>
+    </View>
+  )
 }
 
 export function OfferCard({ offer, captainLocation, onAccept, accepting }: OfferCardProps) {
@@ -32,6 +48,9 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
   const awayKm = captainLocation ? haversineKm(captainLocation, pickup) : null
   const tripKm = haversineKm(pickup, dropoff)
 
+  const pickupName = usePlaceName(pickup)
+  const dropName = usePlaceName(dropoff)
+
   return (
     <View
       style={{
@@ -40,13 +59,11 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
         borderCurve: 'continuous',
         padding: Spacing.lg,
         gap: Spacing.md,
-        boxShadow: '0px 6px 18px rgba(0, 0, 0, 0.06)',
+        boxShadow: '0px 6px 18px rgba(0, 0, 0, 0.10)',
       }}
     >
       {/* header: type + fare */}
-      {/* native forceRTL mirrors this row in AR — no manual flip */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        {/* native forceRTL mirrors this row in AR — no manual flip */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
           <Icon name={isRoom ? 'people' : 'car'} size={18} color={colors.tint} />
           <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
@@ -60,26 +77,31 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting }: Offer
             </View>
           )}
         </View>
-        {/* Fare is a Western-grouped number — lock LTR so the IQD suffix and digits read correctly under native forceRTL */}
         <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
           {formatIqd(offer.fareIqd, isAr ? 'ar' : 'en')}
         </Text>
       </View>
 
-      {/* details */}
-      <View style={{ gap: Spacing.xs, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+      {/* pickup + destination place names */}
+      <View style={{ gap: Spacing.xs }}>
+        <PlaceRow icon="ellipse" color={colors.tint} name={pickupName.name} loading={pickupName.isLoading} />
+        <PlaceRow icon="location" color={colors.destructive} name={dropName.name} loading={dropName.isLoading} />
+      </View>
+
+      {/* distances */}
+      <View style={{ gap: 2, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
         {!isRoom && awayKm != null && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
             {t('captain.queue.kmAway', { km: awayKm.toFixed(1) })}
           </Text>
         )}
         {!isRoom && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
             {t('captain.queue.tripDistance', { km: tripKm.toFixed(1) })}
           </Text>
         )}
         {isRoom && offer.roomType !== 'women_only' && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
             {t('captain.queue.roomMixed')}
           </Text>
         )}
