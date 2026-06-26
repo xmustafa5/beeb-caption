@@ -89,6 +89,28 @@ export async function getActiveCaptainTrip(captainId: string): Promise<Trip | nu
   return null
 }
 
+/** Pool statuses to scan for a room's rider trips (accepted/in_progress/completed). */
+const POOL_TRIP_STATUSES: TripStatus[] = ['accepted', 'in_progress', 'completed']
+
+/**
+ * All of the captain's trips that belong to one Abriyah room. There is no
+ * room→trips endpoint and no room_id filter on /api/trips, so we scan the
+ * captain's trips across the pool statuses and keep the ones whose room_id matches.
+ */
+export async function getRoomTrips(captainId: string, roomId: string): Promise<Trip[]> {
+  const out: Trip[] = []
+  for (const status of POOL_TRIP_STATUSES) {
+    const { data } = await api.get<{ items: BackendTrip[] }>('/api/trips', {
+      params: { captain_id: captainId, status, per_page: 50 },
+    })
+    for (const b of data.items ?? []) {
+      const trip = toTrip(b)
+      if (trip.roomId === roomId) out.push(trip)
+    }
+  }
+  return out
+}
+
 /** Cue at pickup — no status change. */
 export async function arriveTrip(id: string): Promise<void> {
   await api.post(`/api/trips/${id}/arrive`)
