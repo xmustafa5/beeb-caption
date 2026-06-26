@@ -1,21 +1,20 @@
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, I18nManager } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
-import { OfferCard } from '@/components/captain/offer-card'
+import { TripMap, type TripMapHandle } from '@/components/trip/trip-map'
+import { OfferPickupMarker } from '@/components/captain/offer-pickup-marker'
+import { OfferCarousel } from '@/components/captain/offer-carousel'
 import { useTripQueue } from '@/hooks/use-trip-queue'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { useCurrentLocation } from '@/hooks/use-current-location'
 import { parseApiError } from '@/lib/api'
 import type { CaptainOffer } from '@/services/captain-queue'
-
-// Stable for the session — forceRTL changes require a restart anyway
-const isRTL = I18nManager.isRTL
 
 export default function QueueScreen() {
   const { t } = useTranslation()
@@ -23,9 +22,28 @@ export default function QueueScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { online } = useCaptainPresence()
-  const { offers, isLoading, isRefetching, refetch, accept, accepting } = useTripQueue()
-  const { location } = useCurrentLocation()
+  const { offers, isLoading, accept, accepting, refetch } = useTripQueue()
+  const { location, fallback } = useCurrentLocation()
   const [error, setError] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const mapRef = useRef<TripMapHandle>(null)
+
+  // Keep activeIndex in range as offers arrive/expire.
+  useEffect(() => {
+    if (activeIndex > offers.length - 1) setActiveIndex(Math.max(0, offers.length - 1))
+  }, [offers.length, activeIndex])
+
+  // Pan the camera to the active offer's pickup whenever it changes.
+  const active = offers[activeIndex]
+  useEffect(() => {
+    if (!active) return
+    mapRef.current?.animateToRegion({
+      latitude: active.pickupLat,
+      longitude: active.pickupLng,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    })
+  }, [active?.id, active?.pickupLat, active?.pickupLng])
 
   async function onAccept(offer: CaptainOffer) {
     setError(null)
@@ -42,13 +60,7 @@ export default function QueueScreen() {
     }
   }
 
-  const header = (
-    <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
-      {t('captain.queue.title')}
-    </Text>
-  )
-
-  // Offline
+  // Offline → keep the simple offline message (no map).
   if (!online) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md }}>
@@ -59,39 +71,77 @@ export default function QueueScreen() {
     )
   }
 
+  const center = location ?? fallback
+  const hasOffers = offers.length > 0
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: Spacing.xl, paddingTop: insets.top + Spacing.xl, gap: Spacing.lg, flexGrow: 1 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-    >
-      {header}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <TripMap
+        ref={mapRef}
+        initialRegion={{
+          latitude: active?.pickupLat ?? center.latitude,
+          longitude: active?.pickupLng ?? center.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }}
+        showsUserLocation
+      >
+        {offers.map((o, i) => (
+          <OfferPickupMarker
+            key={`${o.offerType}-${o.id}`}
+            coord={{ latitude: o.pickupLat, longitude: o.pickupLng }}
+            active={i === activeIndex}
+          />
+        ))}
+      </TripMap>
 
-      {error && (
-        <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal' }}>{error}</Text>
-      )}
-
-      {isLoading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Loading overlay (first fetch) */}
+      {isLoading && !hasOffers && (
+        <View style={{ position: 'absolute', top: insets.top + Spacing.xl, alignSelf: 'center' }}>
           <ActivityIndicator color={colors.tint} />
         </View>
-      ) : offers.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md }}>
-          <Icon name="hourglass-outline" size={40} color={colors.muted} />
-          <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'center', fontStyle: 'normal' }}>{t('captain.queue.emptyTitle')}</Text>
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, textAlign: 'center', fontStyle: 'normal' }}>{t('captain.queue.emptyBody')}</Text>
+      )}
+
+      {/* Online but no offers → waiting pill over the map */}
+      {!isLoading && !hasOffers && (
+        <View
+          style={{
+            position: 'absolute',
+            top: insets.top + Spacing.lg,
+            alignSelf: 'center',
+            backgroundColor: colors.card,
+            borderRadius: 999,
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.sm,
+            boxShadow: '0px 2px 10px rgba(0,0,0,0.18)',
+          }}
+        >
+          <Icon name="hourglass-outline" size={16} color={colors.subtle} />
+          <Text style={{ ...Typography['caption-sm'], color: colors.text, fontStyle: 'normal' }}>{t('captain.queue.emptyTitle')}</Text>
         </View>
-      ) : (
-        offers.map((offer) => (
-          <OfferCard
-            key={`${offer.offerType}-${offer.id}`}
-            offer={offer}
+      )}
+
+      {/* Offers → bottom carousel */}
+      {hasOffers && (
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + Spacing.md, gap: Spacing.sm }}>
+          {error && (
+            <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'center', marginHorizontal: Spacing.xl }}>
+              {error}
+            </Text>
+          )}
+          <OfferCarousel
+            offers={offers}
+            activeIndex={activeIndex}
+            onIndexChange={setActiveIndex}
             captainLocation={location}
-            onAccept={() => onAccept(offer)}
+            onAccept={onAccept}
             accepting={accepting}
           />
-        ))
+        </View>
       )}
-    </ScrollView>
+    </View>
   )
 }
