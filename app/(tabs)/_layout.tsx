@@ -14,6 +14,7 @@ import ProfileScreen from './profile'
 
 const SCREENS = [HomeScreen, TripsScreen, NotificationsScreen, ProfileScreen]
 const TAB_PATHS = ['/', '/trips', '/notifications', '/profile']
+const QUEUE_INDEX = 1 // 'trips' screen = the Queue tab
 
 // Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
@@ -47,6 +48,7 @@ export default function TabLayout() {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
+        scrollEnabled={activeIndex !== QUEUE_INDEX}
         layoutDirection={isRTL ? 'rtl' : 'ltr'}
         overdrag
         onPageSelected={(e) => {
