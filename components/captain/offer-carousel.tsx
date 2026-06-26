@@ -1,6 +1,6 @@
 // components/captain/offer-carousel.tsx
 import { useEffect, useRef } from 'react'
-import { View, FlatList, useWindowDimensions, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native'
+import { View, FlatList, useWindowDimensions, type ViewToken } from 'react-native'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, cancelAnimation, runOnJS, Easing } from 'react-native-reanimated'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Spacing } from '@/constants/Spacing'
@@ -26,6 +26,17 @@ export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocat
   const progress = useSharedValue(0)
   const count = offers.length
 
+  // The index the LIST has actually settled on. Lets the programmatic scroll fire
+  // only for auto-advance / external changes — never to echo a manual swipe (which
+  // otherwise causes a scroll⇄report feedback loop = the janky / "infinite" swipe).
+  const settledIndex = useRef(activeIndex)
+  // Refs so the (stable) viewability callback always reads fresh values without being
+  // recreated — RN forbids changing onViewableItemsChanged between renders.
+  const activeIndexRef = useRef(activeIndex)
+  const onIndexChangeRef = useRef(onIndexChange)
+  useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
+  useEffect(() => { onIndexChangeRef.current = onIndexChange }, [onIndexChange])
+
   // Countdown + auto-advance. Resets whenever the active offer or the count changes
   // (a manual swipe updates activeIndex → this effect re-runs → timer restarts).
   useEffect(() => {
@@ -37,19 +48,31 @@ export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocat
     return () => cancelAnimation(progress)
   }, [activeIndex, count, progress, onIndexChange])
 
-  // Keep the list scrolled to the active card (covers auto-advance + external changes).
+  // Scroll the list to the active card ONLY when the change came from outside the
+  // list (auto-advance / clamp) — i.e. the list hasn't already settled there.
   useEffect(() => {
-    if (activeIndex >= 0 && activeIndex < count) {
-      listRef.current?.scrollToIndex({ index: activeIndex, animated: true })
+    if (activeIndex !== settledIndex.current && activeIndex >= 0 && activeIndex < count) {
+      settledIndex.current = activeIndex
+      try {
+        listRef.current?.scrollToIndex({ index: activeIndex, animated: true })
+      } catch {
+        // list not laid out yet — getItemLayout makes this rare; ignore.
+      }
     }
   }, [activeIndex, count])
 
   const barStyle = useAnimatedStyle(() => ({ width: `${(1 - progress.value) * 100}%` }))
 
-  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / width)
-    if (idx !== activeIndex && idx >= 0 && idx < count) onIndexChange(idx)
-  }
+  // Settled-card detection via viewability — reports the actual visible item's data
+  // index, so it is correct under both LTR and native forceRTL (no contentOffset math,
+  // which is mirrored/unreliable in RTL). Stable identity via refs.
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current
+  const onViewableItemsChanged = useRef((info: { viewableItems: ViewToken[] }) => {
+    const idx = info.viewableItems[0]?.index
+    if (idx == null) return
+    settledIndex.current = idx
+    if (idx !== activeIndexRef.current) onIndexChangeRef.current(idx)
+  }).current
 
   return (
     <View style={{ gap: Spacing.sm }}>
@@ -67,8 +90,10 @@ export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocat
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onMomentumEnd}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+        onScrollToIndexFailed={() => {}}
         renderItem={({ item }) => (
           <View style={{ width, paddingHorizontal: Spacing.xl }}>
             <OfferCard
