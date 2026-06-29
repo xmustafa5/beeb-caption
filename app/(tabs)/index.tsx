@@ -8,6 +8,7 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { TripMap, type TripMapHandle } from '@/components/trip/trip-map'
+import { RecenterButton } from '@/components/trip/recenter-button'
 import { OfferPickupMarker } from '@/components/captain/offer-pickup-marker'
 import { OfferCarousel } from '@/components/captain/offer-carousel'
 import { useTripQueue } from '@/hooks/use-trip-queue'
@@ -49,6 +50,21 @@ export default function HomeScreen() {
     })
   }, [active?.id, active?.pickupLat, active?.pickupLng])
 
+  // Fly to the captain's real GPS fix the FIRST time one arrives after mount
+  // (GPS resolves async, so the map opens on the Baghdad fallback). We fly exactly
+  // once — later watch updates must not yank the map while the captain pans to
+  // inspect the area. An active offer keeps camera priority: don't fight the
+  // offer-pickup pan above. Mirrors the rider picker's fly-to-GPS-on-first-fix.
+  const flewToGpsRef = useRef(false)
+  useEffect(() => {
+    if (flewToGpsRef.current || !location || active) return
+    flewToGpsRef.current = true
+    mapRef.current?.animateToRegion(
+      { latitude: location.latitude, longitude: location.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 },
+      500,
+    )
+  }, [location, active])
+
   async function onAccept(offer: CaptainOffer) {
     setError(null)
     try {
@@ -78,6 +94,11 @@ export default function HomeScreen() {
           longitudeDelta: 0.02,
         }}
         showsUserLocation
+        showPois
+        // Active offer's dropoff (destructive pin) for trip-direction context. The
+        // active pickup is already drawn by OfferPickupMarker below, so only the
+        // dropoff is passed here — passing `pickup` too would double-draw it.
+        dropoff={active ? { latitude: active.dropoffLat, longitude: active.dropoffLng } : undefined}
       >
         {offers.map((o, i) => (
           <OfferPickupMarker
@@ -90,6 +111,20 @@ export default function HomeScreen() {
 
       {/* Persistent "you have a trip in progress" banner, floating over the map. */}
       <ActiveTripBanner topInset={insets.top} />
+
+      {/* Zoom-to-current-location button. Sits above the offer carousel when
+          offers are present, near the safe-area edge when idle. */}
+      {location && (
+        <RecenterButton
+          bottomOffset={insets.bottom + (hasOffers ? 200 : Spacing.lg)}
+          onPress={() =>
+            mapRef.current?.animateToRegion(
+              { latitude: location.latitude, longitude: location.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 },
+              450,
+            )
+          }
+        />
+      )}
 
       {/* Loading overlay (first fetch while online). */}
       {online && isLoading && !hasOffers && (
