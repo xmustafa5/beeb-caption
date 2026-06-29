@@ -326,7 +326,8 @@
       "amountInvalid": "Enter a valid amount",
       "payByCard": "Pay {{fee}} by card",
       "cardPaymentFailed": "Card payment failed. Please try again.",
-      "cardPaymentPending": "Payment is processing. Pull to refresh in a moment."
+      "cardPaymentPending": "Payment is processing. Pull to refresh in a moment.",
+      "tabActivate": "Activate"
     },
     "online": {
       "toggleLabel": "Go online",

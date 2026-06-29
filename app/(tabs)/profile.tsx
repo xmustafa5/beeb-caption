@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { ScrollView, View, Text, TouchableOpacity, I18nManager, Alert } from 'react-native'
+import { useRef, useState } from 'react'
+import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -7,11 +7,13 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
+import { PeriodTabs } from '@/components/captain/period-tabs'
+import { EarningsSummary } from '@/components/captain/earnings-summary'
+import { useEarnings } from '@/hooks/use-earnings'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
-
-const isRTL = I18nManager.isRTL
+import type { EarningsPeriod } from '@/services/earnings'
 
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation()
@@ -22,6 +24,8 @@ export default function ProfileScreen() {
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
   const langSheetRef = useRef<OptionSheetRef>(null)
+  const [period, setPeriod] = useState<EarningsPeriod>('today')
+  const { earnings, isLoading: earningsLoading } = useEarnings(period)
 
   if (!captain) return null
 
@@ -116,6 +120,23 @@ export default function ProfileScreen() {
           <Stat value={captain.avgRating ? captain.avgRating.toFixed(1) : '—'} label={t('profile.ratingStat')} icon="star" iconColor={colors.accent} colors={colors} />
           <View style={{ width: 1, backgroundColor: colors.border }} />
           <Stat value={String(captain.tripCount ?? 0)} label={t('profile.tripsStat')} icon="car-sport" iconColor={colors.tint} colors={colors} />
+        </View>
+
+        {/* ── Earnings ── */}
+        <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
+          <Text style={sectionLabel(colors)}>{t('captain.earnings.title')}</Text>
+          <PeriodTabs value={period} onChange={setPeriod} />
+          {earningsLoading ? (
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xl }}>
+              <ActivityIndicator color={colors.tint} />
+            </View>
+          ) : earnings ? (
+            <EarningsSummary earnings={earnings} />
+          ) : (
+            <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'left' }}>
+              {t('captain.earnings.loadFailed')}
+            </Text>
+          )}
         </View>
 
         {/* ── Vehicle card ── */}

@@ -4,17 +4,16 @@ import PagerView from 'react-native-pager-view'
 import { usePathname } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { CustomTabBar } from '@/components/tab-bar/custom-tab-bar'
+import { ActivateSheet } from '@/components/captain/activate-sheet'
 import { useTabStore } from '@/store/tab-store'
 import { useResumeActiveTrip } from '@/hooks/use-resume-active-trip'
 
 import HomeScreen from './index'
-import TripsScreen from './trips'
-import NotificationsScreen from './notifications'
 import ProfileScreen from './profile'
 
-const SCREENS = [HomeScreen, TripsScreen, NotificationsScreen, ProfileScreen]
-const TAB_PATHS = ['/', '/trips', '/notifications', '/profile']
-const QUEUE_INDEX = 1 // 'trips' screen = the Queue tab
+const SCREENS = [HomeScreen, ProfileScreen]
+const TAB_PATHS = ['/', '/profile']
+const HOME_INDEX = 0 // Home = the live map; disable pager swipe so it doesn't fight the map gesture
 
 // Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
@@ -23,6 +22,7 @@ export default function TabLayout() {
   const pagerRef = useRef<PagerView>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [rendered, setRendered] = useState(new Set<number>([0]))
+  const [showActivate, setShowActivate] = useState(false)
 
   // If a trip is in flight, resume the captain into the live-trip screen on launch.
   useResumeActiveTrip()
@@ -48,7 +48,7 @@ export default function TabLayout() {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        scrollEnabled={activeIndex !== QUEUE_INDEX}
+        scrollEnabled={activeIndex !== HOME_INDEX}
         layoutDirection={isRTL ? 'rtl' : 'ltr'}
         overdrag
         onPageSelected={(e) => {
@@ -67,7 +67,12 @@ export default function TabLayout() {
           </View>
         ))}
       </PagerView>
-      <CustomTabBar activeIndex={activeIndex} onTabPress={goToTab} />
+      <CustomTabBar
+        activeIndex={activeIndex}
+        onTabPress={goToTab}
+        onActivatePress={() => setShowActivate(true)}
+      />
+      <ActivateSheet visible={showActivate} onClose={() => setShowActivate(false)} />
     </View>
   )
 }

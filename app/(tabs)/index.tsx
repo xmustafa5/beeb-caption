@@ -1,237 +1,153 @@
-import { useState } from 'react'
-import { View, Text, ActivityIndicator, ScrollView, RefreshControl, I18nManager, Switch, TouchableOpacity } from 'react-native'
-import { useRouter } from 'expo-router'
-import { useCaptainPresence, type ConnectionHealth } from '@/providers/captain-presence'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, ActivityIndicator, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'expo-router'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
-import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
-import { FormError } from '@/components/forms/form-error'
-import { TopUpSheet } from '@/components/captain/top-up-sheet'
-import { useActivation } from '@/hooks/use-activation'
+import { TripMap, type TripMapHandle } from '@/components/trip/trip-map'
+import { OfferPickupMarker } from '@/components/captain/offer-pickup-marker'
+import { OfferCarousel } from '@/components/captain/offer-carousel'
+import { useTripQueue } from '@/hooks/use-trip-queue'
+import { useCaptainPresence } from '@/providers/captain-presence'
+import { useCurrentLocation } from '@/hooks/use-current-location'
 import { useActiveTrip } from '@/hooks/use-active-trip'
-import { DEFAULT_DAILY_FEE_IQD, getTodayActivation } from '@/services/activation'
-import { getWallet } from '@/services/wallet'
-import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
-import { formatIqd } from '@/lib/format-currency'
-import { parseApiError, apiErrorKey } from '@/lib/api'
+import { parseApiError } from '@/lib/api'
+import type { CaptainOffer } from '@/services/captain-queue'
 
+// Home is the live map: current location + incoming offers carousel. Activation
+// and going online moved to the tab bar's center button (ActivateSheet). The map
+// always renders — when offline, an overlay pill nudges the captain to activate.
 export default function HomeScreen() {
-  const { t, i18n } = useTranslation()
-  // Drive layout off the active language, not I18nManager.isRTL: in dev the native
-  // RTL flag can lag a forceRTL restart, leaving isRTL=false while the UI is Arabic.
-  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
+  const { t } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
-  const { query, activate } = useActivation()
-  const { checkout } = useQiCardCheckout()
-
+  const router = useRouter()
+  const { online } = useCaptainPresence()
+  const { offers, isLoading, accept, accepting, refetch } = useTripQueue()
+  const { location, fallback } = useCurrentLocation()
   const [error, setError] = useState<string | null>(null)
-  const [showTopUp, setShowTopUp] = useState(false)
-  const [insufficient, setInsufficient] = useState(false)
-  const [balanceIqd, setBalanceIqd] = useState(0)
-  const [payingCard, setPayingCard] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const mapRef = useRef<TripMapHandle>(null)
 
-  const activation = query.data?.activation ?? null
-  const feeIqd = activation?.feeAmountIqd ?? DEFAULT_DAILY_FEE_IQD
+  // Keep activeIndex in range as offers arrive/expire.
+  useEffect(() => {
+    if (activeIndex > offers.length - 1) setActiveIndex(Math.max(0, offers.length - 1))
+  }, [offers.length, activeIndex])
 
-  async function runActivate() {
+  // Pan the camera to the active offer's pickup whenever it changes.
+  const active = offers[activeIndex]
+  useEffect(() => {
+    if (!active) return
+    mapRef.current?.animateToRegion({
+      latitude: active.pickupLat,
+      longitude: active.pickupLng,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    })
+  }, [active?.id, active?.pickupLat, active?.pickupLng])
+
+  async function onAccept(offer: CaptainOffer) {
     setError(null)
     try {
-      await activate.mutateAsync()
-      setInsufficient(false)
+      await accept(offer)
+      router.push(offer.offerType === 'room' ? `/(trip)/room/${offer.id}` : `/(trip)/${offer.id}`)
     } catch (err) {
       const info = parseApiError(err)
-      if (info.status === 402) {
-        // Fetch balance so the insufficient-funds card + sheet can show it.
-        try {
-          const w = await getWallet()
-          setBalanceIqd(w.balanceIqd)
-        } catch {
-          setBalanceIqd(0)
-        }
-        setInsufficient(true)
-      } else {
-        setError(t(apiErrorKey(err, 'captain.activate.activateFailed')))
+      if (info.status === 409) setError(t('captain.queue.taken'))
+      else if (info.status !== 403 && info.status !== 400) {
+        setError(t(info.isNetwork ? 'common.networkError' : 'captain.queue.acceptFailed'))
       }
+      refetch()
     }
   }
 
-  // Pay the daily activation fee directly by card (QiCard), skipping the wallet.
-  // daily_fee checkout needs the activation id as target_id and the exact fee as
-  // the amount — both server-enforced. The activate POST is idempotent and returns
-  // the row even when the wallet charge failed (402), so we use it to resolve the id.
-  async function payDailyFeeByCard() {
-    setError(null)
-    setPayingCard(true)
-    try {
-      let target = activation
-      if (!target) {
-        // No row yet (or stale): create/fetch it. A 402 still yields a row to pay.
-        try {
-          target = await activate.mutateAsync()
-        } catch {
-          target = (await getTodayActivation()).activation
-        }
-      }
-      if (!target) {
-        setError(t('captain.activate.activateFailed'))
-        return
-      }
-      const outcome = await checkout('daily_fee', target.feeAmountIqd, target.id)
-      if (outcome.kind === 'paid') {
-        // Settling flips the activation to paid server-side; refetch the gate.
-        setInsufficient(false)
-        await query.refetch()
-      } else if (outcome.kind === 'failed') {
-        setError(t('captain.activate.cardPaymentFailed'))
-      } else if (outcome.kind === 'pending') {
-        // Live mode, not settled yet — tell the captain to check back.
-        setError(t('captain.activate.cardPaymentPending'))
-        query.refetch()
-      }
-      // 'cancelled' → silent; the captain dismissed the form.
-    } catch (err) {
-      setError(t(apiErrorKey(err, 'captain.activate.cardPaymentFailed')))
-    } finally {
-      setPayingCard(false)
-    }
-  }
-
-  // Loading
-  if (query.isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator color={colors.tint} />
-      </View>
-    )
-  }
-
-  // Initial load failed (network / 403) — don't render a misleading activate card.
-  if (query.isError && !query.data) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, padding: Spacing.xl, gap: Spacing.lg }}>
-        <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal' }}>
-          {t('common.networkError')}
-        </Text>
-        <Button label={t('common.retry')} variant="secondary" onPress={() => query.refetch()} />
-      </View>
-    )
-  }
-
-  const activated = query.data?.activated === true
+  const center = location ?? fallback
+  const hasOffers = offers.length > 0
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: Spacing.xl, paddingTop: insets.top + Spacing.xl, gap: Spacing.lg }}
-      refreshControl={
-          <RefreshControl
-            refreshing={query.isRefetching}
-            onRefresh={() => { setInsufficient(false); setError(null); query.refetch() }}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <TripMap
+        ref={mapRef}
+        initialRegion={{
+          latitude: active?.pickupLat ?? center.latitude,
+          longitude: active?.pickupLng ?? center.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }}
+        showsUserLocation
+      >
+        {offers.map((o, i) => (
+          <OfferPickupMarker
+            key={`${o.offerType}-${o.id}`}
+            coord={{ latitude: o.pickupLat, longitude: o.pickupLng }}
+            active={i === activeIndex}
           />
-        }
-    >
-      <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-        {t('captain.activate.homeTitle')}
-      </Text>
+        ))}
+      </TripMap>
 
-      <ActiveTripBanner />
+      {/* Persistent "you have a trip in progress" banner, floating over the map. */}
+      <ActiveTripBanner topInset={insets.top} />
 
-      {activated ? (
-        <View
-          style={{
-            backgroundColor: colors.card,
-            borderRadius: 22,
-            borderCurve: 'continuous',
-            padding: Spacing.xl,
-            gap: Spacing.md,
-            alignItems: isRTL ? 'flex-end' : 'flex-start',
-            boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="checkmark-circle" size={40} color={colors.success} />
-          </View>
-          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
-            {t('captain.activate.activatedTitle')}
-          </Text>
-          <Text style={{ ...Typography.body, color: colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
-            {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
-          </Text>
-          <OnlineToggle />
-        </View>
-      ) : (
-        <View
-          style={{
-            backgroundColor: colors.card,
-            borderRadius: 22,
-            borderCurve: 'continuous',
-            padding: Spacing.xl,
-            gap: Spacing.lg,
-            boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-            <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
-              {insufficient ? t('captain.activate.insufficientTitle') : t('captain.activate.notActivatedTitle')}
-            </Text>
-            <Text style={{ ...Typography.body, color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-              {insufficient
-                ? t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isRTL ? 'ar' : 'en'), fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })
-                : t('captain.activate.feeNotice', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
-            </Text>
-          </View>
-
-          <FormError message={error} />
-
-          {insufficient ? (
-            <Button
-              label={t('captain.activate.topUpAndActivate')}
-              onPress={() => setShowTopUp(true)}
-              leading={<Icon name="wallet-outline" size={18} color={colors.onTint} />}
-            />
-          ) : (
-            <Button
-              label={t('captain.activate.activateCta')}
-              loading={activate.isPending}
-              onPress={runActivate}
-            />
-          )}
-
-          {/* Pay the daily fee directly by card (QiCard hosted form) — works
-              whether or not the wallet has funds. */}
-          <Button
-            label={t('captain.activate.payByCard', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
-            variant="secondary"
-            loading={payingCard}
-            onPress={payDailyFeeByCard}
-            leading={<Icon name="card-outline" size={18} color={colors.text} />}
-          />
+      {/* Loading overlay (first fetch while online). */}
+      {online && isLoading && !hasOffers && (
+        <View style={{ position: 'absolute', top: insets.top + Spacing.xl * 2.5, alignSelf: 'center' }}>
+          <ActivityIndicator color={colors.tint} />
         </View>
       )}
 
-      <TopUpSheet
-        visible={showTopUp}
-        balanceIqd={balanceIqd}
-        feeIqd={feeIqd}
-        onClose={() => setShowTopUp(false)}
-        onToppedUp={() => {
-          setShowTopUp(false)
-          runActivate()
-        }}
-      />
-    </ScrollView>
+      {/* Status pill over the map: offline → nudge to activate; online + empty → waiting. */}
+      {!hasOffers && (!online || !isLoading) && (
+        <View
+          style={{
+            position: 'absolute',
+            top: insets.top + Spacing.xl * 2.5,
+            alignSelf: 'center',
+            backgroundColor: colors.card,
+            borderRadius: 999,
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.sm,
+            boxShadow: '0px 2px 10px rgba(0,0,0,0.18)',
+          }}
+        >
+          <Icon name={online ? 'hourglass-outline' : 'cloud-offline-outline'} size={16} color={colors.subtle} />
+          <Text style={{ ...Typography['caption-sm'], color: colors.text, fontStyle: 'normal' }}>
+            {online ? t('captain.queue.emptyTitle') : t('captain.queue.offlineTitle')}
+          </Text>
+        </View>
+      )}
+
+      {/* Offers → bottom carousel. */}
+      {hasOffers && (
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + Spacing.md, gap: Spacing.sm }}>
+          {error && (
+            <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'center', marginHorizontal: Spacing.xl }}>
+              {error}
+            </Text>
+          )}
+          <OfferCarousel
+            offers={offers}
+            activeIndex={activeIndex}
+            onIndexChange={setActiveIndex}
+            captainLocation={location}
+            onAccept={onAccept}
+            accepting={accepting}
+          />
+        </View>
+      )}
+    </View>
   )
 }
 
-// Persistent "you have a trip in progress" banner. Visible on the home screen
+// Persistent "you have a trip in progress" banner. Floats over the home map
 // whenever the captain has an active trip, so they can return to the live-trip
 // screen after navigating away. Clears itself when the trip ends (the query polls).
-function ActiveTripBanner() {
+function ActiveTripBanner({ topInset }: { topInset: number }) {
   const { t, i18n } = useTranslation()
   const isRTL = i18n.language === 'ar' || I18nManager.isRTL
   const colors = useThemeColors()
@@ -245,6 +161,10 @@ function ActiveTripBanner() {
       activeOpacity={0.85}
       onPress={() => router.push(trip.tripType === 'abriyah' && trip.roomId ? `/(trip)/room/${trip.roomId}` : `/(trip)/${trip.id}`)}
       style={{
+        position: 'absolute',
+        top: topInset + Spacing.md,
+        left: Spacing.lg,
+        right: Spacing.lg,
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
@@ -268,59 +188,5 @@ function ActiveTripBanner() {
       </View>
       <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.onTint} />
     </TouchableOpacity>
-  )
-}
-
-const HEALTH_COLORS: Record<ConnectionHealth, 'muted' | 'success' | 'tint' | 'destructive'> = {
-  offline: 'muted',
-  connecting: 'tint',
-  live: 'success',
-  stale: 'destructive',
-}
-
-function OnlineToggle() {
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
-  const colors = useThemeColors()
-  const { online, connection, goingOnline, error, setOnline } = useCaptainPresence()
-
-  const healthColor = colors[HEALTH_COLORS[connection]]
-  const healthLabel =
-    connection === 'live' ? t('captain.online.live')
-    : connection === 'connecting' ? t('captain.online.connecting')
-    : connection === 'stale' ? t('captain.online.stale')
-    : online ? t('captain.online.online') : t('captain.online.offline')
-
-  return (
-    <View style={{ alignSelf: 'stretch', gap: Spacing.md, marginTop: Spacing.sm }}>
-      {/* native forceRTL mirrors this row in AR — no manual flip */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
-          {online ? t('captain.online.online') : t('captain.online.toggleLabel')}
-        </Text>
-        <Switch
-          value={online}
-          onValueChange={(v) => setOnline(v)}
-          disabled={goingOnline}
-          trackColor={{ true: colors.tint }}
-          // RN's Switch doesn't auto-mirror in RTL — the knob always slides to the
-          // visual right when "on". Mirror it in RTL so the knob travels the natural
-          // way for an Arabic reader. (scaleX on a symmetric control, not a directional icon.)
-          style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
-        />
-      </View>
-
-      {/* native forceRTL mirrors this row in AR — no manual flip */}
-      <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: healthColor }} />
-        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
-          {healthLabel}
-        </Text>
-      </View>
-
-      <Text style={{ ...Typography['caption-sm'], color: error ? colors.destructive : colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
-        {error ? t(`captain.online.${error}`) : t('captain.online.gpsHint')}
-      </Text>
-    </View>
   )
 }

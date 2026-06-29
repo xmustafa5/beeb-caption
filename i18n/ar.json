@@ -326,7 +326,8 @@
       "amountInvalid": "أدخل مبلغًا صحيحًا",
       "payByCard": "ادفع {{fee}} بالبطاقة",
       "cardPaymentFailed": "فشل الدفع بالبطاقة. حاول مرة أخرى.",
-      "cardPaymentPending": "جارٍ معالجة الدفع. اسحب للتحديث بعد لحظات."
+      "cardPaymentPending": "جارٍ معالجة الدفع. اسحب للتحديث بعد لحظات.",
+      "tabActivate": "تفعيل"
     },
     "online": {
       "toggleLabel": "ابدأ الاتصال",
