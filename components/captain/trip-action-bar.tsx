@@ -9,10 +9,11 @@ import { Icon } from '@/components/ui/icon'
 interface TripActionBarProps {
   onCall: () => void
   onNavigate: () => void
+  onChat?: () => void // shown only when provided (chat open while trip active)
   onCancel?: () => void // shown only when provided (accepted state)
 }
 
-export function TripActionBar({ onCall, onNavigate, onCancel }: TripActionBarProps) {
+export function TripActionBar({ onCall, onNavigate, onChat, onCancel }: TripActionBarProps) {
   const { t } = useTranslation()
   const colors = useThemeColors()
 
@@ -20,6 +21,9 @@ export function TripActionBar({ onCall, onNavigate, onCancel }: TripActionBarPro
   return (
     <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
       <ActionButton icon="call" label={t('captain.live.call')} onPress={onCall} colors={colors} />
+      {onChat && (
+        <ActionButton icon="chatbubble-ellipses" label={t('captain.live.chat')} onPress={onChat} colors={colors} />
+      )}
       <ActionButton icon="navigate" label={t('captain.live.navigate')} onPress={onNavigate} colors={colors} />
       {onCancel && (
         <ActionButton icon="close-circle" label={t('captain.live.cancel')} onPress={onCancel} colors={colors} destructive />

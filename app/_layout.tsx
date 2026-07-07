@@ -91,6 +91,7 @@ export default function RootLayout() {
                     <Stack.Screen name="(auth)" />
                     <Stack.Screen name="(tabs)" />
                     <Stack.Screen name="(trip)" />
+                    <Stack.Screen name="(chat)" />
                   </Stack>
                 </CaptainPresenceProvider>
                 <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />

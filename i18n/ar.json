@@ -398,7 +398,8 @@
       "cancelFailed": "تعذّر الإلغاء. حاول مرة أخرى.",
       "callUnavailable": "الاتصال غير متاح حاليًا.",
       "resumeTitle": "رحلة قيد التنفيذ",
-      "resumeSubtitle": "اضغط للعودة إلى رحلتك الحالية"
+      "resumeSubtitle": "اضغط للعودة إلى رحلتك الحالية",
+      "chat": "دردشة"
     },
     "nafarat": {
       "title": "رحلة نفرات",
@@ -497,5 +498,16 @@
     },
     "scaffoldHome": "هيكل تطبيق الكابتن — الميزات قادمة.",
     "scaffoldProfile": "الكابتن"
+  },
+  "chat": {
+    "riderTitle": "الراكب",
+    "subtitle": "دردشة أثناء الرحلة",
+    "inputPlaceholder": "رسالة…",
+    "emptyTitle": "لا توجد رسائل بعد",
+    "emptyBody": "أرسل رسالة إلى الراكب بخصوص نقطة الانطلاق.",
+    "unavailableTitle": "الدردشة غير متاحة",
+    "unavailableBody": "لا يمكن فتح هذه الدردشة الآن.",
+    "closedNote": "هذه الدردشة للقراءة فقط.",
+    "closedTerminal": "انتهت الرحلة — الدردشة للقراءة فقط."
   }
 }

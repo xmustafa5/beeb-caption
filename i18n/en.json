@@ -398,7 +398,8 @@
       "cancelFailed": "Couldn't cancel. Please try again.",
       "callUnavailable": "Calling isn't available right now.",
       "resumeTitle": "Trip in progress",
-      "resumeSubtitle": "Tap to return to your active trip"
+      "resumeSubtitle": "Tap to return to your active trip",
+      "chat": "Chat"
     },
     "nafarat": {
       "title": "Nafarat ride",
@@ -497,5 +498,16 @@
     },
     "scaffoldHome": "Captain app scaffold — features coming next.",
     "scaffoldProfile": "Captain"
+  },
+  "chat": {
+    "riderTitle": "Rider",
+    "subtitle": "In-ride chat",
+    "inputPlaceholder": "Message…",
+    "emptyTitle": "No messages yet",
+    "emptyBody": "Send a message to the rider about the pickup.",
+    "unavailableTitle": "Chat unavailable",
+    "unavailableBody": "This chat can't be opened right now.",
+    "closedNote": "This chat is read-only.",
+    "closedTerminal": "The trip has ended — chat is read-only."
   }
 }

@@ -195,6 +195,7 @@ export default function LiveTripScreen() {
         <TripActionBar
           onCall={onCall}
           onNavigate={onNavigate}
+          onChat={() => router.push({ pathname: '/(chat)/[tripId]', params: { tripId: id } })}
           onCancel={status === 'accepted' ? () => setShowCancel(true) : undefined}
         />
       </ScrollView>
