@@ -44,3 +44,7 @@ app-example
 
 # Visual brainstorm companion artifacts
 .superpowers/
+
+# Firebase (per-project, keep out of the repo — supply via EAS secret)
+google-services.json
+GoogleService-Info.plist

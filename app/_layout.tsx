@@ -26,6 +26,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { CaptainPresenceProvider } from '@/providers/captain-presence'
+import { PushProvider } from '@/providers/push-provider'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -84,15 +85,17 @@ export default function RootLayout() {
                     trip screen) so the driving screen gets live WS trip updates.
                     It self-gates on token + approval, so it no-ops on auth screens. */}
                 <CaptainPresenceProvider>
-                  <Stack screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: colors.background },
-                  }}>
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="(trip)" />
-                    <Stack.Screen name="(chat)" />
-                  </Stack>
+                  <PushProvider>
+                    <Stack screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: colors.background },
+                    }}>
+                      <Stack.Screen name="(auth)" />
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="(trip)" />
+                      <Stack.Screen name="(chat)" />
+                    </Stack>
+                  </PushProvider>
                 </CaptainPresenceProvider>
                 <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
               </AuthGate>

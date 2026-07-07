@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { View, Text, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +11,7 @@ import { Icon } from '@/components/ui/icon'
 import { ChatThread } from '@/components/chat/chat-thread'
 import { useChat } from '@/hooks/use-chat'
 import { getTrip } from '@/services/captain-trips'
+import { setForegroundChatTrip } from '@/providers/push-provider'
 
 const isRTL = I18nManager.isRTL
 
@@ -29,6 +31,13 @@ export default function ChatScreen() {
   const trip = tripQuery.data
 
   const chat = useChat(tripId)
+
+  // Suppress the foreground chat banner for the thread that's on screen (the WS
+  // already renders those messages live). Clear it when leaving the screen.
+  useEffect(() => {
+    setForegroundChatTrip(tripId)
+    return () => setForegroundChatTrip(null)
+  }, [tripId])
 
   const canSend = trip?.status === 'accepted' || trip?.status === 'in_progress'
   const closedNote =
