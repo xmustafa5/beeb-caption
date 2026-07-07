@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -9,6 +10,7 @@ import { Icon } from '@/components/ui/icon'
 import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
 import { PeriodTabs } from '@/components/captain/period-tabs'
 import { EarningsSummary } from '@/components/captain/earnings-summary'
+import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
 import { useEarnings } from '@/hooks/use-earnings'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
@@ -20,6 +22,7 @@ export default function ProfileScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const captain = useAuthStore((s) => s.captain)
+  const router = useRouter()
   const lang = i18n.language as 'en' | 'ar'
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
@@ -139,6 +142,38 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* ── Wallet ── */}
+        <TouchableOpacity
+          onPress={() => router.push('/(wallet)')}
+          activeOpacity={0.85}
+          style={{
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.md,
+            marginTop: Spacing.lg,
+            backgroundColor: colors.card,
+            borderRadius: 16,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: Spacing.lg,
+          }}
+        >
+          <View style={{
+            width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+            backgroundColor: colors.tint + '1A',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="wallet-outline" size={18} color={colors.tint} />
+          </View>
+          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: 'left' }}>
+            {t('wallet.title')}
+          </Text>
+          {/* Chevron points toward the reading direction end — swap glyph in AR. */}
+          <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+        </TouchableOpacity>
+
         {/* ── Vehicle card ── */}
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={sectionLabel(colors)}>{t('profile.vehicleTitle')}</Text>
@@ -169,8 +204,25 @@ export default function ProfileScreen() {
               <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: 'left' }} selectable>
                 {captain.carPlate}
               </Text>
+              {/* Admin-set car class grade (1..3 stars). Read-only for the captain. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', gap: 2 }}>
+                  {[1, 2, 3].map((i) => (
+                    <Icon key={i} name={i <= captain.star ? 'star' : 'star-outline'} size={12} color={colors.accent} />
+                  ))}
+                </View>
+                <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
+                  {t(`profile.carClassStar${captain.star}`)}
+                </Text>
+              </View>
             </View>
           </View>
+        </View>
+
+        {/* ── Abriyah (shared-ride) access ── */}
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={sectionLabel(colors)}>{t('abriyahAccess.title')}</Text>
+          <AbriyahAccessCard />
         </View>
 
         {/* ── Theme switch ── */}

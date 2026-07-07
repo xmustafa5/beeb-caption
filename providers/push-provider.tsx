@@ -30,11 +30,21 @@ function tripIdFromData(data: unknown): string | null {
   return typeof candidate === 'string' ? candidate : null
 }
 
-function isChatNotification(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false
+/** The push kind from the FCM `data` block (`notification_type`, with a `type` fallback). */
+function notificationType(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null
   const d = data as Record<string, unknown>
-  return d.notification_type === 'chat_message' || d.type === 'chat_message'
+  const t = d.notification_type ?? d.type
+  return typeof t === 'string' ? t : null
 }
+
+function isChatNotification(data: unknown): boolean {
+  return notificationType(data) === 'chat_message'
+}
+
+// Push kinds that, on tap, should open a specific trip screen (the captain is a
+// participant). `new_trip_in_queue` and room pushes route to the home queue instead.
+const TRIP_PUSH_TYPES = new Set(['trip_accepted', 'captain_arriving', 'trip_completed', 'trip_cancelled'])
 
 // Foreground display policy: show banner + play sound EXCEPT for a chat message
 // on the thread the user is already viewing (the WS already rendered it).
@@ -90,6 +100,13 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 250, 250],
           })
+          // Trip offers + lifecycle alerts — MAX importance so a new ride offer
+          // surfaces immediately even when the app is backgrounded.
+          await Notifications.setNotificationChannelAsync('trips', {
+            name: 'Trip alerts',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+          })
         }
 
         const device = await Notifications.getDevicePushTokenAsync()
@@ -109,13 +126,31 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token])
 
-  // Tap-to-open: a chat push opens that trip's chat thread.
+  // Tap-to-open: route by push kind. Chat → that trip's chat thread; a trip
+  // lifecycle push → that trip screen; a new-offer / room push → the home queue.
+  // The push is only a wake-up; the destination screen fetches current state.
   useEffect(() => {
     function handleResponse(response: Notifications.NotificationResponse) {
       const data = response.notification.request.content.data
-      if (!isChatNotification(data)) return
+      const type = notificationType(data)
       const tripId = tripIdFromData(data)
-      if (tripId) router.push({ pathname: '/(chat)/[tripId]', params: { tripId } })
+
+      if (type === 'chat_message') {
+        if (tripId) router.push({ pathname: '/(chat)/[tripId]', params: { tripId } })
+        return
+      }
+      if (type && TRIP_PUSH_TYPES.has(type)) {
+        // Open the trip if we have its id; otherwise fall back to the home queue.
+        if (tripId) router.push({ pathname: '/(trip)/[id]', params: { id: tripId } })
+        else router.push('/(tabs)')
+        return
+      }
+      if (type === 'new_trip_in_queue' || type === 'room_dispatched' || type === 'room_expired') {
+        // A new offer or room event — send the captain to the queue to act on it.
+        router.push('/(tabs)')
+        return
+      }
+      // Unknown/other (e.g. captain_approval_decision): no deep-link, just open the app.
     }
 
     const sub = Notifications.addNotificationResponseReceivedListener(handleResponse)

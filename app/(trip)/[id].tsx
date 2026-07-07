@@ -15,7 +15,9 @@ import { TripActionBar } from '@/components/captain/trip-action-bar'
 import { CancelSheet } from '@/components/captain/cancel-sheet'
 import { RatingStars } from '@/components/captain/rating-stars'
 import { MemberRoster } from '@/components/captain/member-roster'
+import { StopsPanel } from '@/components/captain/stops-panel'
 import { useLiveTrip } from '@/hooks/use-live-trip'
+import { useTripStops } from '@/hooks/use-trip-stops'
 import { getProxy, rateRider, type CancelReason } from '@/services/captain-trips'
 import { getRoomMembers } from '@/services/abriyah-members'
 import { getRoute } from '@/services/routing'
@@ -51,6 +53,11 @@ export default function LiveTripScreen() {
     queryFn: () => getRoomMembers(trip!.roomId as string),
     enabled: trip?.tripType === 'abriyah' && !!trip?.roomId,
   })
+
+  // Multi-stop: regular trips only, while the captain is on the trip (accepted/in_progress).
+  const stopsEnabled =
+    trip?.tripType === 'regular' && (status === 'accepted' || status === 'in_progress')
+  const { stops, reachStop, reachingId } = useTripStops(id, !!stopsEnabled)
 
   // Route line from captain → target.
   useEffect(() => {
@@ -171,6 +178,7 @@ export default function LiveTripScreen() {
           pickup={pickup}
           dropoff={dropoff}
           routeCoords={routeCoords}
+          stops={stops.map((s) => ({ latitude: s.lat, longitude: s.lng }))}
           showsUserLocation={false}
         />
       </View>
@@ -187,6 +195,10 @@ export default function LiveTripScreen() {
         </View>
 
         {trip.tripType === 'abriyah' && <MemberRoster data={roster.data} />}
+
+        {trip.tripType === 'regular' && (
+          <StopsPanel stops={stops} reachingId={reachingId} onReach={reachStop} />
+        )}
 
         <FormError message={error} />
 

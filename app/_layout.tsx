@@ -94,6 +94,7 @@ export default function RootLayout() {
                       <Stack.Screen name="(tabs)" />
                       <Stack.Screen name="(trip)" />
                       <Stack.Screen name="(chat)" />
+                      <Stack.Screen name="(wallet)" />
                     </Stack>
                   </PushProvider>
                 </CaptainPresenceProvider>

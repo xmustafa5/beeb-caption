@@ -6,6 +6,10 @@ import { toAsciiDigits } from '@/lib/digits'
 
 export type CaptainStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
 export type CaptainGender = 'male' | 'female'
+/** Car star grade (1|2|3), set by an admin. 3 = nicest. Defaults to 1. */
+export type CarStar = 1 | 2 | 3
+/** Abriyah (shared-ride) access state, gated by admin approval. */
+export type AbriyahStatus = 'none' | 'requested' | 'approved' | 'rejected'
 
 export interface Captain {
   id: string
@@ -25,6 +29,12 @@ export interface Captain {
   blockedReason?: string | null
   avgRating: number
   tripCount: number
+  /** Car class grade (1|2|3), admin-set. Server defaults existing captains to 1. */
+  star: CarStar
+  /** Abriyah access status; gate the Abriyah UI on this. */
+  abriyahStatus: AbriyahStatus
+  /** Reason shown when abriyahStatus === 'rejected'. */
+  abriyahRejectionReason?: string | null
 }
 
 export interface BackendCaptain {
@@ -45,6 +55,18 @@ export interface BackendCaptain {
   blocked_reason?: string | null
   avg_rating: number
   trip_count: number
+  star?: number | null
+  abriyah_status?: string | null
+  abriyah_rejection_reason?: string | null
+}
+
+/** Coerce the backend `star` into the 1|2|3 range (defaults to 1). */
+export function toCarStar(s: number | null | undefined): CarStar {
+  return s === 2 || s === 3 ? s : 1
+}
+
+export function toAbriyahStatus(s: string | null | undefined): AbriyahStatus {
+  return s === 'requested' || s === 'approved' || s === 'rejected' ? s : 'none'
 }
 
 export function toCaptainGender(g: string): CaptainGender {
@@ -74,6 +96,9 @@ export function toCaptain(b: BackendCaptain): Captain {
     blockedReason: b.blocked_reason ?? null,
     avgRating: b.avg_rating ?? 0,
     tripCount: b.trip_count ?? 0,
+    star: toCarStar(b.star),
+    abriyahStatus: toAbriyahStatus(b.abriyah_status),
+    abriyahRejectionReason: b.abriyah_rejection_reason ?? null,
   }
 }
 

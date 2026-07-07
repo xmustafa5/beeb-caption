@@ -344,9 +344,13 @@ Action: ask backend to add this path to the OpenAPI spec and confirm the auth ti
 
 ---
 
-## 7. Captain can't list a trip's stops (multi-stop "reach" unusable from the captain side) — ⏳ **OPEN (raised 2026-06-11)**
+## 7. Captain can't list a trip's stops (multi-stop "reach" unusable from the captain side) — ✅ **RESOLVED (backend shipped + client wired 2026-07-07)**
 
-**Found:** 2026-06-11 (Captain App, Area 5 live-trip) · **Status:** awaiting backend
+**Found:** 2026-06-11 (Captain App, Area 5 live-trip) · **Status:** DONE — backend shipped
+`GET /api/captain/trips/{trip_id}/stops` (bare `TripStop[]`, verified live). Client wired:
+`services/captain-stops.ts` `getStops` now calls it (was a `[]` stub); `hooks/use-trip-stops.ts`
++ `components/captain/stops-panel.tsx` render the stops with a "mark reached" action in
+`app/(trip)/[id].tsx` (regular trips, accepted/in_progress).
 
 The captain can mark a stop reached — `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach`
 (captain-scoped, verified present) — but there is **no captain-facing endpoint to LIST a trip's

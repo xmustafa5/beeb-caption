@@ -207,17 +207,21 @@
     "ratingStat": "التقييم",
     "tripsStat": "الرحلات",
     "statusStat": "الحالة",
-    "documents": "مستنداتي"
+    "documents": "مستنداتي",
+    "carClassLabel": "فئة السيارة",
+    "carClassStar1": "بيب جو",
+    "carClassStar2": "بيب كومفورت",
+    "carClassStar3": "بيب بريميوم"
   },
   "wallet": {
     "title": "المحفظة",
     "balance": "الرصيد",
-    "topUp": "شحن",
-    "topUpTitle": "شحن المحفظة",
+    "topUp": "إضافة رصيد",
+    "topUpTitle": "إضافة رصيد للمحفظة",
     "amount": "المبلغ",
-    "amountInvalid": "أدخل مبلغاً صحيحاً",
+    "amountInvalid": "أدخل مبلغاً صحيحاً.",
     "payWith": "الدفع عبر",
-    "cash": "نقداً / لاحقاً",
+    "cash": "نقداً / يدوي",
     "addCard": "إضافة بطاقة",
     "paymentMethods": "طرق الدفع",
     "noCards": "لا توجد بطاقات بعد",
@@ -230,20 +234,25 @@
     "cardNumberInvalid": "أدخل رقم بطاقة صحيحاً",
     "setAsDefault": "تعيين كافتراضية",
     "transactions": "المعاملات",
-    "noTransactions": "لا توجد معاملات بعد",
-    "topUpFailed": "فشل الشحن",
+    "noTransactions": "لا توجد معاملات بعد.",
+    "topUpFailed": "فشلت إضافة الرصيد. حاول مرة أخرى.",
     "tx": {
       "trip_fare": "أجرة الرحلة",
       "daily_fee": "الرسوم اليومية",
-      "topup": "شحن",
+      "topup": "إضافة رصيد",
       "refund": "استرداد",
       "cancellation_penalty": "رسوم الإلغاء"
     },
     "status": {
-      "pending": "قيد الانتظار",
-      "failed": "فشلت",
-      "reversed": "معكوسة"
-    }
+      "pending": "قيد المعالجة",
+      "failed": "فاشلة",
+      "reversed": "معكوسة",
+      "succeeded": "مكتملة"
+    },
+    "loadFailed": "تعذّر تحميل المحفظة.",
+    "confirmTopUp": "إضافة الرصيد",
+    "topUpSuccess": "تمت إضافة الرصيد.",
+    "payByCard": "الدفع بالبطاقة (QiCard)"
   },
   "scheduled": {
     "upcoming": "القادمة",
@@ -497,7 +506,14 @@
       "notActiveBody": "حساب الكابتن غير مفعّل بعد. إذا تمت الموافقة عليك للتو، حاول تسجيل الدخول مرة أخرى. إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم."
     },
     "scaffoldHome": "هيكل تطبيق الكابتن — الميزات قادمة.",
-    "scaffoldProfile": "الكابتن"
+    "scaffoldProfile": "الكابتن",
+    "stops": {
+      "title": "المحطات",
+      "stopLabel": "المحطة {{n}}",
+      "reached": "تم الوصول",
+      "markReached": "تحديد كمُنجَز",
+      "reaching": "جارٍ الحفظ…"
+    }
   },
   "chat": {
     "riderTitle": "الراكب",
@@ -509,5 +525,20 @@
     "unavailableBody": "لا يمكن فتح هذه الدردشة الآن.",
     "closedNote": "هذه الدردشة للقراءة فقط.",
     "closedTerminal": "انتهت الرحلة — الدردشة للقراءة فقط."
+  },
+  "abriyahAccess": {
+    "title": "عبرية (الرحلات المشتركة)",
+    "descNone": "اطلب صلاحية قبول غرف رحلات عبرية المشتركة. يراجع المشرف كل طلب.",
+    "descRequested": "طلبك قيد المراجعة. ستتمكّن من قبول غرف عبرية بعد الموافقة.",
+    "descApproved": "يمكنك رؤية غرف رحلات عبرية المشتركة وقبولها.",
+    "descRejected": "تم رفض طلب وصول عبرية. يمكنك تقديم الطلب مرة أخرى.",
+    "request": "طلب الوصول",
+    "requestAgain": "إعادة الطلب",
+    "pending": "قيد المراجعة",
+    "approved": "مُعتمد",
+    "rejected": "مرفوض",
+    "reasonLabel": "السبب",
+    "requestFailed": "تعذّر إرسال الطلب. حاول مرة أخرى.",
+    "needApproved": "متاح بعد اعتماد حساب الكابتن."
   }
 }

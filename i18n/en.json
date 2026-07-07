@@ -207,7 +207,11 @@
     "ratingStat": "Rating",
     "tripsStat": "Trips",
     "statusStat": "Status",
-    "documents": "My documents"
+    "documents": "My documents",
+    "carClassLabel": "Car class",
+    "carClassStar1": "Beeb Go",
+    "carClassStar2": "Beeb Comfort",
+    "carClassStar3": "Beeb Premium"
   },
   "wallet": {
     "title": "Wallet",
@@ -215,9 +219,9 @@
     "topUp": "Top up",
     "topUpTitle": "Top up wallet",
     "amount": "Amount",
-    "amountInvalid": "Enter a valid amount",
+    "amountInvalid": "Enter a valid amount.",
     "payWith": "Pay with",
-    "cash": "Cash / pay later",
+    "cash": "Cash / manual",
     "addCard": "Add a card",
     "paymentMethods": "Payment methods",
     "noCards": "No cards yet",
@@ -230,8 +234,8 @@
     "cardNumberInvalid": "Enter a valid card number",
     "setAsDefault": "Set as default",
     "transactions": "Transactions",
-    "noTransactions": "No transactions yet",
-    "topUpFailed": "Top-up failed",
+    "noTransactions": "No transactions yet.",
+    "topUpFailed": "Top-up failed. Try again.",
     "tx": {
       "trip_fare": "Trip fare",
       "daily_fee": "Daily fee",
@@ -242,8 +246,13 @@
     "status": {
       "pending": "Pending",
       "failed": "Failed",
-      "reversed": "Reversed"
-    }
+      "reversed": "Reversed",
+      "succeeded": "Completed"
+    },
+    "loadFailed": "Couldn't load your wallet.",
+    "confirmTopUp": "Add funds",
+    "topUpSuccess": "Wallet topped up.",
+    "payByCard": "Pay by card (QiCard)"
   },
   "scheduled": {
     "upcoming": "Upcoming",
@@ -497,7 +506,14 @@
       "notActiveBody": "Your captain account isn't active yet. If you were just approved, try logging in again. If you think this is a mistake, contact support."
     },
     "scaffoldHome": "Captain app scaffold — features coming next.",
-    "scaffoldProfile": "Captain"
+    "scaffoldProfile": "Captain",
+    "stops": {
+      "title": "Stops",
+      "stopLabel": "Stop {{n}}",
+      "reached": "Reached",
+      "markReached": "Mark reached",
+      "reaching": "Saving…"
+    }
   },
   "chat": {
     "riderTitle": "Rider",
@@ -509,5 +525,20 @@
     "unavailableBody": "This chat can't be opened right now.",
     "closedNote": "This chat is read-only.",
     "closedTerminal": "The trip has ended — chat is read-only."
+  },
+  "abriyahAccess": {
+    "title": "Abriyah (shared rides)",
+    "descNone": "Request access to accept Abriyah shared-ride rooms. An admin reviews each request.",
+    "descRequested": "Your request is under review. You'll be able to accept Abriyah rooms once approved.",
+    "descApproved": "You can see and accept Abriyah shared-ride rooms.",
+    "descRejected": "Your Abriyah access request was rejected. You can request again.",
+    "request": "Request access",
+    "requestAgain": "Request again",
+    "pending": "Pending review",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "reasonLabel": "Reason",
+    "requestFailed": "Couldn't send the request. Try again.",
+    "needApproved": "Available once your captain account is approved."
   }
 }
