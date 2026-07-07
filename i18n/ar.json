@@ -418,7 +418,9 @@
       "dropOff": "إنزال",
       "dropped": "تم الإنزال",
       "allDoneTitle": "تم إنزال جميع الركاب",
-      "loadError": "تعذّر تحميل الرحلة."
+      "loadError": "تعذّر تحميل الرحلة.",
+      "navigateNext": "التوجّه إلى الأقرب ({{name}})",
+      "navigate": "التوجّه"
     },
     "earnings": {
       "tabLabel": "الأرباح",

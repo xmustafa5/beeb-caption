@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, ActivityIndicator, Linking, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -10,7 +10,8 @@ import { Spacing } from '@/constants/Spacing'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
-import { TripMap } from '@/components/trip/trip-map'
+import { TripMap, type TripMapHandle } from '@/components/trip/trip-map'
+import { RecenterButton } from '@/components/trip/recenter-button'
 import { TripActionBar } from '@/components/captain/trip-action-bar'
 import { CancelSheet } from '@/components/captain/cancel-sheet'
 import { RatingStars } from '@/components/captain/rating-stars'
@@ -23,6 +24,7 @@ import { getRoomMembers } from '@/services/abriyah-members'
 import { getRoute } from '@/services/routing'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
+import { openNavigation, nearestOf } from '@/lib/nav-links'
 import { parseApiError } from '@/lib/api'
 
 const isRTL = I18nManager.isRTL
@@ -34,6 +36,7 @@ export default function LiveTripScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { location } = useCurrentLocation()
+  const mapRef = useRef<TripMapHandle>(null)
 
   const { trip, isLoading, arrived, arrive, start, complete, cancel, busy } = useLiveTrip(id)
   const [error, setError] = useState<string | null>(null)
@@ -89,13 +92,25 @@ export default function LiveTripScreen() {
     }
   }
 
+  // Un-reached intermediate stops as coordinates — the pending waypoints of a
+  // multi-stop trip. Empty for a plain point-to-point ride.
+  const pendingStops = stops
+    .filter((s) => s.status !== 'reached')
+    .map((s) => ({ latitude: s.lat, longitude: s.lng }))
+
+  // Open Waze (Google Maps fallback). While riders remain to be picked up
+  // (status 'accepted'), route to the NEAREST un-reached stop first — Waze takes
+  // one destination per launch, so the captain marks it reached, then this button
+  // targets the next-nearest. Once in progress (heading to dropoff) or with no
+  // stops, navigate straight to `target` (pickup, then dropoff).
   function onNavigate() {
+    if (status === 'accepted' && pendingStops.length > 0 && location) {
+      const next = nearestOf(location, pendingStops) ?? pendingStops[0]
+      void openNavigation(next)
+      return
+    }
     if (!target) return
-    const ll = `${target.latitude},${target.longitude}`
-    const url = process.env.EXPO_OS === 'ios'
-      ? `https://maps.google.com/?daddr=${ll}`
-      : `https://www.google.com/maps/dir/?api=1&destination=${ll}`
-    Linking.openURL(url)
+    void openNavigation(target)
   }
 
   async function onCancelConfirm(reason: CancelReason, comment?: string) {
@@ -170,17 +185,50 @@ export default function LiveTripScreen() {
     : status === 'in_progress' ? t('captain.live.completeTrip')
     : t('captain.live.arrivedAtPickup') // 'requested' (transient) fallback — refetch clears it
 
+  const stopCoords = stops.map((s) => ({ latitude: s.lat, longitude: s.lng }))
+  // Frame the map to enclose the whole active leg (captain + pickup + dropoff +
+  // stops). Without this the camera has no initial region and MapLibre opens at
+  // world zoom — the "map is so far away" bug. `fitToCoords` needs ≥2 points; the
+  // pickup/dropoff pair guarantees that even before the first GPS fix lands.
+  const fitCoords = [
+    ...(location ? [location] : []),
+    ...(pickup ? [pickup] : []),
+    ...(dropoff ? [dropoff] : []),
+    ...stopCoords,
+  ]
+  // A single-point region as a floor, so the map is never at world zoom for the
+  // one frame before fitToCoords runs (or if only one point exists).
+  const focus = target ?? pickup ?? dropoff ?? location ?? undefined
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ height: '52%' }}>
         <TripMap
+          ref={mapRef}
+          initialRegion={
+            focus
+              ? { latitude: focus.latitude, longitude: focus.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 }
+              : undefined
+          }
+          fitToCoords={fitCoords}
           driver={location ?? undefined}
           pickup={pickup}
           dropoff={dropoff}
           routeCoords={routeCoords}
-          stops={stops.map((s) => ({ latitude: s.lat, longitude: s.lng }))}
+          stops={stopCoords}
           showsUserLocation={false}
         />
+        {location && (
+          <RecenterButton
+            bottomOffset={Spacing.lg}
+            onPress={() =>
+              mapRef.current?.animateToRegion(
+                { latitude: location.latitude, longitude: location.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 },
+                450,
+              )
+            }
+          />
+        )}
       </View>
 
       <ScrollView

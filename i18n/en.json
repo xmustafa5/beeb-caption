@@ -418,7 +418,9 @@
       "dropOff": "Drop off",
       "dropped": "Dropped off",
       "allDoneTitle": "All riders dropped off",
-      "loadError": "Couldn't load this ride."
+      "loadError": "Couldn't load this ride.",
+      "navigateNext": "Navigate to nearest ({{name}})",
+      "navigate": "Navigate"
     },
     "earnings": {
       "tabLabel": "Earnings",

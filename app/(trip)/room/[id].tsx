@@ -1,5 +1,5 @@
 // app/(trip)/room/[id].tsx
-import { View, Text, ScrollView, ActivityIndicator, I18nManager } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -12,7 +12,9 @@ import { TripMap } from '@/components/trip/trip-map'
 import { NafaratMarkers } from '@/components/captain/nafarat-markers'
 import { RiderSeatCard } from '@/components/captain/rider-seat-card'
 import { useNafaratRoom } from '@/hooks/use-nafarat-room'
+import { useCurrentLocation } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
+import { openNavigation, distanceKm } from '@/lib/nav-links'
 
 const isRTL = I18nManager.isRTL
 
@@ -23,6 +25,7 @@ export default function NafaratRoomScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { location } = useCurrentLocation()
   const { room, dropoffZone, pickupBreakdown, seats, isLoading, isError, pickup, dropoff, busyTripId } = useNafaratRoom(id)
 
   // Loading (first load)
@@ -70,6 +73,21 @@ export default function NafaratRoomScreen() {
   const dropoffs = seats.map((s) => s.dropoff)
   const zoneName = (isAr ? dropoffZone?.nameAr : dropoffZone?.name) ?? t('captain.live.unknownZone')
 
+  // Nearest-first navigation. Each un-finished rider has ONE active target: their
+  // pickup until they're aboard (in_progress → their dropoff). Waze takes a single
+  // destination per launch, so we pick the rider whose active target is physically
+  // closest to the captain and open Waze to just that leg. After the captain picks
+  // up / drops off, this recomputes to the next-nearest rider.
+  const navTargets = seats
+    .filter((s) => s.tripStatus !== 'completed')
+    .map((s) => ({ name: s.name, coord: s.tripStatus === 'in_progress' ? s.dropoff : s.pickup }))
+  const nextTarget =
+    location && navTargets.length > 0
+      ? navTargets.reduce((best, cur) =>
+          distanceKm(location, cur.coord) < distanceKm(location, best.coord) ? cur : best,
+        )
+      : navTargets[0] ?? null
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ height: '42%' }}>
@@ -95,6 +113,34 @@ export default function NafaratRoomScreen() {
             {t('captain.nafarat.progress', { done, total })}
           </Text>
         </View>
+
+        {/* Nearest-first navigation: open Waze to the closest un-finished rider's
+            active target (pickup, or dropoff once aboard). One leg per launch. */}
+        {nextTarget && (
+          <TouchableOpacity
+            onPress={() => void openNavigation(nextTarget.coord)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: Spacing.sm,
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              borderCurve: 'continuous',
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingVertical: Spacing.md + 2,
+              paddingHorizontal: Spacing.lg,
+            }}
+          >
+            <Icon name="navigate" size={18} color={colors.tint} />
+            <Text style={{ ...Typography['body-md'], color: colors.tint, fontStyle: 'normal' }} numberOfLines={1}>
+              {t('captain.nafarat.navigateNext', { name: nextTarget.name })}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* pickup-zone breakdown */}
         {pickupBreakdown.length > 0 && (

@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Beeb uses your location to show nearby drivers and to set your pickup point."
+        "NSLocationWhenInUseUsageDescription": "Beeb uses your location to show nearby drivers and to set your pickup point.",
+        "LSApplicationQueriesSchemes": ["waze", "comgooglemaps"]
       }
     },
     "android": {
