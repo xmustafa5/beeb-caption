@@ -15,13 +15,31 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "distribution": "store"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "tandeviq@gmail.com",
+        "ascAppId": "6791985509",
+        "appleTeamId": "F2B493H3RF",
+        "ascApiKeyPath": "/home/alinameer/.apple-keys/AuthKey_Y5KYYJU34G.p8",
+        "ascApiKeyId": "Y5KYYJU34G",
+        "ascApiKeyIssuerId": "0a0a3a4e-cd08-4232-8a3e-fd774070806f"
+      }
+    }
   }
 }

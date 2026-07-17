@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Beeb Captain",
+    "name": "Beep Captain",
     "slug": "beeb-captain",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,9 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.beep.captain",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Beeb uses your location to show nearby drivers and to set your pickup point.",
-        "LSApplicationQueriesSchemes": ["waze", "comgooglemaps"]
+        "LSApplicationQueriesSchemes": [
+          "waze",
+          "comgooglemaps"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -76,8 +81,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "016fcce9-1b13-4542-8025-8bcb4c424c8b"
+        "projectId": "300be89d-59a9-47cf-811c-8134475fbc73"
       }
-    }
+    },
+    "owner": "alinamer"
   }
 }
