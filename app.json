@@ -36,7 +36,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "com.xmustafa5.beebcaptain"
+      "package": "com.beeb.captain"
     },
     "web": {
       "output": "static",
