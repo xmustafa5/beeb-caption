@@ -1,0 +1,20 @@
+# Files to exclude from the EAS Build upload (keeps the upload small & clean).
+# EAS regenerates native code, so local build output never needs uploading.
+#
+# NOTE: this file REPLACES .gitignore for the EAS upload. google-services.json is
+# gitignored but must NOT be listed here — EAS needs it to build (app.json →
+# android.googleServicesFile).
+
+# Built app binaries
+*.apk
+*.aab
+*.ipa
+
+# Local native build dirs (EAS runs prebuild itself)
+/android
+/ios
+
+# Local build/output artifacts
+dist/
+web-build/
+*.tsbuildinfo
