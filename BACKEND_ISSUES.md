@@ -378,3 +378,36 @@ or (2), the multi-stop panel shows nothing (regular 1:1 trips and Abriyah are un
 endpoint lands, the client adds a one-line `getStops()` call and the panel activates. The core legs
 (arrive/start/complete), masked call, navigate, cancel, rating, and the Abriyah roster are all fully
 supported and verified live.
+
+---
+
+## 9. Trips/offers carry no address text — the rider's chosen place name never reaches the captain — ⏳ **OPEN (raised 2026-08-14)**
+
+**Found:** 2026-08-14 (fixing the from/to label quality in both apps).
+
+**Context.** Offer cards (`components/captain/offer-card.tsx` → `hooks/use-place-name.ts`)
+show pickup/dropoff text by **reverse-geocoding raw coordinates** through Nominatim,
+because that's the only address source the contract provides. Both clients now share a
+hardened label builder (`services/places.ts` → `buildAddressLabel`) that copes with
+Baghdad OSM data (numeric lane codes like `903-8`, quarter-first area names), so the
+geocoded labels are decent — but they can never equal what the **rider actually chose**:
+when the rider picks "مول المنصور" from search or taps a POI, that name exists in the
+rider app at booking time and is then **discarded**, because there is nowhere to send it.
+
+**Verified (2026-08-14, `docs/openapi.json` + live spec):**
+- `Trip` schema: only `pickup_lat/pickup_lng/dropoff_lat/dropoff_lng` — **no address props**.
+- `CaptainOffer` (trip-queue) schema: same — coordinates only.
+- Meanwhile `CreateScheduledTrip` / `ScheduledTrip` **do** carry `pickup_address` /
+  `dropoff_address`, and `TripStop` carries `address` — so the pattern already exists in
+  the API; it's just missing from the regular-trip path.
+
+**Ask (additive, mirrors the scheduled-trip shape):**
+1. Accept optional `pickup_address` / `dropoff_address` (short strings) on **`POST /api/trips`**.
+2. Return them on the **`Trip`** object and include them in **`GET /api/captain/trip-queue`
+   offers** (and the `rt:*` trip frames that feed the queue).
+
+**Client follow-up when it lands:** the rider app sends `pickupAddress`/`dropoffAddress`
+(already in state on the booking screens) at trip creation; the captain app's OfferCard and
+live-trip screen prefer the server-provided text and keep `usePlaceName` reverse-geocoding
+only as the fallback for trips created before the field existed. Until then, captains see
+geocoded labels (mahalla + quarter), never the rider's chosen place name.

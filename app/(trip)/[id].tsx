@@ -63,9 +63,18 @@ export default function LiveTripScreen() {
   const { stops, reachStop, reachingId } = useTripStops(id, !!stopsEnabled)
 
   // Route line from captain → target.
+  const routeTargetRef = useRef<string | null>(null)
   useEffect(() => {
     let cancelled = false
-    if (!location || !target) { setRouteCoords([]); return }
+    if (!location || !target) { setRouteCoords([]); routeTargetRef.current = null; return }
+    // Target flip (pickup → dropoff on trip start): drop the stale route right away
+    // instead of showing the old line until the new OSRM response lands. Ordinary
+    // GPS ticks keep the same target, so the line doesn't blink while driving.
+    const targetKey = `${target.latitude},${target.longitude}`
+    if (routeTargetRef.current !== targetKey) {
+      routeTargetRef.current = targetKey
+      setRouteCoords([])
+    }
     getRoute(location, target).then((r) => { if (!cancelled) setRouteCoords(r?.coords ?? []) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

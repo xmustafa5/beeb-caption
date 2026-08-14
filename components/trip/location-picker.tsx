@@ -143,6 +143,9 @@ export function LocationPicker({
 
   // Debounced reverse geocoding when the map settles.
   const reverseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bumped whenever a pick/pan supersedes earlier geocode work: a response from
+  // an older generation must not overwrite the newer address.
+  const geocodeGen = useRef(0)
   useEffect(() => {
     // A POI tap already set a precise name — skip geocoding while the center is still ~at the
     // picked coord (~33 m). This survives the easeTo settle echo (sub-metre drift) and a re-tap on
@@ -158,8 +161,10 @@ export function LocationPicker({
     pickedCoordRef.current = null // moved away from the pick → resume normal geocoding
     if (reverseTimer.current) clearTimeout(reverseTimer.current)
     setResolving(true)
+    const gen = ++geocodeGen.current
     reverseTimer.current = setTimeout(async () => {
       const a = await reverseGeocode(center, lang)
+      if (gen !== geocodeGen.current) return // superseded by a later pick/pan — drop the stale label
       setAddress(a)
       setResolving(false)
     }, 400)
@@ -167,6 +172,17 @@ export function LocationPicker({
       if (reverseTimer.current) clearTimeout(reverseTimer.current)
     }
   }, [center.latitude, center.longitude])
+
+  // A tapped POI / search result supplies its own name. Cancel any pending or
+  // in-flight settle geocode so a stale response can't overwrite that name
+  // (and `resolving` can't stay stuck true, which would disable Confirm).
+  const adoptPickedAddress = (coord: LatLng, title: string) => {
+    geocodeGen.current++
+    if (reverseTimer.current) clearTimeout(reverseTimer.current)
+    setResolving(false)
+    pickedCoordRef.current = coord // suppress geocoding around this coord (set BEFORE setCenter)
+    setAddress(title)
+  }
 
   // Debounced search.
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -200,6 +216,9 @@ export function LocationPicker({
     setQuery('')
     setSearchActive(false)
     Keyboard.dismiss()
+    // Keep the picked result's name as the address — re-geocoding the coord would
+    // replace a recognizable place name with a raw street/mahalla label.
+    adoptPickedAddress(place.coord, place.title)
     setCenter(place.coord)
     flyTo(place.coord)
   }
@@ -207,8 +226,7 @@ export function LocationPicker({
   // Tapping a POI snaps the crosshair onto it and uses its name as the chosen address.
   const onSelectPoi = (poi: Poi) => {
     if (zonePolygon && !isPointInPolygon(poi.coord, zonePolygon)) return // reject silently (like onPickResult)
-    pickedCoordRef.current = poi.coord // suppress geocoding around this coord (set BEFORE setCenter)
-    setAddress(poiLabel(poi, lang))
+    adoptPickedAddress(poi.coord, poiLabel(poi, lang))
     setCenter(poi.coord)
     // Ease IN past the gate so the zone-constrained picker (opens below it) keeps pins alive after a pick.
     cameraRef.current?.easeTo({

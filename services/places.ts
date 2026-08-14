@@ -121,21 +121,107 @@ interface NominatimResult {
   address?: Record<string, string>
 }
 
-/** First meaningful address part to use as a concise title. */
-function shortTitle(r: NominatimResult): string {
-  if (r.name) return r.name
-  const a = r.address ?? {}
-  return (
-    a.road || a.neighbourhood || a.suburb || a.quarter || a.city_district ||
-    a.city || a.town || a.village || r.display_name.split(',')[0]
-  )
+// --- Address label building -------------------------------------------------
+// Baghdad OSM data quirks (verified against live Nominatim across 8 districts):
+// `road` is usually a bare mahalla-lane code ("903-8"), top-level `name` often
+// duplicates it, `quarter` is the only reliably human-named field (حي الصدر
+// الثاني، الكرادة…), and `suburb` is often a verbose admin unit ("ناحية مرکز
+// قضاء الرصافة"). So: filter numeric-ish values, prefer quarter for the area
+// part, and strip bureaucratic prefixes.
+
+/**
+ * Bare numeric code, Western / Arabic-Indic / Persian digits: "8", "903-8",
+ * "611/63", and spaced variants like "731 - 19" (real Baghdad road names).
+ */
+function isBareNumeric(s: string): boolean {
+  return /^[0-9٠-٩۰-۹]+([\s\-\/]+[0-9٠-٩۰-۹]+)*$/.test(s.trim())
 }
 
-/** A concise area subtitle (district، city). */
+/**
+ * True for values that make a useless label: bare numeric codes and
+ * generic-word + number pseudo-names ("شارع 8", "Street 5", "زقاق 12").
+ */
+function isLowQualityName(s: string | undefined): boolean {
+  if (!s || !s.trim()) return true
+  const t = s.trim()
+  if (isBareNumeric(t)) return true
+  const withoutGeneric = t.replace(/^(شارع|زقاق|فرع|طريق|street|st\.?|road|rd\.?|lane|alley)\s+/i, '')
+  return withoutGeneric !== t && isBareNumeric(withoutGeneric)
+}
+
+/** Strip bureaucratic prefixes: "ناحية مرکز قضاء الرصافة" → "الرصافة". */
+function stripAdminPrefixes(s: string): string {
+  let out = s.trim()
+  // Both Arabic ك and Farsi ک spellings of مركز appear in Iraqi OSM data.
+  const prefixes = ['ناحية ', 'مركز ', 'مرکز ', 'قضاء ', 'بلدية ']
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const p of prefixes) {
+      if (out.startsWith(p)) {
+        out = out.slice(p.length).trim()
+        changed = true
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Build a concise, human-readable two-part label ("place، area") from a
+ * Nominatim result. Returns null when nothing usable exists.
+ */
+export function buildAddressLabel(
+  r: Pick<NominatimResult, 'display_name' | 'name' | 'address'>,
+): string | null {
+  const a = r.address ?? {}
+
+  // Primary part: the most specific human-recognizable name.
+  // POI/building name beats road; numeric codes are skipped entirely.
+  const primaryCandidates = [r.name, a.road, a.neighbourhood, a.quarter, stripAdminPrefixes(a.suburb ?? '')]
+  const part1 = primaryCandidates.find((c) => c && !isLowQualityName(c))?.trim() ?? null
+
+  // Area part: quarter is the reliably human-named field in Baghdad;
+  // suburb/city_district only after stripping admin prefixes; city last.
+  const areaCandidates = [a.quarter, a.suburb, a.city_district, a.city, a.town, a.village]
+    .filter((c): c is string => Boolean(c))
+    .map(stripAdminPrefixes)
+    .filter((c) => c && !isLowQualityName(c))
+  const part2 = areaCandidates.find((c) => c !== part1) ?? null
+
+  if (part1 && part2) return `${part1}، ${part2}`
+  if (part1) return part1
+  if (part2) return part2
+
+  // Last resort: first two non-numeric display_name segments (skips house numbers).
+  const segments = (r.display_name ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && !isLowQualityName(s))
+  if (segments.length === 0) return null
+  return segments.slice(0, 2).join('، ')
+}
+
+/** First meaningful address part to use as a concise title. */
+function shortTitle(r: NominatimResult): string {
+  const a = r.address ?? {}
+  const candidates = [
+    r.name, a.road, a.neighbourhood, a.quarter, a.suburb, a.city_district,
+    a.city, a.town, a.village,
+  ]
+  return candidates.find((c) => c && !isLowQualityName(c)) || r.display_name.split(',')[0]
+}
+
+/** A concise area subtitle (district، city), never repeating the title. */
 function shortSubtitle(r: NominatimResult): string {
   const a = r.address ?? {}
-  const parts = [a.suburb || a.neighbourhood || a.city_district, a.city || a.town || a.state]
-    .filter(Boolean)
+  const title = shortTitle(r)
+  const area = [a.quarter, a.suburb, a.city_district]
+    .filter((c): c is string => Boolean(c))
+    .map(stripAdminPrefixes)
+    .find((c) => c && !isLowQualityName(c) && c !== title)
+  const city = [a.city, a.town].find((c) => c && c !== title)
+  const parts = [area, city].filter(Boolean)
   return parts.join('، ') || r.display_name.split(',').slice(1, 3).join(',').trim()
 }
 
@@ -244,13 +330,7 @@ export async function reverseGeocode(coord: LatLng, lang: 'en' | 'ar' = 'ar'): P
     const res = await fetch(`${REVERSE_URL}?${params.toString()}`, { headers: GEOCODER_HEADERS })
     if (!res.ok) return null
     const r = (await res.json()) as NominatimResult
-    const a = r.address ?? {}
-    const parts = [
-      a.road || a.neighbourhood || a.suburb || r.name,
-      a.suburb || a.city_district || a.city || a.town,
-    ].filter(Boolean) as string[]
-    if (parts.length === 0) return r.display_name?.split(',').slice(0, 2).join(',') ?? null
-    return parts.slice(0, 2).join('، ')
+    return buildAddressLabel(r)
   } catch {
     return null
   }
