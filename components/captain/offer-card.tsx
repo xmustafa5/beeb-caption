@@ -27,7 +27,7 @@ function PlaceRow({ icon, color, name, loading }: { icon: React.ComponentProps<t
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
       <Icon name={icon} size={15} color={color} />
       <Text
-        numberOfLines={1}
+        numberOfLines={2}
         style={{ ...Typography['caption-sm'], color: colors.text, flex: 1, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}
       >
         {name ?? (loading ? '…' : '—')}

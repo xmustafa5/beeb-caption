@@ -37,10 +37,10 @@ import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { RecenterButton } from '@/components/trip/recenter-button'
 import {
   getPopularPlaces,
-  reverseGeocode,
   searchPlaces,
   type PlaceResult,
 } from '@/services/places'
+import { describePlace } from '@/services/place-label'
 import { isPointInPolygon } from '@/lib/point-in-polygon'
 
 export interface LocationPickerResult {
@@ -163,7 +163,7 @@ export function LocationPicker({
     setResolving(true)
     const gen = ++geocodeGen.current
     reverseTimer.current = setTimeout(async () => {
-      const a = await reverseGeocode(center, lang)
+      const a = await describePlace(center, lang)
       if (gen !== geocodeGen.current) return // superseded by a later pick/pan — drop the stale label
       setAddress(a)
       setResolving(false)
@@ -574,7 +574,7 @@ export function LocationPicker({
                 {/* native forceRTL mirrors this row in AR — no manual flip */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {resolving && <ActivityIndicator size="small" color={colors.tint} />}
-                  <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1 }} numberOfLines={1}>
+                  <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1 }} numberOfLines={2}>
                     {address ?? t('booking.locating')}
                   </Text>
                 </View>

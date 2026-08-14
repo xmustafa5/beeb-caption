@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { reverseGeocode } from '@/services/places'
+import { describePlace } from '@/services/place-label'
 import type { LatLng } from '@/hooks/use-current-location'
 
 /**
- * Reverse-geocodes a coordinate to a human place name, cached for the session.
- * Keyed by rounded coord + language so the same spot resolves once. Returns
- * { name: null, isLoading: true } until it resolves; name stays null on failure.
+ * Describes a coordinate as a rich place label (area، mahalla، street، nearest
+ * landmark), cached for the session. Keyed by rounded coord + language so the
+ * same spot resolves once. Returns { name: null, isLoading: true } until it
+ * resolves; name stays null on failure.
  */
 export function usePlaceName(coord: LatLng | null): { name: string | null; isLoading: boolean } {
   const { i18n } = useTranslation()
@@ -16,7 +17,7 @@ export function usePlaceName(coord: LatLng | null): { name: string | null; isLoa
 
   const query = useQuery({
     queryKey: ['place-name', key, lang],
-    queryFn: () => reverseGeocode(coord as LatLng, lang),
+    queryFn: () => describePlace(coord as LatLng, lang),
     enabled: coord != null,
     staleTime: Infinity,
     gcTime: Infinity,

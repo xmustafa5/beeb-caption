@@ -168,30 +168,37 @@ function stripAdminPrefixes(s: string): string {
 }
 
 /**
- * Build a concise, human-readable two-part label ("place، area") from a
- * Nominatim result. Returns null when nothing usable exists.
+ * Build a descriptive address chain from a Nominatim result, reading BIG → SMALL
+ * the way Iraqi addresses are spoken: area (quarter) ، mahalla ، street ،
+ * building/POI — e.g. "حي الصدر الثاني، محلة 544، شارع الحمزة".
+ * Returns null when nothing usable exists.
  */
 export function buildAddressLabel(
   r: Pick<NominatimResult, 'display_name' | 'name' | 'address'>,
 ): string | null {
   const a = r.address ?? {}
 
-  // Primary part: the most specific human-recognizable name.
-  // POI/building name beats road; numeric codes are skipped entirely.
-  const primaryCandidates = [r.name, a.road, a.neighbourhood, a.quarter, stripAdminPrefixes(a.suburb ?? '')]
-  const part1 = primaryCandidates.find((c) => c && !isLowQualityName(c))?.trim() ?? null
+  const parts: string[] = []
+  const push = (v: string | null | undefined) => {
+    if (!v) return
+    const t = v.trim()
+    if (!t || isLowQualityName(t) || parts.includes(t)) return
+    parts.push(t)
+  }
 
-  // Area part: quarter is the reliably human-named field in Baghdad;
-  // suburb/city_district only after stripping admin prefixes; city last.
-  const areaCandidates = [a.quarter, a.suburb, a.city_district, a.city, a.town, a.village]
-    .filter((c): c is string => Boolean(c))
-    .map(stripAdminPrefixes)
-    .filter((c) => c && !isLowQualityName(c))
-  const part2 = areaCandidates.find((c) => c !== part1) ?? null
+  // Area: quarter is the reliably human-named field in Baghdad;
+  // suburb/city_district only after stripping bureaucratic prefixes.
+  push(
+    [a.quarter, stripAdminPrefixes(a.suburb ?? ''), stripAdminPrefixes(a.city_district ?? '')]
+      .find((c) => c && !isLowQualityName(c)),
+  )
+  push(a.neighbourhood) // mahalla — numeric-ish but locally meaningful
+  push(a.road) // only genuinely named streets survive the filter
+  if (r.name && r.name !== a.road) push(r.name) // matched building/POI name
 
-  if (part1 && part2) return `${part1}، ${part2}`
-  if (part1) return part1
-  if (part2) return part2
+  // Too thin to recognize on its own → anchor with the city.
+  if (parts.length < 2) push(a.city || a.town || a.village)
+  if (parts.length > 0) return parts.join('، ')
 
   // Last resort: first two non-numeric display_name segments (skips house numbers).
   const segments = (r.display_name ?? '')
@@ -200,6 +207,23 @@ export function buildAddressLabel(
     .filter((s) => s && !isLowQualityName(s))
   if (segments.length === 0) return null
   return segments.slice(0, 2).join('، ')
+}
+
+/**
+ * Append the nearest landmark to a geocoded address ("…، قرب مصرف الرافدين"),
+ * skipping it when it is already part of the address. Falls back to the
+ * landmark alone when geocoding produced nothing.
+ */
+export function combinePlaceLabel(
+  address: string | null,
+  landmark: string | null,
+  lang: 'en' | 'ar',
+): string | null {
+  if (!landmark) return address
+  if (address?.includes(landmark)) return address
+  const near = lang === 'ar' ? `قرب ${landmark}` : `near ${landmark}`
+  if (!address) return near
+  return lang === 'ar' ? `${address}، ${near}` : `${address}, ${near}`
 }
 
 /** First meaningful address part to use as a concise title. */
