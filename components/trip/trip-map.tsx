@@ -34,9 +34,27 @@ export interface MapRegion {
   longitudeDelta: number
 }
 
+/** Symmetric inset used when a caller doesn't specify its own frame padding. */
+const DEFAULT_FIT_PADDING = { top: 56, right: 48, bottom: 56, left: 48 }
+
+/** Padding (px) around a fitted frame. Raise `bottom` when a sheet overlays the map. */
+export interface FitPadding {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
 /** Imperative handle exposed to callers — mirrors the one react-native-maps method we used. */
 export interface TripMapHandle {
   animateToRegion: (region: MapRegion, durationMs?: number) => void
+  /**
+   * Frame these points NOW. Imperative on purpose: a user action (tapping a card)
+   * must re-frame every time, including after the user has panned away. The
+   * `fitToCoords` PROP can't do that — it re-fits only when the coordinates
+   * themselves change, so repeating the same action is a silent no-op.
+   */
+  fitToCoords: (coords: LatLng[], padding?: FitPadding, durationMs?: number) => void
 }
 
 interface TripMapProps {
@@ -129,6 +147,11 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
         duration: durationMs,
       })
     },
+    fitToCoords: (coords, padding = DEFAULT_FIT_PADDING, durationMs = 450) => {
+      const bounds = boundsFor(coords)
+      if (!bounds) return // <2 distinct points — nothing to frame
+      cameraRef.current?.fitBounds(bounds, { padding, duration: durationMs })
+    },
   }), [])
 
   // Frame all of fitToCoords with padding so the whole route is visible.
@@ -139,7 +162,7 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
     const bounds = boundsFor(pts)
     if (!bounds) return
     cameraRef.current?.fitBounds(bounds, {
-      padding: { top: 56, right: 48, bottom: 56, left: 48 },
+      padding: DEFAULT_FIT_PADDING,
       duration: durationMs,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

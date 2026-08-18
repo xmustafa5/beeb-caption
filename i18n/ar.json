@@ -359,6 +359,8 @@
       "emptyBody": "ستظهر الرحلات الجديدة في منطقتك هنا.",
       "newTrip": "رحلة جديدة",
       "newRoom": "غرفة نفرات",
+      "fromLabel": "من",
+      "toLabel": "إلى",
       "kmAway": "على بُعد {{km}} كم",
       "tripDistance": "رحلة {{km}} كم",
       "roomMixed": "مختلط",

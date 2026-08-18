@@ -13,6 +13,13 @@ export interface CaptainOffer {
   pickupLng: number
   dropoffLat: number
   dropoffLng: number
+  /**
+   * Human-readable place names carried by the offer itself — the name the rider
+   * picked, or the POI the backend resolved from the coordinates at trip
+   * creation. Undefined on older trips; the card reverse-geocodes only then.
+   */
+  pickupAddress?: string
+  dropoffAddress?: string
   fareIqd: number
   createdAt: string
 }
@@ -26,6 +33,8 @@ interface BackendOffer {
   pickup_lng: number
   dropoff_lat: number
   dropoff_lng: number
+  pickup_address?: string | null
+  dropoff_address?: string | null
   fare_iqd: number
   created_at: string
 }
@@ -40,6 +49,8 @@ function toOffer(b: BackendOffer): CaptainOffer {
     pickupLng: b.pickup_lng,
     dropoffLat: b.dropoff_lat,
     dropoffLng: b.dropoff_lng,
+    pickupAddress: b.pickup_address ?? undefined,
+    dropoffAddress: b.dropoff_address ?? undefined,
     fareIqd: b.fare_iqd,
     createdAt: b.created_at,
   }

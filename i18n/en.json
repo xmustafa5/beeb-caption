@@ -359,6 +359,8 @@
       "emptyBody": "New trips in your area will appear here.",
       "newTrip": "New trip",
       "newRoom": "Nafarat room",
+      "fromLabel": "From",
+      "toLabel": "To",
       "kmAway": "{{km}} km away",
       "tripDistance": "{{km}} km trip",
       "roomMixed": "Mixed",

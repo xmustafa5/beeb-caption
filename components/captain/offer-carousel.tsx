@@ -17,9 +17,11 @@ interface OfferCarouselProps {
   captainLocation: LatLng | null
   onAccept: (offer: CaptainOffer) => void
   accepting: boolean
+  /** Tapping a card frames that offer's pickup + dropoff on the map. */
+  onCardPress?: (offer: CaptainOffer) => void
 }
 
-export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocation, onAccept, accepting }: OfferCarouselProps) {
+export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocation, onAccept, accepting, onCardPress }: OfferCarouselProps) {
   const colors = useThemeColors()
   const { width } = useWindowDimensions()
   const listRef = useRef<FlatList<CaptainOffer>>(null)
@@ -101,6 +103,7 @@ export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocat
               captainLocation={captainLocation}
               onAccept={() => onAccept(item)}
               accepting={accepting}
+              onPress={onCardPress ? () => onCardPress(item) : undefined}
             />
           </View>
         )}

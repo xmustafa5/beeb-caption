@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, ActivityIndicator, TouchableOpacity, I18nManager } from 'react-native'
+import { View, Text, ActivityIndicator, TouchableOpacity, I18nManager, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -9,11 +9,12 @@ import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { TripMap, type TripMapHandle } from '@/components/trip/trip-map'
 import { RecenterButton } from '@/components/trip/recenter-button'
-import { OfferPickupMarker } from '@/components/captain/offer-pickup-marker'
+import { OfferEndMarker } from '@/components/captain/offer-end-marker'
 import { OfferCarousel } from '@/components/captain/offer-carousel'
 import { useTripQueue } from '@/hooks/use-trip-queue'
 import { useCaptainPresence } from '@/providers/captain-presence'
-import { useCurrentLocation } from '@/hooks/use-current-location'
+import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
+import { getRoute } from '@/services/routing'
 import { useActiveTrip } from '@/hooks/use-active-trip'
 import { parseApiError } from '@/lib/api'
 import type { CaptainOffer } from '@/services/captain-queue'
@@ -32,6 +33,10 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const mapRef = useRef<TripMapHandle>(null)
+  const { height: windowHeight } = useWindowDimensions()
+  // Road line joining the active offer's two ends. Two bare dots on a POI-dense
+  // map don't read as a trip; the line is what makes it one shape.
+  const [routeCoords, setRouteCoords] = useState<LatLng[]>([])
 
   // Keep activeIndex in range as offers arrive/expire.
   useEffect(() => {
@@ -49,6 +54,51 @@ export default function HomeScreen() {
       longitudeDelta: 0.012,
     })
   }, [active?.id, active?.pickupLat, active?.pickupLng])
+
+  /**
+   * Frame a whole trip on demand. Imperative because it is a user ACTION: the
+   * captain may pan the map to look around and tap again to snap back, and that
+   * must work every time. `fitBounds` only guarantees the points land inside the
+   * padded box, so the bottom inset reserves the WHOLE carousel — not just a gap
+   * above it — or a long trip frames a pin underneath the card.
+   */
+  const frameOffer = (o: CaptainOffer) => {
+    const ends = [
+      { latitude: o.pickupLat, longitude: o.pickupLng },
+      { latitude: o.dropoffLat, longitude: o.dropoffLng },
+    ]
+    // Frame the ROUTE when we have it, not just the two ends: a road route
+    // regularly bulges outside the box its endpoints make, and framing the ends
+    // alone leaves the line running off the edges.
+    const pts = o.id === active?.id && routeCoords.length >= 2 ? routeCoords : ends
+    mapRef.current?.fitToCoords(pts, {
+      top: 96,
+      right: 56,
+      bottom: Math.round(windowHeight * 0.46) + 24,
+      left: 56,
+    })
+  }
+
+  // Fetch the road route for the active offer. Straight line as the fallback so
+  // the two ends are ALWAYS joined, even when OSRM is unreachable.
+  useEffect(() => {
+    if (!active) {
+      setRouteCoords([])
+      return
+    }
+    const pickup = { latitude: active.pickupLat, longitude: active.pickupLng }
+    const dropoff = { latitude: active.dropoffLat, longitude: active.dropoffLng }
+    let cancelled = false
+    setRouteCoords([pickup, dropoff])
+    getRoute(pickup, dropoff).then((r) => {
+      if (!cancelled && r?.coords?.length) setRouteCoords(r.coords)
+    })
+    return () => { cancelled = true }
+    // Depend on the COORDS, not the `active` object: the queue refetches on a poll
+    // and hands back a new object each time, which would refire the route request
+    // for an unchanged offer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.pickupLat, active?.pickupLng, active?.dropoffLat, active?.dropoffLng])
 
   // Fly to the captain's real GPS fix the FIRST time one arrives after mount
   // (GPS resolves async, so the map opens on the Baghdad fallback). We fly exactly
@@ -73,7 +123,13 @@ export default function HomeScreen() {
     } catch (err) {
       const info = parseApiError(err)
       if (info.status === 409) setError(t('captain.queue.taken'))
-      else if (info.status !== 403 && info.status !== 400) {
+      else if (info.status === 429) {
+        // The gateway told us to back off. "Try again" would be actively wrong
+        // advice here — retrying is what extends the limit — and refetching now
+        // just burns another request, so bail before the refetch below.
+        setError(t('common.rateLimited'))
+        return
+      } else if (info.status !== 403 && info.status !== 400) {
         setError(t(info.isNetwork ? 'common.networkError' : 'captain.queue.acceptFailed'))
       }
       refetch()
@@ -95,18 +151,29 @@ export default function HomeScreen() {
         }}
         showsUserLocation
         showPois
-        // Active offer's dropoff (destructive pin) for trip-direction context. The
-        // active pickup is already drawn by OfferPickupMarker below, so only the
-        // dropoff is passed here — passing `pickup` too would double-draw it.
-        dropoff={active ? { latitude: active.dropoffLat, longitude: active.dropoffLng } : undefined}
+        routeCoords={routeCoords}
       >
+        {/* Both ends of the ACTIVE offer are drawn here (labelled), so TripMap's
+            own unlabelled `pickup`/`dropoff` props stay unused — passing them too
+            would double-draw each end. */}
         {offers.map((o, i) => (
-          <OfferPickupMarker
-            key={`${o.offerType}-${o.id}`}
+          <OfferEndMarker
+            key={`pickup-${o.offerType}-${o.id}`}
             coord={{ latitude: o.pickupLat, longitude: o.pickupLng }}
+            kind="pickup"
             active={i === activeIndex}
+            label={t('captain.queue.fromLabel')}
           />
         ))}
+        {active && (
+          <OfferEndMarker
+            key={`dropoff-${active.offerType}-${active.id}`}
+            coord={{ latitude: active.dropoffLat, longitude: active.dropoffLng }}
+            kind="dropoff"
+            active
+            label={t('captain.queue.toLabel')}
+          />
+        )}
       </TripMap>
 
       {/* Persistent "you have a trip in progress" banner, floating over the map. */}
@@ -167,6 +234,7 @@ export default function HomeScreen() {
           )}
           <OfferCarousel
             offers={offers}
+            onCardPress={frameOffer}
             activeIndex={activeIndex}
             onIndexChange={setActiveIndex}
             captainLocation={location}
