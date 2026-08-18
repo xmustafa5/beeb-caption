@@ -122,3 +122,18 @@ export async function registerCaptain(
   )
   return { captain: toCaptain(data), token: data.token }
 }
+
+/**
+ * Permanently delete the signed-in captain's own account (App Store guideline
+ * 5.1.1(v) requires in-app deletion). The backend archives and anonymizes:
+ * phone, name, plate, national id, push token and password hash are scrubbed and
+ * the captain can no longer sign in. Phone and plate are freed for a fresh
+ * registration later.
+ *
+ * Refused with 409 while a trip is accepted or in progress — the captain must
+ * finish or cancel it first. Callers MUST surface that case; it is the one
+ * failure the captain can act on.
+ */
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/api/captain/me')
+}
