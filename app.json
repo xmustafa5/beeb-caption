@@ -54,6 +54,13 @@
       ],
       "@react-native-community/datetimepicker",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Beep Captain accesses your photo library only when you submit registration documents \u2014 for example, choosing an existing photo of your driving licence or vehicle registration to upload for verification.",
