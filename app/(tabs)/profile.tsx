@@ -342,7 +342,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <Text style={{ ...Typography.micro, color: colors.muted, fontStyle: 'normal', textAlign: 'center', marginTop: Spacing.lg }}>
-          Beeb Captain · 1.0.0
+          Beep Captain · 1.0.0
         </Text>
       </ScrollView>
 

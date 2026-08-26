@@ -36,8 +36,8 @@ offline push. The live WS path is unaffected.
 ## What YOU need to do (one-time, needs a Google/Firebase account)
 
 ### 1. Firebase project
-- <https://console.firebase.google.com> → create or reuse the Beeb project.
-- **Add an Android app** with package name **`com.beeb.captain`** (exact —
+- <https://console.firebase.google.com> → create or reuse the Beep project.
+- **Add an Android app** with package name **`com.beep.captain`** (exact —
   it's in `app.json` → `android.package`).
 - The **rider app** (`com.beeb.rider`, other repo) can live in the **same**
   Firebase project — just add it as a second Android app.

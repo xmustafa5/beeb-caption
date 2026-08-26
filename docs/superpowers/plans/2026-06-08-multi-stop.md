@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Let a rider add up to 3 stops to an active regular trip and watch each stop's pending/reached state — wired to the live Beeb backend.
+**Goal:** Let a rider add up to 3 stops to an active regular trip and watch each stop's pending/reached state — wired to the live Beep backend.
 
 **Architecture:** Phase 1–5b spine — `services/trip-stops.ts` owns backend shapes; a TanStack Query hook owns caching + a 10s poll + the add mutation; a shared `StopsPanel` renders on the two live-trip screens; `TripMap` gains a `stops` marker prop. Reuse `LocationPicker` for the pin.
 

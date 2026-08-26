@@ -1,10 +1,10 @@
-# Beeb Customer (Rider) App — Backend Integration Study & Roadmap
+# Beep Customer (Rider) App — Backend Integration Study & Roadmap
 
 > Generated 2026-06-05 from a study of the PRD suite (`docs/prd/`), the backend handoff (`docs/frontend-summary.md`), the live OpenAPI spec (`docs/openapi.json`), the current app source, and live curl tests against `https://beeb.madebyhaithem.com`.
 
 ## 1. Which app is this? — Definitive answer
 
-**This repo is the Beeb Customer (Rider) App.** High confidence.
+**This repo is the Beep Customer (Rider) App.** High confidence.
 
 The PRD describes one platform with **three surfaces**: an Admin Dashboard (web), a **Customer App**, and a **Captain App**. This repo is the Customer App.
 

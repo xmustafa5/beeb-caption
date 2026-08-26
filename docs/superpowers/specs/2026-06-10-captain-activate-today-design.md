@@ -1,6 +1,6 @@
 # Captain App — Area 2: Activate Today — Design
 
-> Spec for the second build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the second build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-10. Grounded in the Captain App PRD (§3.3 Activate Today), the backend handoff
 > (`docs/frontend-summary.md` → Captain App / Daily Activation Gate), the live OpenAPI spec, and
 > live probes against `https://beeb.madebyhaithem.com` (2026-06-10, test captain `9647000000098`).

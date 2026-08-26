@@ -1,6 +1,6 @@
 # Captain App — Area 4: Trip Queue + Accept — Design
 
-> Spec for the fourth build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the fourth build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-11. Grounded in the Captain App PRD (§3.5 Trip Queue), the backend handoff
 > (`docs/frontend-summary.md` → Captain App / Real-Time Delivery), the live OpenAPI spec, and live
 > probes against `https://beeb.madebyhaithem.com`. Builds on Area 3 (the presence provider exposes

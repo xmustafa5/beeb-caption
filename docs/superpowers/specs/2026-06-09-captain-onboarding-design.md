@@ -1,6 +1,6 @@
 # Captain App — Area 1: Onboarding & Auth — Design
 
-> Spec for the first build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the first build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-09. Grounded in the Captain App PRD (`docs/prd/Beep_Module_Captain_App_PRD_V1_0_0.md`),
 > the backend handoff (`docs/frontend-summary.md` → Captain App), the live OpenAPI spec
 > (`docs/openapi.json`), and live probes against `https://beeb.madebyhaithem.com` (2026-06-09).

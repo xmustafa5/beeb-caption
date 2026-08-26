@@ -1,6 +1,6 @@
 # Captain App — Area 5: Live Trip Legs — Design
 
-> Spec for the fifth build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the fifth build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-11. Grounded in the Captain App PRD (§3.6 Live Trip), the backend handoff
 > (`docs/frontend-summary.md` → Regular Trips / Abriyah / Privacy), the live OpenAPI spec, and live
 > probes against `https://beeb.madebyhaithem.com`. Replaces the Area 4 placeholder

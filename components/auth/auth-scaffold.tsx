@@ -23,10 +23,10 @@ import { Icon } from '@/components/ui/icon'
 const isRTL = I18nManager.isRTL
 
 /**
- * Shared auth-screen frame: a full-bleed Beeb-tinted hero gradient with the logo
+ * Shared auth-screen frame: a full-bleed Beep-tinted hero gradient with the logo
  * pinned top, an absolute back button, and a centered scrollable content column.
  * Mirrors the TAN reference layout (logo → title → form → pill button) but uses
- * Beeb's themed colors via useThemeColors() so light/dark both work.
+ * Beep's themed colors via useThemeColors() so light/dark both work.
  */
 export function AuthScaffold({
   title,

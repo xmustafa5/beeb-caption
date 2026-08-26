@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios'
 import { useAuthStore } from '@/store/auth-store'
 
-// Beeb backend. EXPO_PUBLIC_* vars are inlined at build time; the fallback keeps
+// Beep backend. EXPO_PUBLIC_* vars are inlined at build time; the fallback keeps
 // the app working if .env is missing (the staging host is public, not a secret).
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? 'https://beeb.madebyhaithem.com'
@@ -39,7 +39,7 @@ api.interceptors.response.use(
   },
 )
 
-// Dev-only network logger: prints every Beeb API call to the Metro terminal
+// Dev-only network logger: prints every Beep API call to the Metro terminal
 // (method, URL, status, and a trimmed body). Never runs in production. Sensitive
 // fields are redacted so tokens / raw card numbers don't land in logs.
 if (__DEV__) {

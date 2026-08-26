@@ -1,8 +1,8 @@
-# Beeb Captain App — Build Roadmap
+# Beep Captain App — Build Roadmap
 
 > Generated 2026-06-09 from the **Captain App PRD** (`docs/prd/Beep_Module_Captain_App_PRD_V1_0_0.md`),
 > the backend handoff (`docs/frontend-summary.md` → *Captain App* section), the live
-> OpenAPI spec (`docs/openapi.json`), and the current scaffold (forked from the Beeb
+> OpenAPI spec (`docs/openapi.json`), and the current scaffold (forked from the Beep
 > Customer App template). This is the **driver-facing** counterpart to the Customer App;
 > it talks to the same backend (`https://beeb.madebyhaithem.com`, all 13 phases Live).
 
@@ -23,7 +23,7 @@ captain onboarding flow**. We do **not** touch the Customer App repo.
 
 | Asset | Status | Captain use |
 |---|---|---|
-| `lib/api.ts` | ✅ reuse as-is | axios + Bearer interceptor + 401→clear + `parseApiError`/`apiErrorKey`. Already points at the Beeb base + exposes `WS_BASE_URL`. |
+| `lib/api.ts` | ✅ reuse as-is | axios + Bearer interceptor + 401→clear + `parseApiError`/`apiErrorKey`. Already points at the Beep base + exposes `WS_BASE_URL`. |
 | `store/auth-store.ts` | 🔧 **rework in place** | Replace rider `User` with a `Captain` shape (id, phone, name, name_ar, gender, car_*, **status**). Keep `token`/`setSession`/`clear`/`hasHydrated`/SecureStore. |
 | `services/auth.ts` | 🔧 rework | Keep `requestOtp` + `normalizePhone` + gender mappers; replace `verifyOtp` (captain verify endpoint) and `getMe` (`GET /api/captains/{id}`, not `/riders/me`). |
 | `app/(auth)/*` | 🔧 adapt | `phone.tsx`/`otp.tsx` mostly reusable (same OTP send + a different verify); `profile-setup.tsx` → replaced by the multi-step **registration** wizard. |

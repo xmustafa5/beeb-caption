@@ -1,6 +1,6 @@
 # Captain App — Area 6: Earnings — Design
 
-> Spec for the sixth and final build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the sixth and final build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-11. Grounded in the Captain App PRD (§3.7 Earnings), the backend handoff
 > (`docs/frontend-summary.md` → Captain App / Earnings), the live OpenAPI spec, and live probes
 > against `https://beeb.madebyhaithem.com` (verified with real earnings data 2026-06-11).

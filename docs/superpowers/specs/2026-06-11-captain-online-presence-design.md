@@ -1,6 +1,6 @@
 # Captain App — Area 3: Online Toggle, Location & Real-time — Design
 
-> Spec for the third build area of the Beeb Captain App (see `docs/CAPTAIN_ROADMAP.md`).
+> Spec for the third build area of the Beep Captain App (see `docs/CAPTAIN_ROADMAP.md`).
 > Date: 2026-06-11. Grounded in the Captain App PRD (§3.4 Online Toggle, §4.5 idle timeout,
 > §4.7 offline ping queue), the backend handoff (`docs/frontend-summary.md` → Real-Time Delivery /
 > Captain App), the live OpenAPI spec, and live probes against `https://beeb.madebyhaithem.com`

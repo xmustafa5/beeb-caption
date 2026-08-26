@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let a rider schedule a regular trip 30 min–7 days out, view upcoming scheduled trips in the Trips tab, reschedule the time, and cancel — wired to the live Beeb backend.
+**Goal:** Let a rider schedule a regular trip 30 min–7 days out, view upcoming scheduled trips in the Trips tab, reschedule the time, and cancel — wired to the live Beep backend.
 
 **Architecture:** Phase 1–5a spine — `services/scheduled-trips.ts` owns backend shapes; TanStack Query hooks own caching + mutations; an `app/(scheduled)/` route group for the multi-step create flow; a reschedule modal; the Trips tab gains an Upcoming/Past segment. Reuse `LocationPicker`/`FromToReview` for pins and a new `@react-native-community/datetimepicker` wrapper for time.
 

@@ -1,4 +1,4 @@
-// Beeb Captain brand palette — Royal Navy edition (shared with the Beeb rider app).
+// Beep Captain brand palette — Royal Navy edition (shared with the Beep rider app).
 // Navy #1F3A6D (primary), Steel Blue #4F77C4 (accent),
 // true-black dark mode (no navy bg), white light mode,
 // Success Green #22C55E, Danger Red #FF5A5F.

@@ -60,7 +60,7 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse'
 // Baghdad bounding box (left,top,right,bottom) — biases ranking toward the city.
 const BAGHDAD_VIEWBOX = '44.20,33.45,44.62,33.20'
-const GEOCODER_HEADERS = { 'User-Agent': 'BeebRiderApp/1.0 (ride-hailing; Baghdad)' }
+const GEOCODER_HEADERS = { 'User-Agent': 'BeepRiderApp/1.0 (ride-hailing; Baghdad)' }
 
 // Photon (OpenStreetMap, free, no key) — built for TYPE-AS-YOU-GO autocomplete.
 // Nominatim's /search needs a near-complete name (typing "جامعة الفراهي" → 0

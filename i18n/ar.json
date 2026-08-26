@@ -131,9 +131,9 @@
     "stillSearching": "ما زلنا نبحث عن سائق قريب…",
     "cancelPenaltyMessage": "السائق في الطريق. الإلغاء الآن قد يترتب عليه رسوم بسيطة.",
     "fareEstimate": "تقريباً {{amount}}",
-    "vehicleBeebGo": "بيب جو",
-    "vehicleBeebComfort": "بيب كومفورت",
-    "vehicleBeebXL": "بيب إكس إل"
+    "vehicleBeepGo": "بيب جو",
+    "vehicleBeepComfort": "بيب كومفورت",
+    "vehicleBeepXL": "بيب إكس إل"
   },
   "abriyah": {
     "introTitle": "شنو نفرات؟",

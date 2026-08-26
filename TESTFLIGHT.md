@@ -4,10 +4,12 @@ Mirrors the newTan setup (`/home/alinameer/Pictures/TAN/newTan/TESTFLIGHT.md`): 
 Apple team, same ASC API key, same EAS account (`alinamer`).
 
 > **Naming:** the App Store listing is **"Beep Captain"** ("Beeb" was taken; the rider app
-> had to become "Beep Taxi"). The repo folder (`beeb-caption/`), the EAS slug
-> (`beeb-captain`) and all in-app i18n copy still say "Beeb" — only the store identity,
-> bundle ID and home-screen name are "Beep". Don't "fix" the slug; it would orphan the EAS
-> project.
+> had to become "Beep Taxi"). The store identity, bundle ID, home-screen name and all in-app
+> i18n copy are now **"Beep"**. What still says "beeb" is deliberately frozen: the repo folder
+> (`beeb-caption/`), the EAS slug (`beeb-captain`), the URL scheme (`beebcaptain`), and — in
+> the rider repo only — the Android package `com.beeb.rider` plus its Firebase config. Don't
+> "fix" the slug; it would orphan the EAS project. Don't "fix" the Android package either; it
+> is baked into the Firebase config and the Play listing.
 
 ## Identity
 

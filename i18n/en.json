@@ -60,7 +60,7 @@
     "greeting": "Hi, {{name}}",
     "greetingDefault": "Welcome",
     "whereTo": "Where to?",
-    "rideTypeRegular": "Beeb",
+    "rideTypeRegular": "Beep",
     "rideTypeAbriyah": "Nafarat",
     "subtitle": "Your. Ride. Our. beep.",
     "setPickup": "Set pickup",
@@ -131,9 +131,9 @@
     "stillSearching": "Still looking for a nearby captain…",
     "cancelPenaltyMessage": "A captain is on the way. Cancelling now may incur a small fee.",
     "fareEstimate": "Estimated {{amount}}",
-    "vehicleBeebGo": "Beeb Go",
-    "vehicleBeebComfort": "Beeb Comfort",
-    "vehicleBeebXL": "Beeb XL"
+    "vehicleBeepGo": "Beep Go",
+    "vehicleBeepComfort": "Beep Comfort",
+    "vehicleBeepXL": "Beep XL"
   },
   "abriyah": {
     "introTitle": "What is Nafarat?",
@@ -214,9 +214,9 @@
     "statusStat": "Status",
     "documents": "My documents",
     "carClassLabel": "Car class",
-    "carClassStar1": "Beeb Go",
-    "carClassStar2": "Beeb Comfort",
-    "carClassStar3": "Beeb Premium"
+    "carClassStar1": "Beep Go",
+    "carClassStar2": "Beep Comfort",
+    "carClassStar3": "Beep Premium"
   },
   "wallet": {
     "title": "Wallet",
@@ -296,8 +296,8 @@
     }
   },
   "captain": {
-    "appName": "Beeb Captain",
-    "welcomeTitle": "Drive with Beeb",
+    "appName": "Beep Captain",
+    "welcomeTitle": "Drive with Beep",
     "welcomeSubtitle": "Accept trips, go online, and earn — on your schedule.",
     "startCta": "Start as a Captain",
     "auth": {
