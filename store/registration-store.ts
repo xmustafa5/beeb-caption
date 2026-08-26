@@ -12,7 +12,6 @@ interface RegistrationDraft {
   ticket: string
   password: string
   name: string
-  nameAr: string
   gender: CaptainGender
   nationalId: string
   carMake: string
@@ -22,7 +21,7 @@ interface RegistrationDraft {
   cityId: string
   setPhone: (phone: string) => void
   setAccount: (v: Pick<RegistrationDraft, 'phone' | 'ticket' | 'password'>) => void
-  setStep1: (v: Pick<RegistrationDraft, 'name' | 'nameAr' | 'gender' | 'nationalId'>) => void
+  setStep1: (v: Pick<RegistrationDraft, 'name' | 'gender' | 'nationalId'>) => void
   setStep2: (v: Pick<RegistrationDraft, 'carMake' | 'carModel' | 'carColor' | 'carPlate' | 'cityId'>) => void
   reset: () => void
 }
@@ -32,7 +31,6 @@ const EMPTY = {
   ticket: '',
   password: '',
   name: '',
-  nameAr: '',
   gender: 'male' as CaptainGender,
   nationalId: '',
   carMake: '',

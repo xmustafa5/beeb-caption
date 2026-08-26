@@ -19,7 +19,6 @@ export interface RegisterCaptainInput {
   password: string
   ticket: string // register-purpose ticket from verifyOtp()
   name: string
-  nameAr: string
   gender: CaptainGender
   carMake: string
   carModel: string
@@ -107,7 +106,10 @@ export async function registerCaptain(
     password: input.password,
     ticket: input.ticket,
     name: input.name,
-    name_ar: input.nameAr,
+    // The app collects a single full name. `name_ar` is optional server-side
+    // (it falls back to `name`), but we still send it so a build that ships
+    // ahead of the backend deploy keeps working against the older contract.
+    name_ar: input.name,
     gender: toBackendGender(input.gender),
     car_make: input.carMake,
     car_model: input.carModel,

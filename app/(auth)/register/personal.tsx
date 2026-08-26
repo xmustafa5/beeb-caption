@@ -21,7 +21,6 @@ const isRTL = I18nManager.isRTL
 
 const schema = z.object({
   name: z.string().min(2, 'captain.register.nameInvalid'),
-  nameAr: z.string().min(2, 'captain.register.nameArInvalid'),
   gender: z.enum(['male', 'female']),
   nationalId: z.string().optional(),
 })
@@ -36,13 +35,13 @@ export default function PersonalStep() {
 
   const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { name: draft.name, nameAr: draft.nameAr, gender: draft.gender, nationalId: draft.nationalId },
+    defaultValues: { name: draft.name, gender: draft.gender, nationalId: draft.nationalId },
     mode: 'onChange',
   })
   const gender = watch('gender')
 
   const onNext = (v: Form) => {
-    draft.setStep1({ name: v.name, nameAr: v.nameAr, gender: v.gender, nationalId: v.nationalId ?? '' })
+    draft.setStep1({ name: v.name, gender: v.gender, nationalId: v.nationalId ?? '' })
     router.push('/(auth)/register/vehicle')
   }
 
@@ -75,10 +74,6 @@ export default function PersonalStep() {
             <Controller control={control} name="name" render={({ field: { onChange, value } }) => (
               <Input label={t('captain.register.name')} value={value} onChangeText={onChange} autoCapitalize="words"
                 error={errors.name ? t(errors.name.message ?? '') : undefined} />
-            )} />
-            <Controller control={control} name="nameAr" render={({ field: { onChange, value } }) => (
-              <Input label={t('captain.register.nameAr')} value={value} onChangeText={onChange}
-                error={errors.nameAr ? t(errors.nameAr.message ?? '') : undefined} />
             )} />
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ ...Typography['input-label'], color: colors.subtle, textAlign: 'left' }}>{t('captain.register.gender')}</Text>

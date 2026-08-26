@@ -58,7 +58,6 @@ export default function VehicleStep() {
         password: draft.password,
         ticket: draft.ticket,
         name: draft.name,
-        nameAr: draft.nameAr,
         gender: draft.gender,
         nationalId: draft.nationalId || null,
         carMake: v.carMake,
