@@ -539,17 +539,9 @@
   },
   "abriyahAccess": {
     "title": "Abriyah (shared rides)",
-    "descNone": "Request access to accept Abriyah shared-ride rooms. An admin reviews each request.",
-    "descRequested": "Your request is under review. You'll be able to accept Abriyah rooms once approved.",
-    "descApproved": "You can see and accept Abriyah shared-ride rooms.",
-    "descRejected": "Your Abriyah access request was rejected. You can request again.",
-    "request": "Request access",
-    "requestAgain": "Request again",
-    "pending": "Pending review",
-    "approved": "Approved",
-    "rejected": "Rejected",
-    "reasonLabel": "Reason",
-    "requestFailed": "Couldn't send the request. Try again.",
-    "needApproved": "Available once your captain account is approved."
+    "enabled": "Enabled",
+    "notEnabled": "Not enabled",
+    "descEnabled": "You can see and accept Abriyah shared-ride rooms.",
+    "descNotEnabled": "Your account is set to taxi orders only. Shared-ride access is set by Beep — contact support if you need it."
   }
 }

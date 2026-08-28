@@ -146,7 +146,10 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
             </View>
           ) : (
             <View style={{ gap: Spacing.lg }}>
-              <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+              {/* native forceRTL mirrors the cross axis in AR — no manual flip.
+                  (textAlign below IS flipped by hand: 'left'/'right' are absolute
+                  in RN and do not mirror, unlike flexbox alignment.) */}
+              <View style={{ gap: Spacing.sm, alignItems: 'flex-start' }}>
                 <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
                   {insufficient ? t('captain.activate.insufficientTitle') : t('captain.activate.notActivatedTitle')}
                 </Text>

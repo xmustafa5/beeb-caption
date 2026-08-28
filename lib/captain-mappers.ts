@@ -8,7 +8,13 @@ export type CaptainStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
 export type CaptainGender = 'male' | 'female'
 /** Car star grade (1|2|3), set by an admin. 3 = nicest. Defaults to 1. */
 export type CarStar = 1 | 2 | 3
-/** Abriyah (shared-ride) access state, gated by admin approval. */
+/**
+ * Abriyah (shared-ride) access state. Only 'approved' grants shared rides;
+ * everything else means taxi orders only. The server now writes just 'none' and
+ * 'approved' -- an admin picks the scope when approving the captain. The legacy
+ * 'requested' / 'rejected' values are kept in the union because a store
+ * rehydrated from an older build can still hold one.
+ */
 export type AbriyahStatus = 'none' | 'requested' | 'approved' | 'rejected'
 
 export interface Captain {
@@ -31,9 +37,9 @@ export interface Captain {
   tripCount: number
   /** Car class grade (1|2|3), admin-set. Server defaults existing captains to 1. */
   star: CarStar
-  /** Abriyah access status; gate the Abriyah UI on this. */
+  /** Abriyah access status; gate the Abriyah UI on `=== 'approved'`. */
   abriyahStatus: AbriyahStatus
-  /** Reason shown when abriyahStatus === 'rejected'. */
+  /** Legacy rejection reason. The server clears this now; nothing renders it. */
   abriyahRejectionReason?: string | null
 }
 

@@ -97,7 +97,16 @@ export default function DeleteAccountScreen() {
             ? 'common.networkError'
             : info.status === 409
               ? 'profile.deleteAccountActiveTrip'
-              : 'profile.deleteAccountFailed',
+              : // The password runs through the SAME throttled gate as login, so
+                // five wrong tries here lock the captain out of LOGIN as well.
+                // "Try again" would be the one thing that cannot work.
+                info.status === 429
+                ? 'common.rateLimited'
+                : // Blocked: refused before the password is read, and retrying
+                  // never clears it.
+                  info.status === 403
+                  ? 'captain.status.blockedBody'
+                  : 'profile.deleteAccountFailed',
         ),
       )
     },
