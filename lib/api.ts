@@ -25,14 +25,60 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+/**
+ * Machine-readable reason code the backend returns in its `{ "error": ... }`
+ * envelope on the one 401 that does NOT mean "your session is over": the
+ * password submitted in the request body was rejected, but the JWT is fine
+ * (`AppError::UnauthorizedCode("wrong_password")` server-side).
+ *
+ * Status alone cannot tell the two apart — a dead token and a wrong password are
+ * both 401 on DELETE /api/captain/me — and they demand opposite behavior, so the
+ * body carries the code and clients branch on it.
+ */
+export const WRONG_PASSWORD_CODE = 'wrong_password'
+
+/** Reads the backend's uniform `{ "error": "..." }` envelope, tolerating a raw-string body. */
+function readErrorCode(data: unknown): string | undefined {
+  let parsed = data
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed)
+    } catch {
+      return undefined
+    }
+  }
+  if (parsed && typeof parsed === 'object') {
+    const code = (parsed as { error?: unknown }).error
+    if (typeof code === 'string') return code
+  }
+  return undefined
+}
+
+/**
+ * True only for "the password you typed is wrong" — never for "your token is
+ * dead". Every other 401 (a bare body from `require_auth`, or
+ * `{"error":"unauthorized"}`) is an expired/revoked session and must sign out.
+ */
+export function isWrongPasswordError(error: unknown): boolean {
+  return (
+    axios.isAxiosError(error) &&
+    error.response?.status === 401 &&
+    readErrorCode(error.response.data) === WRONG_PASSWORD_CODE
+  )
+}
+
 // There is no refresh-token flow: a 401 on an authenticated request means the
 // JWT expired or was revoked → clear the session so the AuthGate routes to login.
+// The single exception is the `wrong_password` 401 above, which reports a bad
+// credential in the request body rather than a dead token. Note the exemption is
+// keyed to what the SERVER said, not to which endpoint was called: an expired
+// token on DELETE /api/captain/me still signs the captain out, as it must.
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
     const status = error.response?.status
     const hadAuth = !!error.config?.headers?.Authorization
-    if (status === 401 && hadAuth) {
+    if (status === 401 && hadAuth && !isWrongPasswordError(error)) {
       useAuthStore.getState().clear()
     }
     return Promise.reject(error)
@@ -91,9 +137,11 @@ export interface ApiErrorInfo {
   /** True when the request never reached the server (offline / timeout). */
   isNetwork: boolean
   /**
-   * The backend's human message from its `{ "error": "..." }` envelope, if any.
-   * NOTE: auth 401s come back with an EMPTY body — there is no message there,
-   * so callers must branch on `status`, not on this field.
+   * The backend's `{ "error": "..." }` envelope, if any. It carries either a
+   * human message or a machine-readable code (`wrong_password`,
+   * `activation_required`, …). Some 401s — the bare ones from `require_auth` —
+   * have no body at all, so this can be undefined on a 401; branch on `status`
+   * first and treat a missing code as "no code", never as a match.
    */
   backendMessage?: string
 }
@@ -103,11 +151,10 @@ export function parseApiError(error: unknown): ApiErrorInfo {
     if (!error.response) {
       return { status: undefined, isNetwork: true }
     }
-    const body = error.response.data as { error?: string } | undefined
     return {
       status: error.response.status,
       isNetwork: false,
-      backendMessage: typeof body?.error === 'string' ? body.error : undefined,
+      backendMessage: readErrorCode(error.response.data),
     }
   }
   return { status: undefined, isNetwork: false }

@@ -1,6 +1,6 @@
 // components/captain/activate-sheet.tsx
-import { useState } from 'react'
-import { Modal, View, Text, TouchableOpacity, Switch, ActivityIndicator, I18nManager } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Modal, View, Text, TouchableOpacity, ActivityIndicator, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -11,7 +11,6 @@ import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
 import { TopUpSheet } from '@/components/captain/top-up-sheet'
 import { useActivation } from '@/hooks/use-activation'
-import { useCaptainPresence, type ConnectionHealth } from '@/providers/captain-presence'
 import { DEFAULT_DAILY_FEE_IQD, getTodayActivation } from '@/services/activation'
 import { getWallet } from '@/services/wallet'
 import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
@@ -24,13 +23,13 @@ interface ActivateSheetProps {
 }
 
 /**
- * The daily-activation flow, presented as a bottom sheet from the tab bar's
- * center Activate button. Two states:
- *  - Not activated (or insufficient funds) → activate / top-up / pay-by-card.
- *  - Activated → the online/offline toggle + connection health.
+ * Paying the daily activation fee — wallet, top-up, or card. That is all this
+ * sheet does now.
  *
- * Lifted out of the old home screen so home is now a pure map; the sheet is the
- * single place the captain pays the fee and goes online (Baly-style center CTA).
+ * Going online is NOT here: once the fee is paid the tab bar's center button is
+ * itself the on/off switch, so a captain flipping status between rides never
+ * opens a sheet. This one closes the moment the day is paid for, handing the
+ * captain straight back to the map.
  */
 export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   const { t, i18n } = useTranslation()
@@ -49,6 +48,13 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   const activation = query.data?.activation ?? null
   const feeIqd = activation?.feeAmountIqd ?? DEFAULT_DAILY_FEE_IQD
   const activated = query.data?.activated === true
+
+  // Every success path ends the same way: the day is paid for and there is
+  // nothing left to show. Watching `activated` covers the wallet charge, the
+  // top-up retry and the card checkout without each having to close by hand.
+  useEffect(() => {
+    if (visible && activated) onClose()
+  }, [visible, activated, onClose])
 
   async function runActivate() {
     setError(null)
@@ -138,19 +144,6 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
             <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>
               <ActivityIndicator color={colors.tint} />
             </View>
-          ) : activated ? (
-            <View style={{ gap: Spacing.md, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="checkmark-circle" size={36} color={colors.success} />
-              </View>
-              <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: isRTL ? 'right' : 'left' }}>
-                {t('captain.activate.activatedTitle')}
-              </Text>
-              <Text style={{ ...Typography.body, color: colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
-                {t('captain.activate.activatedBody', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
-              </Text>
-              <OnlineToggle />
-            </View>
           ) : (
             <View style={{ gap: Spacing.lg }}>
               <View style={{ gap: Spacing.sm, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
@@ -161,6 +154,12 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
                   {insufficient
                     ? t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isRTL ? 'ar' : 'en'), fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })
                     : t('captain.activate.feeNotice', { fee: formatIqd(feeIqd, isRTL ? 'ar' : 'en') })}
+                </Text>
+                {/* Location-sharing disclosure. It used to sit next to the online
+                    toggle inside this sheet; with the toggle moved to the tab bar
+                    this is where the captain still reads what activating means. */}
+                <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+                  {t('captain.online.gpsHint')}
                 </Text>
               </View>
 
@@ -205,59 +204,5 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
         }}
       />
     </Modal>
-  )
-}
-
-const HEALTH_COLORS: Record<ConnectionHealth, 'muted' | 'success' | 'tint' | 'destructive'> = {
-  offline: 'muted',
-  connecting: 'tint',
-  live: 'success',
-  stale: 'destructive',
-}
-
-function OnlineToggle() {
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
-  const colors = useThemeColors()
-  const { online, connection, goingOnline, error, setOnline } = useCaptainPresence()
-
-  const healthColor = colors[HEALTH_COLORS[connection]]
-  const healthLabel =
-    connection === 'live' ? t('captain.online.live')
-    : connection === 'connecting' ? t('captain.online.connecting')
-    : connection === 'stale' ? t('captain.online.stale')
-    : online ? t('captain.online.online') : t('captain.online.offline')
-
-  return (
-    <View style={{ alignSelf: 'stretch', gap: Spacing.md, marginTop: Spacing.sm }}>
-      {/* native forceRTL mirrors this row in AR — no manual flip */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
-          {online ? t('captain.online.online') : t('captain.online.toggleLabel')}
-        </Text>
-        <Switch
-          value={online}
-          onValueChange={(v) => setOnline(v)}
-          disabled={goingOnline}
-          trackColor={{ true: colors.tint }}
-          // RN's Switch doesn't auto-mirror in RTL — the knob always slides to the
-          // visual right when "on". Mirror it in RTL so the knob travels the natural
-          // way for an Arabic reader. (scaleX on a symmetric control, not a directional icon.)
-          style={isRTL ? { transform: [{ scaleX: -1 }] } : undefined}
-        />
-      </View>
-
-      {/* native forceRTL mirrors this row in AR — no manual flip */}
-      <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: healthColor }} />
-        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>
-          {healthLabel}
-        </Text>
-      </View>
-
-      <Text style={{ ...Typography['caption-sm'], color: error ? colors.destructive : colors.subtle, textAlign: isRTL ? 'right' : 'left', fontStyle: 'normal' }}>
-        {error ? t(`captain.online.${error}`) : t('captain.online.gpsHint')}
-      </Text>
-    </View>
   )
 }

@@ -132,10 +132,20 @@ export async function registerCaptain(
  * the captain can no longer sign in. Phone and plate are freed for a fresh
  * registration later.
  *
- * Refused with 409 while a trip is accepted or in progress — the captain must
- * finish or cancel it first. Callers MUST surface that case; it is the one
- * failure the captain can act on.
+ * The plaintext password is re-verified SERVER-SIDE before anything is deleted —
+ * a client-only check would be worthless for an irreversible action. Status map:
+ *   204 → deleted; 404 → already gone (same end state — sign the captain out)
+ *   401 + `{"error":"wrong_password"}` → the typed password was rejected; the
+ *         session is still valid, so keep the captain signed in and show an
+ *         inline error on the password field
+ *   401 otherwise → the JWT is expired or revoked; sign out like anywhere else.
+ *         Both cases are 401, which is why the body's code decides, not the
+ *         status (see `isWrongPasswordError` in lib/api.ts)
+ *   409 → a trip is accepted or in progress; finish or cancel it first. Callers
+ *         MUST surface this — it is the one failure the captain can act on.
+ *
+ * One axios detail: DELETE only carries a body via `data`.
  */
-export async function deleteAccount(): Promise<void> {
-  await api.delete('/api/captain/me')
+export async function deleteAccount(password: string): Promise<void> {
+  await api.delete('/api/captain/me', { data: { password } })
 }

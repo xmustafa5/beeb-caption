@@ -1,12 +1,9 @@
-import { View, Text, I18nManager } from 'react-native'
+import { View, Text } from 'react-native'
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
-
-// Stable for the session — forceRTL changes require a restart anyway
-const isRTL = I18nManager.isRTL
 
 /** Inline API-error banner shown above a form's submit button. */
 export function FormError({ message }: { message?: string | null }) {
@@ -33,7 +30,12 @@ export function FormError({ message }: { message?: string | null }) {
             color: colors.destructive,
             flex: 1,
             fontStyle: 'normal',
-            textAlign: isRTL ? 'right' : 'left',
+            // Reading-start, so the message hugs its icon. RN swaps left/right on
+            // <Text> under RTL, so 'left' resolves to visual right in AR; an
+            // isRTL ternary here would pin the Arabic to visual LEFT and tear it
+            // away from the icon (iOS RCTAttributedTextUtils swaps Right→Left;
+            // Android maps 'right' to ALIGN_OPPOSITE).
+            textAlign: 'left',
           }}
         >
           {message}

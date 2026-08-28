@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -13,8 +12,6 @@ import { PeriodTabs } from '@/components/captain/period-tabs'
 import { EarningsSummary } from '@/components/captain/earnings-summary'
 import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
 import { useEarnings } from '@/hooks/use-earnings'
-import { deleteAccount } from '@/services/captain-auth'
-import { parseApiError } from '@/lib/api'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
@@ -23,7 +20,6 @@ import type { EarningsPeriod } from '@/services/earnings'
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
-  const qc = useQueryClient()
   const insets = useSafeAreaInsets()
   const captain = useAuthStore((s) => s.captain)
   const router = useRouter()
@@ -33,41 +29,6 @@ export default function ProfileScreen() {
   const langSheetRef = useRef<OptionSheetRef>(null)
   const [period, setPeriod] = useState<EarningsPeriod>('today')
   const { earnings, isLoading: earningsLoading } = useEarnings(period)
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteAccount,
-    // Account is gone server-side; drop the local session so the auth gate routes
-    // to login. Clear the query cache too — none of this captain's cached
-    // earnings/queue data may survive into the next sign-in.
-    onSuccess: () => {
-      qc.clear()
-      useAuthStore.getState().clear()
-    },
-    onError: (err) => {
-      // 409 is the ONE failure the captain can act on: a trip is still live.
-      const status = parseApiError(err).status
-      Alert.alert(
-        t('profile.deleteAccount'),
-        t(status === 409 ? 'profile.deleteAccountActiveTrip' : 'profile.deleteAccountFailed'),
-      )
-    },
-  })
-
-  const onDeleteAccount = () => {
-    Alert.alert(
-      t('profile.deleteAccount'),
-      t('profile.deleteAccountConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('profile.deleteAccountCta'),
-          style: 'destructive',
-          onPress: () => deleteMutation.mutate(),
-        },
-      ],
-    )
-  }
-
 
   if (!captain) return null
 
@@ -264,19 +225,54 @@ export default function ProfileScreen() {
           <AbriyahAccessCard />
         </View>
 
-        {/* ── Theme switch ── */}
-        <View style={{ marginTop: Spacing.xl }}>
-          <ThemeRow
-            value={themePref}
-            onChange={setThemePref}
-            options={[
-              { value: 'system', icon: 'phone-portrait-outline', label: t('profile.themeSystem') },
-              { value: 'light', icon: 'sunny-outline', label: t('profile.themeLight') },
-              { value: 'dark', icon: 'moon-outline', label: t('profile.themeDark') },
-            ]}
-            label={t('profile.theme')}
-            colors={colors}
-          />
+        {/* ── Settings: appearance + account deletion ── */}
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={sectionLabel(colors)}>{t('profile.settingsTitle')}</Text>
+          <View style={{ gap: Spacing.md }}>
+            <ThemeRow
+              value={themePref}
+              onChange={setThemePref}
+              options={[
+                { value: 'system', icon: 'phone-portrait-outline', label: t('profile.themeSystem') },
+                { value: 'light', icon: 'sunny-outline', label: t('profile.themeLight') },
+                { value: 'dark', icon: 'moon-outline', label: t('profile.themeDark') },
+              ]}
+              label={t('profile.theme')}
+              colors={colors}
+            />
+
+            {/* Navigates to the password-confirmation screen — never deletes inline. */}
+            <TouchableOpacity
+              onPress={() => router.push('/(account)/delete')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              style={{
+                // native forceRTL mirrors this row in AR — no manual flip
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.md,
+                backgroundColor: colors.card,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: Spacing.lg,
+              }}
+            >
+              <View style={{
+                width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+                backgroundColor: colors.destructive + '1A',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="trash-outline" size={18} color={colors.destructive} />
+              </View>
+              <Text style={{ ...Typography['body-md'], color: colors.destructive, flex: 1, textAlign: 'left' }}>
+                {t('profile.deleteAccount')}
+              </Text>
+              {/* Chevron points toward the reading-direction end — swap glyph in AR. */}
+              <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Logout ── */}
@@ -307,38 +303,6 @@ export default function ProfileScreen() {
           <Text style={{ ...Typography['body-md'], color: colors.destructive, flex: 1, textAlign: 'left' }}>
             {t('profile.logout')}
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={deleteMutation.isPending ? undefined : onDeleteAccount}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          style={{
-            // native forceRTL mirrors this row in AR — no manual flip
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Spacing.md,
-            marginTop: Spacing.md,
-            backgroundColor: colors.card,
-            borderRadius: 16,
-            borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: Spacing.lg,
-            opacity: deleteMutation.isPending ? 0.6 : 1,
-          }}
-        >
-          <View style={{
-            width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
-            backgroundColor: colors.destructive + '1A',
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon name="trash-outline" size={18} color={colors.destructive} />
-          </View>
-          <Text style={{ ...Typography['body-md'], color: colors.destructive, flex: 1, textAlign: 'left' }}>
-            {t('profile.deleteAccount')}
-          </Text>
-          {deleteMutation.isPending && <ActivityIndicator size="small" color={colors.destructive} />}
         </TouchableOpacity>
 
         <Text style={{ ...Typography.micro, color: colors.muted, fontStyle: 'normal', textAlign: 'center', marginTop: Spacing.lg }}>

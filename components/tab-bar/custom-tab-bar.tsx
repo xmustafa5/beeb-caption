@@ -1,4 +1,5 @@
-import { View, TouchableOpacity, Text, I18nManager } from 'react-native'
+import { View, TouchableOpacity, Text, ActivityIndicator, I18nManager } from 'react-native'
+import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -27,7 +28,7 @@ interface CustomTabBarProps {
   activeIndex: number
   /** Side-tab indices into the pager: Home = 0, Profile = 1. */
   onTabPress: (index: number) => void
-  /** Open the activation / online sheet (center button). */
+  /** Open the payment sheet. Only reached while the day is NOT yet paid for. */
   onActivatePress: () => void
   badges?: Partial<Record<number, number>>
 }
@@ -80,37 +81,78 @@ interface ActivateButtonProps {
 }
 
 /**
- * Center tab item — same shape as the side tabs, just an accent dot to signal
- * state: violet when the day isn't activated, green when online, muted when idle.
+ * Center control. Once the day is paid for this IS the online switch — tapping
+ * it goes on and off air directly, with no sheet in between. The sheet is only
+ * for the one thing that genuinely needs a form: paying the daily fee.
+ *
+ *   not paid  → violet, "Activate"      → opens the payment sheet
+ *   paid, off → outlined, "Go online"   → goes online
+ *   busy      → spinner                 → request in flight, taps ignored
+ *   connecting→ green, "Connecting…"     → on air, socket still handshaking
+ *   live      → green, "Online"         → goes offline
+ *   stale     → red, "Reconnecting…"    → still online, link is struggling
  */
 function ActivateButton({ onPress, colors }: ActivateButtonProps) {
   const { t } = useTranslation()
   const { query } = useActivation()
-  const { online } = useCaptainPresence()
+  const { online, connection, goingOnline, setOnline } = useCaptainPresence()
 
   const activated = query.data?.activated === true
-  const tone = !activated ? colors.tint : online ? colors.success : colors.tabIconDefault
+  // Only the in-flight request blocks input. Socket health must NOT: a link stuck
+  // in `connecting` would otherwise leave the captain on air with no way to switch
+  // off, which is the trap this button exists to avoid. Going offline is always
+  // one tap away — the label still reports the health.
+  const busy = goingOnline
+  const connecting = online && connection === 'connecting'
+  const stale = online && connection === 'stale'
+
+  // Fill the disc whenever the button represents a committed state (unpaid day,
+  // or on air). Offline is the one resting state, so it stays an outline.
+  const tone = !activated ? colors.tint : stale ? colors.destructive : online ? colors.success : colors.tabIconDefault
+  const filled = !activated || online
+
+  const label = !activated
+    ? t('captain.activate.tabActivate')
+    : busy || connecting ? t('captain.online.connecting')
+    : stale ? t('captain.online.stale')
+    : online ? t('captain.online.online')
+    : t('captain.online.toggleLabel')
+
+  function handlePress() {
+    if (busy) return
+    if (process.env.EXPO_OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    // Paid days toggle in place; only an unpaid day needs the sheet.
+    if (activated) void setOnline(!online)
+    else onPress()
+  }
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       activeOpacity={0.7}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: online, disabled: busy }}
+      accessibilityLabel={label}
       style={{ flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: 4, gap: 3 }}
     >
-      <View style={{ position: 'relative' }}>
-        <Icon name="power" size={24} color={tone} />
-        {/* small status dot */}
-        <View style={{
-          position: 'absolute',
-          top: -2,
-          right: -2,
-          width: 9,
-          height: 9,
-          borderRadius: 4.5,
-          backgroundColor: tone,
-          borderWidth: 1.5,
-          borderColor: colors.card,
-        }} />
+      <View
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 17,
+          borderCurve: 'continuous',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: filled ? tone : 'transparent',
+          borderWidth: filled ? 0 : 1.5,
+          borderColor: colors.border,
+        }}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={filled ? colors.onTint : tone} />
+        ) : (
+          <Icon name="power" size={20} color={filled ? colors.onTint : tone} />
+        )}
       </View>
       <Text
         numberOfLines={1}
@@ -122,7 +164,7 @@ function ActivateButton({ onPress, colors }: ActivateButtonProps) {
           color: tone,
         }}
       >
-        {t('captain.activate.tabActivate')}
+        {label}
       </Text>
       <View style={{ height: 3, width: 0, marginTop: 2 }} />
     </TouchableOpacity>
