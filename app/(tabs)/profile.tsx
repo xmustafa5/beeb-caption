@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { ScrollView, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
+import { useRef } from 'react'
+import { ScrollView, View, Text, TouchableOpacity, Alert } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -8,14 +8,20 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
-import { PeriodTabs } from '@/components/captain/period-tabs'
-import { EarningsSummary } from '@/components/captain/earnings-summary'
 import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
-import { useEarnings } from '@/hooks/use-earnings'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
-import type { EarningsPeriod } from '@/services/earnings'
+
+/**
+ * The wallet is not part of the current release. This hides the ONLY entry
+ * point a captain has to `/(wallet)` — the screen and its services are left in
+ * place, so flipping this back to `true` restores the feature with no other
+ * edit. Note this does NOT disable paying the daily activation fee from the
+ * wallet balance: that lives in `components/captain/activate-sheet.tsx` and is
+ * a separate flow the captain still needs.
+ */
+const WALLET_ENABLED = false
 
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation()
@@ -27,8 +33,6 @@ export default function ProfileScreen() {
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
   const langSheetRef = useRef<OptionSheetRef>(null)
-  const [period, setPeriod] = useState<EarningsPeriod>('today')
-  const { earnings, isLoading: earningsLoading } = useEarnings(period)
 
   if (!captain) return null
 
@@ -125,24 +129,43 @@ export default function ProfileScreen() {
           <Stat value={String(captain.tripCount ?? 0)} label={t('profile.tripsStat')} icon="car-sport" iconColor={colors.tint} colors={colors} />
         </View>
 
-        {/* ── Earnings ── */}
-        <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
-          <Text style={sectionLabel(colors)}>{t('captain.earnings.title')}</Text>
-          <PeriodTabs value={period} onChange={setPeriod} />
-          {earningsLoading ? (
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xl }}>
-              <ActivityIndicator color={colors.tint} />
-            </View>
-          ) : earnings ? (
-            <EarningsSummary earnings={earnings} />
-          ) : (
-            <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'left' }}>
-              {t('captain.earnings.loadFailed')}
-            </Text>
-          )}
-        </View>
+        {/* ── Earnings ── Lives on its own screen now; this row is the way in.
+             Keeping the summary inline meant the profile paid for two earnings
+             queries on every visit and still had no room for the trip history. */}
+        <TouchableOpacity
+          onPress={() => router.push('/(account)/earnings')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          style={{
+            // native forceRTL mirrors this row in AR — no manual flip
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.md,
+            marginTop: Spacing.xl,
+            backgroundColor: colors.card,
+            borderRadius: 16,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: Spacing.lg,
+          }}
+        >
+          <View style={{
+            width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+            backgroundColor: colors.tint + '1A',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="trending-up-outline" size={18} color={colors.tint} />
+          </View>
+          <Text style={{ ...Typography['body-md'], color: colors.text, flex: 1, textAlign: 'left' }}>
+            {t('captain.earnings.title')}
+          </Text>
+          {/* Chevron points toward the reading direction end — swap glyph in AR. */}
+          <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+        </TouchableOpacity>
 
         {/* ── Wallet ── */}
+        {WALLET_ENABLED && (
         <TouchableOpacity
           onPress={() => router.push('/(wallet)')}
           activeOpacity={0.85}
@@ -173,6 +196,7 @@ export default function ProfileScreen() {
           {/* Chevron points toward the reading direction end — swap glyph in AR. */}
           <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
         </TouchableOpacity>
+        )}
 
         {/* ── Vehicle card ── */}
         <View style={{ marginTop: Spacing.lg }}>
