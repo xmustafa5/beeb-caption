@@ -12,6 +12,7 @@ import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
+import Constants from 'expo-constants'
 
 /**
  * The wallet is not part of the current release. This hides the ONLY entry
@@ -329,8 +330,10 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* Read from app.json so the footer cannot drift again (it sat at 1.0.0 through
+            two releases). `expoConfig` is always populated in an EAS build. */}
         <Text style={{ ...Typography.micro, color: colors.muted, fontStyle: 'normal', textAlign: 'center', marginTop: Spacing.lg }}>
-          Beep Captain · 1.0.0
+          Beep Captain · {Constants.expoConfig?.version ?? '—'}
         </Text>
       </ScrollView>
 
