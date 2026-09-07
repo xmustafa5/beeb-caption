@@ -12,6 +12,56 @@ export interface CaptainLocation {
 export interface PingCoords {
   longitude: number
   latitude: number
+  /**
+   * Travel direction in degrees clockwise from north. The rider's map rotates the
+   * car sprite with it, so a wrong value is worse than none: send `null` unless the
+   * fix is trustworthy (see `toPingCoords`). Backend `LocationPingInput` defaults
+   * all three of these, so omitting or nulling them is wire-compatible.
+   */
+  heading_deg?: number | null
+  speed_mps?: number | null
+  accuracy_m?: number | null
+}
+
+/**
+ * The subset of `Location.LocationObjectCoords` a ping needs. Declared
+ * structurally so the background task and the foreground watch can share the
+ * mapper without this service depending on expo-location.
+ */
+export interface DeviceCoords {
+  longitude: number
+  latitude: number
+  heading?: number | null
+  speed?: number | null
+  accuracy?: number | null
+}
+
+/**
+ * Below this the device is standing still and its reported heading is stale
+ * noise (the last direction it happened to be facing, or a compass reading).
+ */
+const HEADING_MIN_SPEED_MPS = 1
+
+/**
+ * Device fix → ping payload. The heading guard is the whole point: iOS reports
+ * `-1` for "unknown" and Android reports `0`, the backend 400s on a negative
+ * heading, and `0` is a legitimate "due north" — so a raw passthrough either
+ * kills the ping or permanently points the rider's car north. Only a heading the
+ * device produced while actually moving is sent; everything else is `null`.
+ */
+export function toPingCoords(c: DeviceCoords): PingCoords {
+  const speed = typeof c.speed === 'number' && c.speed >= 0 ? c.speed : null
+  const heading =
+    typeof c.heading === 'number' && c.heading >= 0 && (speed ?? 0) > HEADING_MIN_SPEED_MPS
+      ? c.heading
+      : null
+  return {
+    longitude: c.longitude,
+    latitude: c.latitude,
+    heading_deg: heading,
+    speed_mps: speed,
+    accuracy_m: typeof c.accuracy === 'number' ? c.accuracy : null,
+  }
 }
 
 interface BackendLocation {

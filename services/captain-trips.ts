@@ -5,6 +5,22 @@ export type TripStatus = 'requested' | 'accepted' | 'in_progress' | 'completed' 
 export type TripType = 'regular' | 'abriyah'
 export type CancelReason = 'changed_mind' | 'wait_too_long' | 'wrong_pickup' | 'safety' | 'other'
 
+/** Who ended the trip. Drives which explanation the captain is shown. */
+export type CancelledBy = 'rider' | 'captain' | 'system' | 'admin'
+
+const CANCELLED_BY: readonly CancelledBy[] = ['rider', 'captain', 'system', 'admin']
+
+/**
+ * Narrow an actor off the wire. Anything unrecognised becomes `undefined` so the
+ * UI falls back to generic copy rather than confidently mislabelling who quit —
+ * the frame and the REST DTO both carry this field, and only these four are real.
+ */
+export function toCancelledBy(v: unknown): CancelledBy | undefined {
+  return typeof v === 'string' && (CANCELLED_BY as readonly string[]).includes(v)
+    ? (v as CancelledBy)
+    : undefined
+}
+
 export interface Trip {
   id: string
   tripType: TripType
@@ -19,6 +35,7 @@ export interface Trip {
   fareIqd: number
   distanceKm: number
   cancellationReason?: string | null
+  cancelledBy?: CancelledBy
   completedAt?: string | null
 }
 
@@ -42,6 +59,7 @@ interface BackendTrip {
   fare_iqd: number
   distance_km: number
   cancellation_reason?: string | null
+  cancelled_by?: string | null
   completed_at?: string | null
 }
 
@@ -60,6 +78,7 @@ function toTrip(b: BackendTrip): Trip {
     fareIqd: b.fare_iqd,
     distanceKm: b.distance_km,
     cancellationReason: b.cancellation_reason ?? null,
+    cancelledBy: toCancelledBy(b.cancelled_by),
     completedAt: b.completed_at ?? null,
   }
 }

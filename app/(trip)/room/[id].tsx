@@ -1,4 +1,5 @@
 // app/(trip)/room/[id].tsx
+import { useEffect } from 'react'
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +13,7 @@ import { TripMap } from '@/components/trip/trip-map'
 import { NafaratMarkers } from '@/components/captain/nafarat-markers'
 import { RiderSeatCard } from '@/components/captain/rider-seat-card'
 import { useNafaratRoom } from '@/hooks/use-nafarat-room'
+import { useCaptainPresence } from '@/providers/captain-presence'
 import { useCurrentLocation } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
 import { openNavigation, distanceKm } from '@/lib/nav-links'
@@ -27,6 +29,19 @@ export default function NafaratRoomScreen() {
   const router = useRouter()
   const { location } = useCurrentLocation()
   const { room, dropoffZone, pickupBreakdown, seats, isLoading, isError, pickup, dropoff, busyTripId } = useNafaratRoom(id)
+  const { ensureTracking } = useCaptainPresence()
+
+  // A dispatched room IS a live trip as far as location goes — the pooled riders
+  // are watching this car on their maps exactly like a regular fare. Without this
+  // the shared-ride leg is the one case that still freezes the moment the captain
+  // opens a navigation app, because `ensureTracking` is otherwise only called from
+  // the regular live-trip screen. `dispatched` maps to `in_progress`; any other
+  // room state (expired, or the room going away) releases the OS task.
+  const roomStatus = room?.status
+  useEffect(() => {
+    if (!roomStatus) return
+    void ensureTracking(roomStatus === 'dispatched' ? 'in_progress' : undefined)
+  }, [roomStatus, ensureTracking])
 
   // Loading (first load)
   if (isLoading && seats.length === 0 && !room) {

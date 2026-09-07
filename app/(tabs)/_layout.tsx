@@ -12,6 +12,7 @@ import { Spacing } from '@/constants/Spacing'
 import { useTranslation } from 'react-i18next'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { useResumeActiveTrip } from '@/hooks/use-resume-active-trip'
+import { useRemoteTripCancel } from '@/hooks/use-remote-trip-cancel'
 
 import HomeScreen from './index'
 import ProfileScreen from './profile'
@@ -31,6 +32,10 @@ export default function TabLayout() {
 
   // If a trip is in flight, resume the captain into the live-trip screen on launch.
   useResumeActiveTrip()
+  // A rider/admin cancel while the captain sits on Home: alert + drop the banner,
+  // instead of the banner silently disappearing. Mounted here (once) because the
+  // tabs tree outlives every screen pushed on top of it.
+  useRemoteTripCancel()
 
   const pathname = usePathname()
   useEffect(() => {

@@ -419,7 +419,14 @@
       "callUnavailable": "Calling isn't available right now.",
       "resumeTitle": "Trip in progress",
       "resumeSubtitle": "Tap to return to your active trip",
-      "chat": "Chat"
+      "chat": "Chat",
+      "cancelledByRider": "The rider cancelled this trip.",
+      "cancelledBySupport": "This trip was cancelled by support.",
+      "offlineBlockedTitle": "Finish your trip first",
+      "offlineBlockedBody": "You cannot go offline while a trip is active.",
+      "sharingLocation": "Sharing your location with the rider",
+      "backgroundLocationTitle": "Allow background location",
+      "backgroundLocationBody": "Beep Captain needs background location so the rider keeps seeing your car when you switch to a navigation app."
     },
     "nafarat": {
       "title": "Nafarat ride",
@@ -535,7 +542,23 @@
     "unavailableTitle": "Chat unavailable",
     "unavailableBody": "This chat can't be opened right now.",
     "closedNote": "This chat is read-only.",
-    "closedTerminal": "The trip has ended — chat is read-only."
+    "closedTerminal": "The trip has ended — chat is read-only.",
+    "sendFailed": "Message not sent — tap to retry",
+    "subtitleAccepted": "Heading to the pickup",
+    "subtitleInProgress": "Trip in progress",
+    "emptyBodyPickup": "Let the rider know where you are, or pick a quick reply below.",
+    "emptyBodyRide": "Send the rider a note about the route.",
+    "quick": {
+      "captain": {
+        "onMyWay": "I'm on my way",
+        "almostThere": "I'm about to arrive",
+        "arrived": "I've arrived at the pickup",
+        "whereAreYou": "Where exactly are you?",
+        "pleaseComeOut": "Please come out",
+        "traffic": "Stuck in traffic, a few minutes",
+        "almostDestination": "We're almost there"
+      }
+    }
   },
   "abriyahAccess": {
     "title": "Abriyah (shared rides)",

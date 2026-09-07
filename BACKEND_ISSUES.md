@@ -8,6 +8,10 @@ Backend: `https://beeb.madebyhaithem.com` · spec snapshot: `docs/openapi.json`.
 > (zones seeded, `validate-pins` public, both new endpoints live and auth-gated).
 > The `docs/openapi.json` snapshot was refreshed from the live spec the same day.
 > Kept here as a record of what was requested vs. delivered.
+>
+> **2026-09-06.** **#10** (rider cancel never reached the captain over WS; offers never
+> over WS; captain could go offline mid-trip) found and **resolved the same day**,
+> backend and client together — see the bottom of this file. **#9 remains OPEN.**
 
 ---
 
@@ -411,3 +415,23 @@ rider app at booking time and is then **discarded**, because there is nowhere to
 live-trip screen prefer the server-provided text and keep `usePlaceName` reverse-geocoding
 only as the fallback for trips created before the field existed. Until then, captains see
 geocoded labels (mahalla + quarter), never the rider's chosen place name.
+
+---
+
+## 10. Rider cancel never reached the captain; offers never arrived over WS; captain could go offline mid-trip — ✅ **RESOLVED 2026-09-06 (backend + client shipped together)**
+
+**Found:** 2026-09-06 (owner report: cancellations invisible to the other party; rider's car freezing mid-ride).
+
+**Symptom.** After a rider cancelled, the captain's live-trip screen stayed on "Arrived at pickup" indefinitely; the Home "resume trip" banner just vanished on the next 30 s poll with no explanation. Separately, the rider's car froze whenever the captain opened a navigation app, and a captain tapping the online disc mid-trip silently killed the rider's live map.
+
+**Cause (verified in source):**
+1. `/ws/captain` fixed its channel list at handshake: `rt:captain:{id}:location` + `rt:trip:{id}` *only if a trip was already accepted*. A trip accepted after coming online was never on the socket. The hub is exact-match, so `rt:captain:{id}` — where dispatch offers are published — was never delivered either; the app lived on the 8 s queue poll.
+2. Even when subscribed, the cancel frame `{id, cancelled_by, reason, cancelled_at}` had no `event`/`status`, so `captain-socket.ts` dropped it. `use-live-trip.ts` had no poll backstop, so the screen never learned.
+3. `PUT /api/captain/online {online:false}` had no active-trip guard, and the offline/stale fade frames went only to `rt:captain:{id}:location` + `rt:admin:ops`, never to the rider's `rt:trip:{id}`.
+
+**Fix (backend, live in this tree):**
+- `/ws/captain` now carries three channels for the socket's life: own location echo, own offers/lifecycle (`rt:captain:{id}`), and the active trip. Every `trip_update` (accept/arrive/start/complete/**cancel**) is mirrored to `rt:captain:{captain_id}`; the cancel frame is a normal `trip_update` with `status:"cancelled"` + `cancelled_by`.
+- `set_online(false)` returns **409** `{"trip_id"}` while a trip is accepted/in_progress. Fade frames now carry `"event":"captain_location"` and are also published to `rt:trip:{id}` when the captain is on a trip.
+- Pushes: a single `trip_cancelled` per recipient with `data: {trip_id, cancelled_by, reason}`; admin/system cancels now push the captain too.
+
+**Client follow-up (captain, landed same day):** 10 s `refetchInterval` backstop on `useLiveTrip` while accepted/in_progress; one-shot remote-cancel alert (haptic + `captain.live.cancelledByRider` / `cancelledBySupport` by actor) arbitrated app-wide in `hooks/use-remote-trip-cancel.ts` so the trip screen and the Home tab never double-alert and the captain's own cancel is muted; legacy status-less cancel frame still parsed in `captain-socket.ts`; tab-bar refuses to go offline on a trip; `setOnline(false)` now calls the API first and keeps the session on 409. Location: trip-scoped background tracking via `expo-task-manager`, heading/speed/accuracy on every ping, active trip forces pinging on relaunch, Abriyah room screen included. **Needs a new native build.**

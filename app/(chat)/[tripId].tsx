@@ -1,19 +1,33 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { View, Text, TouchableOpacity, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { ChatThread } from '@/components/chat/chat-thread'
+import type { QuickReply } from '@/components/chat/chat-quick-replies'
 import { useChat } from '@/hooks/use-chat'
-import { getTrip } from '@/services/captain-trips'
+import { getTrip, type Trip, type TripStatus } from '@/services/captain-trips'
+import { useCaptainPresence } from '@/providers/captain-presence'
 import { setForegroundChatTrip } from '@/providers/push-provider'
 
 const isRTL = I18nManager.isRTL
+
+// Quick replies are phase-aware: before pickup the captain is coordinating a
+// meeting point, during the ride there is only the arrival to announce.
+const PICKUP_QUICK_KEYS = [
+  'onMyWay',
+  'almostThere',
+  'arrived',
+  'whereAreYou',
+  'pleaseComeOut',
+  'traffic',
+] as const
+const RIDE_QUICK_KEYS = ['almostDestination'] as const
 
 export default function ChatScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>()
@@ -21,14 +35,33 @@ export default function ChatScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { lastTripUpdate } = useCaptainPresence()
 
   // Trip status gates the composer (send only while accepted / in_progress).
+  // Opened from a push there is no trip screen underneath keeping this fresh,
+  // and the global staleTime is 5 min — so mirror use-live-trip: poll while the
+  // trip is live, and stop as soon as it isn't. Without this the composer (and
+  // the quick replies) stay armed on a finished trip and every send 409s.
   const tripQuery = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => getTrip(tripId),
     enabled: !!tripId,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'accepted' || query.state.data?.status === 'in_progress'
+        ? 15_000
+        : false,
   })
   const trip = tripQuery.data
+
+  // The WS frame beats the poll: patch the cached status when it's THIS trip.
+  useEffect(() => {
+    if (lastTripUpdate && lastTripUpdate.id === tripId) {
+      queryClient.setQueryData<Trip | undefined>(['trip', tripId], (prev) =>
+        prev ? { ...prev, status: lastTripUpdate.status as TripStatus } : prev,
+      )
+    }
+  }, [lastTripUpdate, tripId, queryClient])
 
   const chat = useChat(tripId)
 
@@ -40,17 +73,36 @@ export default function ChatScreen() {
   }, [tripId])
 
   const canSend = trip?.status === 'accepted' || trip?.status === 'in_progress'
+  const isRide = trip?.status === 'in_progress'
   const closedNote =
     trip?.status === 'completed' || trip?.status === 'cancelled'
       ? t('chat.closedTerminal')
       : t('chat.closedNote')
+
+  const subtitle = isRide
+    ? t('chat.subtitleInProgress')
+    : trip?.status === 'accepted'
+      ? t('chat.subtitleAccepted')
+      : t('chat.subtitle')
+
+  const quickReplies: QuickReply[] = useMemo(() => {
+    const keys = isRide ? RIDE_QUICK_KEYS : PICKUP_QUICK_KEYS
+    return keys.map((key) => ({ key, body: t(`chat.quick.captain.${key}`) }))
+  }, [isRide, t])
+
+  // The pickup copy points at the chips, so only offer it while they're there.
+  const emptyBody = canSend
+    ? isRide
+      ? t('chat.emptyBodyRide')
+      : t('chat.emptyBodyPickup')
+    : t('chat.emptyBody')
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View
         style={{
-          paddingTop: insets.top + Spacing.sm,
+          paddingTop: insets.top + Spacing.md,
           paddingBottom: Spacing.md,
           paddingHorizontal: Spacing.md,
           borderBottomWidth: 1,
@@ -85,15 +137,16 @@ export default function ChatScreen() {
           <Icon name="person" size={20} color={colors.onTint} />
         </View>
 
-        <View style={{ flex: 1 }}>
-          <Text style={{ ...Typography['heading-sm'], color: colors.text }} numberOfLines={1}>
+        {/* Title carries the weight; the subtitle is a quiet status line. */}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ ...Typography['heading-md'], color: colors.text }} numberOfLines={1}>
             {t('chat.riderTitle')}
           </Text>
           <Text
-            style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}
+            style={{ fontFamily: 'Poppins_400Regular', fontSize: 12, color: colors.subtle }}
             numberOfLines={1}
           >
-            {t('chat.subtitle')}
+            {subtitle}
           </Text>
         </View>
       </View>
@@ -108,8 +161,11 @@ export default function ChatScreen() {
         isLoadingOlder={chat.isLoadingOlder}
         onSend={chat.send}
         isSending={chat.isSending}
+        sendError={chat.sendError}
         canSend={canSend}
         closedNote={closedNote}
+        quickReplies={quickReplies}
+        emptyBody={emptyBody}
       />
     </View>
   )

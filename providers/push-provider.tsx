@@ -3,7 +3,9 @@ import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import { useRouter } from 'expo-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth-store'
+import { ACTIVE_TRIP_KEY } from '@/hooks/use-active-trip'
 import { registerFcmToken, clearFcmToken } from '@/services/push'
 
 // Offline chat pushes (FCM). While the app is foregrounded on the relevant chat
@@ -44,6 +46,8 @@ function isChatNotification(data: unknown): boolean {
 
 // Push kinds that, on tap, should open a specific trip screen (the captain is a
 // participant). `new_trip_in_queue` and room pushes route to the home queue instead.
+// One `trip_cancelled` covers every actor (rider / captain / system / admin) — the
+// backend no longer sends the per-actor trip_cancelled_by_* variants.
 const TRIP_PUSH_TYPES = new Set(['trip_accepted', 'captain_arriving', 'trip_completed', 'trip_cancelled'])
 
 // Foreground display policy: show banner + play sound EXCEPT for a chat message
@@ -67,6 +71,7 @@ Notifications.setNotificationHandler({
 export function PushProvider({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   // Register the device token whenever we have a session; clear it on logout.
   const registeredForToken = useRef<string | null>(null)
@@ -162,6 +167,21 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
 
     return () => sub.remove()
   }, [router])
+
+  // Arrival (as opposed to tap): a banner alone changes nothing on screen, so a
+  // cancel that lands while the captain is driving would sit there until the next
+  // poll. Invalidating is enough — the trip screen and the tabs-level hook own the
+  // alert, and going through the cache keeps this the same one announcement.
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data
+      if (notificationType(data) !== 'trip_cancelled') return
+      const tripId = tripIdFromData(data)
+      queryClient.invalidateQueries({ queryKey: ACTIVE_TRIP_KEY })
+      if (tripId) queryClient.invalidateQueries({ queryKey: ['trip', tripId] })
+    })
+    return () => sub.remove()
+  }, [queryClient])
 
   return <>{children}</>
 }

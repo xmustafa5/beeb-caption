@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, Text, ActivityIndicator, I18nManager } from 'react-native'
+import { View, TouchableOpacity, Text, ActivityIndicator, Alert, I18nManager } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/icon'
 import { Typography } from '@/constants/Typography'
 import { useActivation } from '@/hooks/use-activation'
 import { useCaptainPresence } from '@/providers/captain-presence'
+import { useActiveTrip } from '@/hooks/use-active-trip'
 import type { ComponentProps } from 'react'
 import type { Ionicons } from '@expo/vector-icons'
 
@@ -91,11 +92,20 @@ interface ActivateButtonProps {
  *   connecting→ green, "Connecting…"     → on air, socket still handshaking
  *   live      → green, "Online"         → goes offline
  *   stale     → red, "Reconnecting…"    → still online, link is struggling
+ *
+ * Going offline is refused mid-trip (it would kill the rider's live car, and the
+ * server 409s it anyway) — the tap explains itself instead of doing nothing.
  */
 function ActivateButton({ onPress, colors }: ActivateButtonProps) {
   const { t } = useTranslation()
   const { query } = useActivation()
-  const { online, connection, goingOnline, setOnline } = useCaptainPresence()
+  const { online, connection, goingOnline, setOnline, tripActive } = useCaptainPresence()
+  const { data: activeTrip } = useActiveTrip()
+  // Both sources, because each has a blind spot: `tripActive` only flips once the
+  // trip screen has called ensureTracking, and the query can be up to a poll
+  // behind (it also covers the window before that call). Shares the active-trip
+  // cache key, so reading it here costs no extra request.
+  const onTrip = tripActive || !!activeTrip
 
   const activated = query.data?.activated === true
   // Only the in-flight request blocks input. Socket health must NOT: a link stuck
@@ -122,8 +132,14 @@ function ActivateButton({ onPress, colors }: ActivateButtonProps) {
     if (busy) return
     if (process.env.EXPO_OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     // Paid days toggle in place; only an unpaid day needs the sheet.
-    if (activated) void setOnline(!online)
-    else onPress()
+    if (!activated) { onPress(); return }
+    // Block only the OFF direction: the rider's map goes dark the moment the pings
+    // stop. Going online is never blocked.
+    if (online && onTrip) {
+      Alert.alert(t('captain.live.offlineBlockedTitle'), t('captain.live.offlineBlockedBody'))
+      return
+    }
+    void setOnline(!online)
   }
 
   return (
@@ -131,7 +147,7 @@ function ActivateButton({ onPress, colors }: ActivateButtonProps) {
       onPress={handlePress}
       activeOpacity={0.7}
       accessibilityRole="switch"
-      accessibilityState={{ checked: online, disabled: busy }}
+      accessibilityState={{ checked: online, disabled: busy || (online && onTrip) }}
       accessibilityLabel={label}
       style={{ flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: 4, gap: 3 }}
     >

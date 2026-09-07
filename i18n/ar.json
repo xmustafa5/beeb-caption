@@ -419,7 +419,14 @@
       "callUnavailable": "الاتصال غير متاح حاليًا.",
       "resumeTitle": "رحلة قيد التنفيذ",
       "resumeSubtitle": "اضغط للعودة إلى رحلتك الحالية",
-      "chat": "دردشة"
+      "chat": "دردشة",
+      "cancelledByRider": "ألغى الراكب هذه الرحلة.",
+      "cancelledBySupport": "أُلغيت هذه الرحلة من قِبل الدعم.",
+      "offlineBlockedTitle": "أنهِ رحلتك أولًا",
+      "offlineBlockedBody": "لا يمكنك إيقاف الاتصال أثناء وجود رحلة نشطة.",
+      "sharingLocation": "تتم مشاركة موقعك مع الراكب",
+      "backgroundLocationTitle": "السماح بالموقع في الخلفية",
+      "backgroundLocationBody": "يحتاج بيب كابتن إلى الموقع في الخلفية ليبقى الراكب يرى سيارتك عند انتقالك إلى تطبيق الملاحة."
     },
     "nafarat": {
       "title": "رحلة نفرات",
@@ -535,7 +542,23 @@
     "unavailableTitle": "الدردشة غير متاحة",
     "unavailableBody": "لا يمكن فتح هذه الدردشة الآن.",
     "closedNote": "هذه الدردشة للقراءة فقط.",
-    "closedTerminal": "انتهت الرحلة — الدردشة للقراءة فقط."
+    "closedTerminal": "انتهت الرحلة — الدردشة للقراءة فقط.",
+    "sendFailed": "لم تُرسل الرسالة — اضغط لإعادة المحاولة",
+    "subtitleAccepted": "في الطريق إلى نقطة الانطلاق",
+    "subtitleInProgress": "الرحلة جارية",
+    "emptyBodyPickup": "أخبر الراكب بمكانك أو اختر ردًا سريعًا من الأسفل.",
+    "emptyBodyRide": "أرسل للراكب ملاحظة عن الطريق.",
+    "quick": {
+      "captain": {
+        "onMyWay": "أنا في الطريق إليك",
+        "almostThere": "أوشكت على الوصول",
+        "arrived": "وصلت إلى نقطة الانطلاق",
+        "whereAreYou": "أين أنت بالضبط؟",
+        "pleaseComeOut": "تفضّل بالخروج من فضلك",
+        "traffic": "الطريق مزدحم، دقائق قليلة",
+        "almostDestination": "أوشكنا على الوصول"
+      }
+    }
   },
   "abriyahAccess": {
     "title": "عبرية (الرحلات المشتركة)",

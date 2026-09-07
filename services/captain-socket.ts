@@ -130,6 +130,16 @@ export class CaptainSocket {
       this.handlers.onTripUpdate?.({ id: String(frame.id), status: String(frame.status), ...frame })
       return
     }
+    // Legacy cancel frame. The cancellation cascade publishes
+    // `{id, cancelled_by, reason, cancelled_at}` — no `event`, no `status` — so
+    // every branch above drops it and the captain never learns the rider quit.
+    // Synthesise the status the app switches on. Deliberately LAST: a backend
+    // that already sends the unified `trip_update` frame is handled above, and an
+    // offer or a location echo can never reach here.
+    if (typeof frame.cancelled_by === 'string' && typeof frame.id === 'string') {
+      this.handlers.onTripUpdate?.({ ...frame, id: frame.id, status: 'cancelled' })
+      return
+    }
     // Unknown frame — ignore.
   }
 }

@@ -18,6 +18,7 @@ import { RatingStars } from '@/components/captain/rating-stars'
 import { MemberRoster } from '@/components/captain/member-roster'
 import { StopsPanel } from '@/components/captain/stops-panel'
 import { useLiveTrip } from '@/hooks/use-live-trip'
+import { useCaptainPresence } from '@/providers/captain-presence'
 import { useTripStops } from '@/hooks/use-trip-stops'
 import { getProxy, rateRider, type CancelReason } from '@/services/captain-trips'
 import { getRoomMembers } from '@/services/abriyah-members'
@@ -39,6 +40,7 @@ export default function LiveTripScreen() {
   const mapRef = useRef<TripMapHandle>(null)
 
   const { trip, isLoading, arrived, arrive, start, complete, cancel, busy } = useLiveTrip(id)
+  const { ensureTracking } = useCaptainPresence()
   const [error, setError] = useState<string | null>(null)
   const [showCancel, setShowCancel] = useState(false)
   const [stars, setStars] = useState(0)
@@ -49,6 +51,16 @@ export default function LiveTripScreen() {
   const dropoff: LatLng | undefined = trip ? { latitude: trip.dropoffLat, longitude: trip.dropoffLng } : undefined
   // Navigate/route target: pickup until started, dropoff once in_progress.
   const target = status === 'in_progress' ? dropoff : pickup
+
+  // Location tracking follows the TRIP, not the online toggle: a trip accepted
+  // mid-session has to switch background tracking on (the launch-resume path only
+  // covers a relaunch), and a terminal one has to hand the OS task back. Skip the
+  // undefined first render — that would read as "no trip" and tear down tracking
+  // a resumed ride had already started, for the one frame before the GET lands.
+  useEffect(() => {
+    if (!status) return
+    void ensureTracking(status)
+  }, [status, ensureTracking])
 
   // Abriyah roster.
   const roster = useQuery({
