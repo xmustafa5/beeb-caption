@@ -14,10 +14,7 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Beep Captain uses your location while you are online to send you nearby trip requests and to share your live position with the rider who booked you \u2014 for example, showing the rider how far away you are while you drive to their pickup point.",
-        "LSApplicationQueriesSchemes": [
-          "waze",
-          "comgooglemaps"
-        ],
+        "LSApplicationQueriesSchemes": ["waze", "comgooglemaps"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -95,3 +92,4 @@
     "owner": "alinamer"
   }
 }
+//
