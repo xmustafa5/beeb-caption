@@ -19,10 +19,44 @@ interface RegistrationDraft {
   carColor: string
   carPlate: string
   cityId: string
+  // Vehicle-catalog selection. '' when the captain used the free-text fallback
+  // instead of the picker — the register call then sends NO catalog ids and the
+  // backend caps that captain's car star at 2 (it can't grade an unresolved car).
+  carBrandId: string
+  carModelId: string
+  // Localized labels for the chosen catalog entry, kept only so the vehicle step
+  // can render "{brand} {model}" without re-fetching. car_make / car_model are
+  // still sent to the API as the ENGLISH names.
+  carBrandName: string
+  carModelName: string
+  /** Model year, held as a STRING while it's being typed; coerced to an int at submit. */
+  carYear: string
   setPhone: (phone: string) => void
   setAccount: (v: Pick<RegistrationDraft, 'phone' | 'ticket' | 'password'>) => void
   setStep1: (v: Pick<RegistrationDraft, 'name' | 'gender' | 'nationalId'>) => void
-  setStep2: (v: Pick<RegistrationDraft, 'carMake' | 'carModel' | 'carColor' | 'carPlate' | 'cityId'>) => void
+  setStep2: (
+    v: Pick<
+      RegistrationDraft,
+      | 'carMake'
+      | 'carModel'
+      | 'carColor'
+      | 'carPlate'
+      | 'cityId'
+      | 'carBrandId'
+      | 'carModelId'
+      | 'carBrandName'
+      | 'carModelName'
+      | 'carYear'
+    >,
+  ) => void
+  /**
+   * Set ONLY the car identity. The car picker is a separate route, so it must be
+   * able to hand its selection back without knowing (or clobbering) the unrelated
+   * step-2 fields the vehicle form still owns — colour, plate, city, year.
+   */
+  setCar: (
+    v: Pick<RegistrationDraft, 'carBrandId' | 'carModelId' | 'carBrandName' | 'carModelName' | 'carMake' | 'carModel'>,
+  ) => void
   reset: () => void
 }
 
@@ -38,6 +72,11 @@ const EMPTY = {
   carColor: '',
   carPlate: '',
   cityId: '',
+  carBrandId: '',
+  carModelId: '',
+  carBrandName: '',
+  carModelName: '',
+  carYear: '',
 }
 
 export const useRegistrationStore = create<RegistrationDraft>((set) => ({
@@ -46,5 +85,6 @@ export const useRegistrationStore = create<RegistrationDraft>((set) => ({
   setAccount: (v) => set(v),
   setStep1: (v) => set(v),
   setStep2: (v) => set(v),
+  setCar: (v) => set(v),
   reset: () => set(EMPTY),
 }))

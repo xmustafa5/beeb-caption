@@ -225,11 +225,27 @@ export default function ProfileScreen() {
               <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }} numberOfLines={1}>
                 {car || '—'}
               </Text>
+              {/* Model year. The label follows the app direction; the YEAR is pinned
+                  LTR + tabular-nums like the plate below it, so RTL can't reorder its
+                  digits. Separate <Text>s because one mixed string would force the
+                  Arabic label into an LTR base direction. The row itself is mirrored
+                  by native forceRTL — no manual flip. */}
+              {captain.carYear != null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
+                    {t('profile.carYearLabel')}
+                  </Text>
+                  <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
+                    {captain.carYear}
+                  </Text>
+                </View>
+              )}
               {/* Plate is a Western-digit ID — lock LTR so it isn't reordered under native forceRTL */}
               <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: 'left' }} selectable>
                 {captain.carPlate}
               </Text>
-              {/* Admin-set car class grade (1..3 stars). Read-only for the captain. */}
+              {/* Car class grade (1..3 stars), graded automatically from the vehicle
+                  catalog + model year. Read-only for the captain. */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 4 }}>
                 <View style={{ flexDirection: 'row', gap: 2 }}>
                   {[1, 2, 3].map((i) => (
@@ -240,6 +256,12 @@ export default function ProfileScreen() {
                   {t(`profile.carClassStar${captain.star}`)}
                 </Text>
               </View>
+              {/* There is NO vehicle-edit endpoint (BACKEND_ISSUES.md #11) — a captain
+                  whose car details are wrong can only be fixed by support, so say so
+                  rather than implying a self-service edit exists. */}
+              <Text style={{ ...Typography.micro, color: colors.muted, fontStyle: 'normal', textAlign: 'left', marginTop: 2 }}>
+                {t('profile.carClassAutoNote')}
+              </Text>
             </View>
           </View>
         </View>

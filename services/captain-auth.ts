@@ -26,6 +26,19 @@ export interface RegisterCaptainInput {
   carPlate: string
   cityId: string
   nationalId?: string | null
+  /**
+   * Vehicle-catalog ids from the car picker. Optional, and they do NOT replace
+   * carMake/carModel — those stay required strings. Omitting them leaves the car
+   * unresolved, which caps the backend's automatic star grade at 2.
+   */
+  carBrandId?: string
+  carModelId?: string
+  /**
+   * Model year (backend range 1970..=2100; anything else is a 400). Optional on
+   * the wire but the app always collects it: with no year the classifier clears
+   * no age gate and the captain is pinned at star 1.
+   */
+  carYear?: number
 }
 
 interface AuthTokenResponse {
@@ -117,6 +130,9 @@ export async function registerCaptain(
     city_id: input.cityId,
     ...(input.carColor ? { car_color: input.carColor } : {}),
     ...(input.nationalId ? { national_id: input.nationalId } : {}),
+    ...(input.carBrandId ? { car_brand_id: input.carBrandId } : {}),
+    ...(input.carModelId ? { car_model_id: input.carModelId } : {}),
+    ...(input.carYear ? { car_year: input.carYear } : {}),
   }
   const { data } = await api.post<BackendCaptain & { token: string }>(
     '/api/captains/register',

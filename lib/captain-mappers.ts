@@ -6,7 +6,19 @@ import { toAsciiDigits } from '@/lib/digits'
 
 export type CaptainStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
 export type CaptainGender = 'male' | 'female'
-/** Car star grade (1|2|3), set by an admin. 3 = nicest. Defaults to 1. */
+/**
+ * Car star grade (1|2|3). 3 = nicest, and it also sets the rider's per-km price.
+ *
+ * It is AUTOMATIC now, not admin-entered: the backend grades the captain from
+ * the vehicle-catalog entry (market value, rear comfort, airbags, recency,
+ * premium marque) plus the model year, behind a hard age cap (star 3 needs a car
+ * <= 5 model years old, star 2 <= 10). A car with no `car_year` clears no age
+ * gate and lands at star 1; a car that never resolved to a catalog entry is
+ * capped at star 2 however new it is.
+ *
+ * An admin can still override the grade (`PUT /api/captains/{id}/star`), and
+ * doing so PINS it — later automatic re-grades skip that captain. Defaults to 1.
+ */
 export type CarStar = 1 | 2 | 3
 /**
  * Abriyah (shared-ride) access state. Only 'approved' grants shared rides;
@@ -27,6 +39,8 @@ export interface Captain {
   carModel: string
   carColor?: string | null
   carPlate: string
+  /** Model year of the car, or null for a captain who registered before it was collected. */
+  carYear: number | null
   cityId: string
   nationalId?: string | null
   status: CaptainStatus
@@ -35,7 +49,7 @@ export interface Captain {
   blockedReason?: string | null
   avgRating: number
   tripCount: number
-  /** Car class grade (1|2|3), admin-set. Server defaults existing captains to 1. */
+  /** Car class grade (1|2|3), auto-graded from the catalog + model year. See CarStar. */
   star: CarStar
   /** Abriyah access status; gate the Abriyah UI on `=== 'approved'`. */
   abriyahStatus: AbriyahStatus
@@ -53,6 +67,7 @@ export interface BackendCaptain {
   car_model: string
   car_color?: string | null
   car_plate: string
+  car_year?: number | null
   city_id: string
   national_id?: string | null
   status: string
@@ -94,6 +109,7 @@ export function toCaptain(b: BackendCaptain): Captain {
     carModel: b.car_model,
     carColor: b.car_color ?? null,
     carPlate: b.car_plate,
+    carYear: b.car_year ?? null,
     cityId: b.city_id,
     nationalId: b.national_id ?? null,
     status: (b.status as CaptainStatus) ?? 'pending',

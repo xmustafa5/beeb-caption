@@ -3,435 +3,101 @@
 Tracked here instead of being worked around in the client (per `CLAUDE.md`).
 Backend: `https://beeb.madebyhaithem.com` · spec snapshot: `docs/openapi.json`.
 
-> **2026-06-07 — Items #1–#5 below are RESOLVED.** The backend shipped and
-> deployed fixes for #1–#5; verified live against the prod stack on 2026-06-07
-> (zones seeded, `validate-pins` public, both new endpoints live and auth-gated).
-> The `docs/openapi.json` snapshot was refreshed from the live spec the same day.
-> Kept here as a record of what was requested vs. delivered.
+> **Closed issues are deleted from this file, not archived.** #1–#10 are all closed and were
+> removed in the 2026-09-13 cleanup.
 >
-> **2026-09-06.** **#10** (rider cancel never reached the captain over WS; offers never
-> over WS; captain could go offline mid-trip) found and **resolved the same day**,
-> backend and client together — see the bottom of this file. **#9 remains OPEN.**
+> Two of them had never been marked closed and were verified against the live OpenAPI spec during
+> that cleanup: **#8** (`/api/places/nearby` undocumented) — the path *and* `/api/places/search`
+> are both in the live spec now; and **#9** (trips/offers carry no address text) — `CaptainOffer`
+> and `Trip` both carry `pickup_address` / `dropoff_address`.
 
 ---
 
-## 6. `POST /api/auth/captain/login` 500-on-unknown-phone — ✅ **RESOLVED 2026-06-15**
+## 11. Vehicle catalog: brand ordering is inverted, and there is no vehicle-edit endpoint — ⏳ **OPEN (raised 2026-09-13)**
 
-A first probe during the OTP→password auth migration saw a **500** for an
-unknown phone instead of the documented 404. On re-verification later the same
-day the endpoint returned the correct **404 `{"error":"not found"}`** (3/3
-attempts), so it was a transient (likely a cold DB connection / deploy blip),
-not a standing bug:
+**Found:** 2026-09-13 (wiring the Car Star v2 catalog picker into captain registration).
+
+Two separate gaps in the same new surface. **(a)** is shipped-around in the client today;
+**(b)** has no client workaround at all.
+
+### (a) `GET /api/vehicle-catalog/brands` returns the popularity order BACKWARDS
+
+The endpoint docs say brands are *"ordered for display, makes common in Iraq first, then A-Z"*
+and instruct clients to *"render in order, don't re-sort"*. That is currently **false in
+production**.
+
+The query is `ORDER BY sort_order DESC`, but the seeded `sort_order` is a **rank** where
+**1 = most common in Iraq**. Descending a rank puts the rarest makes first.
+
+**Verified live (2026-09-13, 141 brands returned):**
+
+| Brand | seeded rank | index in the response |
+|---|---|---|
+| LYNK & CO | 141 | **0** (first) |
+| Mercedes-Benz | 138 | 2 |
+| Kia | 137 | 3 |
+| Nissan | 134 | 6 |
+| Hyundai | 129 | 11 |
+| **Toyota** | **1** | **140** (last of 141) |
+
+So the single most common make in Iraq is the **last** row a captain scrolls to, and the
+first thing they see is a marque almost nobody here drives. All 141 `sort_order` values are
+distinct, so the documented secondary `name_en ASC` never applies either — there is no A-Z
+fallback anywhere in the list.
+
+**Fix (backend):** `ORDER BY sort_order ASC, name_en ASC` — one word. (Re-seeding the ranks
+in reverse would also work but breaks any other consumer that reads `sort_order` as a rank.)
+
+**Client workaround shipped (captain app, `app/(auth)/register/car-picker.tsx`):** the picker
+does **not** trust the server order, and deliberately does **not** reverse it either — a
+reversal would silently break on the day this is fixed. Instead a module-level constant lists
+the backend's own seeded ranks 1–12 by name (Toyota, Soueast, Mercedes-Benz, Kia, BYD, GAC,
+Nissan, Jetour, Mitsubishi, Volkswagen, Geely, Hyundai); those are pinned on top under a
+"Common makes" heading, matched case-insensitively on `name_en`, and **every** brand is then
+listed below in server order under "All makes". A name that doesn't match is simply not
+pinned and still appears in the full list, so the picker is correct whether or not this issue
+is ever fixed. Search (`/api/vehicle-catalog/search`) is unaffected and is the primary path.
+
+### (b) No vehicle-edit endpoint — a mis-entered car can only be fixed by an admin
+
+Registration is the **only** moment a captain can state their car. There is no
+`PUT`/`PATCH` anywhere in the spec that lets a captain (or an admin) change
+`car_make` / `car_model` / `car_brand_id` / `car_model_id` / `car_year` afterwards.
+
+This matters far more than it used to, because the car now sets **money**: the star grade is
+computed from the catalog entry + model year, and star 1/2/3 price at 500/700/1000 IQD per km.
+A captain who fat-fingers `2109` for `2019`, or picks the wrong trim, is stuck on the wrong
+grade — and the only lever anyone has is `PUT /api/captains/{id}/star`, which is super_admin
+only and **pins** the grade (it stamps `star_overridden_at` and permanently exempts that
+captain from automatic re-grading). Fixing a typo therefore costs the captain all future
+automatic re-grades, which is a bad trade for a typo.
+
+**Ask:**
 
 ```
-curl -X POST https://beeb.madebyhaithem.com/api/auth/captain/login \
-  -H 'Content-Type: application/json' \
-  -d '{"phone":"9647000000001","password":"whatever123"}'
-# → HTTP 404 {"error":"not found"}
+PUT /api/captain/me/vehicle
+{ "car_brand_id": uuid?, "car_model_id": uuid?, "car_year": int?, "car_make": string, "car_model": string }
+→ 200 Captain
 ```
 
-Rider `POST /api/auth/login` correctly returns 401 for unknown/bad creds
-(verified 2026-06-15). The temporary client-side "treat 500 as unregistered"
-mitigation was **removed** from `loginCaptain()` — it now branches only on the
-documented 403/404. No open backend gap.
-
----
-
-## 1. No rider-facing captain summary for the Live Trip screen  — ✅ **RESOLVED 2026-06-07**
-
-**Found:** 2026-06-05 (Phase 2 integration) · **Resolved:** 2026-06-07
-
-The Customer App Live Trip screen needs the captain's name, car (make/model/colour),
-plate, and rating; the rider token previously couldn't read any of it.
-
-**Delivered:** `GET /api/rider/trips/{id}/captain` (rider token; scoped — only the
-trip's owner, else 403/404) →
-`{ name, car_make, car_model, car_color, car_plate, avg_rating, trip_count }`.
-No phone (calling stays on the masked proxy `GET /api/rider/trips/{id}/proxy`).
-Verified live (401 auth-gated, route present in the refreshed spec).
-
-**Client follow-up:** wire this into `components/trip/driver-card.tsx` so the card
-fills name/car/plate/rating instead of degrading to "Your captain".
-
----
-
-## 2. Environment not seeded — blocked end-to-end testing  — ✅ **RESOLVED 2026-06-07**
-
-**Found:** 2026-06-05 · **Resolved:** 2026-06-07
-
-Staging/prod is now seeded and an idempotent E2E harness (`scripts/seed_staging.sh`,
-backend repo) is committed. Verified live:
-
-- **1 active Baghdad city** (`Asia/Baghdad`).
-- **Zones present** — `GET /api/zones` returns `Central Abriyah` (abriyah_enabled,
-  `abriyah_per_km_iqd: 1000`, `abriyah_base_fare_iqd: 2000`, `allow_women_only: true`,
-  `room_max_riders: 4`, `room_max_wait_seconds: 300`) **and** `East Regular`
-  (regular_only), both `active: true`.
-- **2 approved + activated-today + online captains** (male `STG-1001`, female
-  `STG-1002`, all 5 docs) + a test rider.
-- The harness drives a full trip lifecycle (request → accept → arrive → start →
-  complete) plus location pings; a regular trip ran to `completed` (fare 3576 IQD).
-
-**Unblocks:** Phase 3 (Abriyah) and the full regular/Abriyah happy-path E2E.
-
----
-
-## 3. `POST /api/abriyah/validate-pins` required auth  — ✅ **RESOLVED 2026-06-07**
-
-**Found:** 2026-06-05 · **Resolved:** 2026-06-07
-
-Now **public**, mirroring `GET /api/trips/estimate`. Verified live: unauthenticated
-`POST` returns `200 { valid, zone_id?, message }` (e.g. `{"valid":true,"zone_id":
-"…","message":"Both pins are inside the Abriyah zone."}`). Behavior otherwise
-unchanged — never an HTTP error; `valid:false` + human message when a pin is out of
-zone. Safe to call during map exploration / before login.
-
----
-
-## 4. WS frames carried no event-type discriminator  — ✅ **RESOLVED 2026-06-07**
-
-**Found:** 2026-06-05 · **Resolved:** 2026-06-07
-
-High-traffic rider frames now carry an **optional, additive** inline `event` field:
-
-- Trip lifecycle (`rt:trip:{id}`) → `"event": "trip_update"`
-- Captain GPS (`rt:trip:{id}` during an active trip, and `rt:captain:{id}:location`)
-  → `"event": "captain_location"`
-- Zone cache-invalidation (`rt:zone:{id}`) → `"event": "beep.zone.updated"`
-
-Additive (extra keys are safe to ignore). **Room (`rt:room:*`) and admin-ops
-(`rt:admin:ops`) frames do NOT carry `event` yet** — keep the `(channel, payload
-fields)` fallback for those. The backend will add `event` to those channels on
-request (small follow-up) if needed.
-
-**Client follow-up:** `services/trip-socket.ts` may switch on `event` (preferring it,
-falling back to field-sniffing); the room socket built in Phase 3 must field-sniff.
-
----
-
-## 5. No rider profile-photo upload  — ✅ **RESOLVED 2026-06-07**
-
-**Found:** 2026-06-05 (Profile tab) · **Resolved:** 2026-06-07
-
-Presigned-upload flow shipped (mirrors the captain document flow). Verified live
-(`POST /api/riders/me/photo/upload-url` is present and auth-gated):
-
-1. `POST /api/riders/me/photo/upload-url` (rider token, no body) →
-   `{ upload_url, object_key, expires_in }`.
-2. HTTP `PUT` the image bytes directly to `upload_url` (no auth header — presigned;
-   bypasses the API body limit).
-3. `PATCH /api/riders/me { "photo_url": "<object_key>" }`.
-4. `GET /api/riders/me` returns `photo_url` as a **short-lived presigned GET URL**
-   (don't cache long-term). A full `https://…` URL is also accepted as a fallback.
-
-**Client follow-up:** wire this into the Profile tab so avatars persist to the
-backend instead of staying as a device-local `file://` URI.
-
----
-
-# Captain App — Open Gaps
-
-## 6. Captain onboarding deadlock: document upload needs a token, but a pending captain can't get one  — ✅ **RE-RESOLVED 2026-06-16** (backend shipped option 2)
-
-> **RE-RESOLVED 2026-06-16 — backend shipped option 2 (token in the register 201 body).**
-> Verified live against `https://beeb.madebyhaithem.com/api-docs/openapi.json` on 2026-06-16:
-> `POST /api/captains/register`'s 201 response is now `CaptainRegisteredResponse` =
-> `allOf [ Captain, { token: string (required) } ]` — the flattened Captain plus a required
-> captain JWT (onboarding-scoped: authorizes documents + self-read while pending; operational
-> endpoints stay 403 until approved). The deadlock is gone.
->
-> **Client wired (this commit):**
-> - `registerCaptain()` now returns `{ captain, token }` (reads `token` from the 201 body).
-> - The register wizard's vehicle step calls `setSession(token, captain)` on success, so the
->   request interceptor authenticates the document uploads, then routes to the **documents step**
->   (`onboarding=1`) → after the 5 uploads → `/(auth)/status`.
-> - The status screen already polls `GET /api/captains/{id}` with the token until `approved`
->   (AuthGate then routes to the tabs). No re-verify fallback needed.
->
-> (Backend also shipped #7's captain stops list and `DELETE /api/captains/{id}` in the same image.)
->
-> ---
->
-> **REOPENED 2026-06-16 — the 2026-06-10 fix is GONE from the live spec.** Re-verified
-> against the live `https://beeb.madebyhaithem.com/api-docs/openapi.json` on 2026-06-16:
->
-> - `POST /api/auth/captain/otp/verify` **no longer exists** — the only verify route is
->   `POST /api/auth/otp/verify`, which returns `{ purpose, ticket }` (a single-use ticket,
->   **NO token**).
-> - `POST /api/captains/register` returns the Captain object (status `pending`) with **NO
->   `token` field** in its 201 body (confirmed against the response schema).
-> - `POST /api/captains/{id}/documents` (and `…/upload-url`, `…/completeness`) still require
->   `bearer_auth` → **401 without a token**.
-> - An admin still **cannot approve** until all 5 documents are uploaded.
->
-> ⇒ The exact original deadlock is back: register (no token) → can't upload docs (needs token)
-> → can't be approved (docs missing). The onboarding flow the backend documented on 2026-06-10
-> (verify issues a token for pending captains) is **not present in the current deployment** — it
-> was reverted or the auth flow was redesigned to the ticket model without restoring the
-> pending-captain token.
->
-> **Product requirement (confirmed with the team 2026-06-16):** documents MUST be uploaded
-> **before** the waiting-for-approval screen, because the admin can only approve after seeing
-> the captain's documents. So "upload after approval + login" is not an acceptable flow — the
-> token must exist during onboarding.
->
-> **What we need from backend — one of (same as the original ask):**
-> 1. **`POST /api/auth/otp/verify` with `purpose: "register"` returns a captain token** (alongside
->    or instead of the ticket) for the captain being registered, scoped to the document +
->    self-read endpoints. *(Preferred.)*
-> 2. **`POST /api/captains/register` returns a short-lived onboarding token** in its 201 body
->    (`{ ...captain, token }`).
->
-> **Client state until fixed:** the wizard now routes register → **documents step** →
-> status screen (matching the product requirement). Document uploads will **401** during
-> onboarding until the backend restores a pending-captain token. The token-acquisition point is
-> isolated to `verifyOtp()` / `registerCaptain()` in `services/captain-auth.ts`, so wiring the
-> token in is a one-line change once the backend ships either option.
-
----
-
-**Historical resolution (2026-06-10 — since regressed, see REOPENED note above):**
-
-**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Resolved:** 2026-06-10
-
-> **RESOLUTION (backend shipped our preferred option 1, hardened — verified live on prod 2026-06-10):**
-> `POST /api/auth/captain/otp/verify` now **issues a captain token for `pending` captains** (still
-> 403 rejected/blocked, 404 unknown). The onboarding flow now works end to end: register →
-> otp/send → otp/verify (token issued while pending) → upload the 5 docs with that token →
-> poll `GET /api/captains/{id}` until `approved`.
->
-> **NEW — ownership now enforced (important for the client):** a captain token may access **only its
-> own** captain id (`sub == {id}`); another captain's id → **403**; admin → any. Applies to
-> `GET /api/captains/{id}`, `…/documents`, `…/documents/upload-url`, `…/documents/completeness`.
-> **Client action:** always call these with the captain's own id (the verify response's `user_id`) —
-> which our spec/plan already do. The **pending token is onboarding-scoped**: every operational
-> endpoint (online, trip-queue, accept/arrive/start/complete, location, proxy, stop-reach) returns
-> **403 until approved** — matching our area sequencing.
->
-> **Client follow-up — the "no token while pending" degraded branch in the spec/plan is now DEAD:**
-> a pending captain always has a token, so the status screen always polls `GET /api/captains/{id}`
-> (it never needs the re-verify fallback). Simplifies Area 1 §4.6.
->
-> **Verified live (2026-06-10) with the test captain `9647000000098` / code `16001600`:**
-> verify → 200 `{token, user_id=a0a0a0a0-…-098}`; GET own record → 200 `status:approved`; GET a
-> different captain id → **403** (ownership); documents/completeness → 200 (all 5 present);
-> activation/today → `{activated:false}` (CTA reachable); wallet → 200 `owner_type:captain`,
-> `balance_iqd:0`; trip-queue → 200 with a live offer. **Environment fully unblocked.**
->
-> Remaining originally-open items: 3(a) the test captain is already non-activated with a 0 balance,
-> so the **Activate-Today CTA + 402 path are reachable as-is** (no reset needed). 3(b) captain wallet
-> confirmed. 3(c) queue offers creatable via `POST /api/trips` (one is live now). 3(d) FCM is
-> Mock-only unless `FCM_PROJECT_ID`+`FCM_SERVICE_ACCOUNT_JSON` set (push deferred to a dev build
-> anyway). 4 public cities list still missing (backend offered a small additive PR) — still deriving
-> `city_id` from `/api/zones`, fine for the single seeded city.
-
----
-
-**Original report (kept as the historical record):**
-
-**Found:** 2026-06-09 (Captain App, Area 1 onboarding) · **Status (at the time):** awaiting backend confirmation/fix
-
-The documented captain onboarding flow appears to **deadlock** on auth. Verified live
-against `https://beeb.madebyhaithem.com` on 2026-06-09:
-
-- `POST /api/captains/register` is **public** and returns the `Captain` object only —
-  **no token** (confirmed with a real 201; body has `id`/`status:"pending"`, no `token` field).
-- `POST /api/captains/{id}/documents/upload-url` and `POST /api/captains/{id}/documents`
-  both require **`bearer_auth`** (openapi `security: [{bearer_auth:[]}]`; unauthenticated → 401).
-- `POST /api/auth/captain/otp/verify` per the contract returns a token **only if the captain
-  is registered AND admin-approved**; a pending captain → **403** (no token).
-- An admin **cannot approve** until **all 5 documents are uploaded**
-  (`POST /api/captains/{id}/approve` → 400 otherwise).
-
-⇒ register (no token) → can't upload docs (needs token) → can't get a token (not approved)
-→ can't be approved (docs missing). The PRD's onboarding flow assumes the captain is
-authenticated while uploading documents, but no documented path issues a credential to a
-**pending** captain.
-
-**Could not fully verify** which resolution is true because the staging **MockSms fixed OTP
-code is unknown to the client team** (common guesses `123456/000000/111111/654321` all → 401;
-not burning more of the 10/phone/10min OTP budget guessing).
-
-**What we need from backend — one of:**
-1. **`POST /api/auth/captain/otp/verify` returns a token for a `pending` captain too**
-   (reserve 403 for `rejected`/`blocked`), so the captain can upload docs and poll
-   `GET /api/captains/{id}` while pending. *(Preferred — smallest client impact; the client
-   is being built to this assumption.)*
-2. **`POST /api/captains/register` returns a short-lived onboarding token** in its 201 body
-   (e.g. `{ ...captain, token }`) scoped to the document + self-read endpoints.
-3. Make the document upload + `GET /api/captains/{id}` self-read endpoints accept the
-   captain `id` without a bearer (less ideal — weaker access control on ID images).
-
-Also please confirm the **staging MockSms fixed OTP code** (and the captain test phone behind
-plate `STG-1001`) so the client can E2E the verify → token → upload → status-poll path.
-
-**Client follow-up:** Captain App Area 1 is built assuming resolution (1). The presigned-upload
-service + status-poll are wired to use the captain token; if backend ships (2) instead, the
-change is to read the token from the `register` response instead of from `verify`.
-
----
-
-### 📨 Message to send the backend team (copy-paste)
-
-> **Subject: Captain App onboarding — auth deadlock + need staging test creds**
->
-> **1. Onboarding auth deadlock — need a decision.** Building the Captain App registration
-> flow, I hit what looks like a deadlock in the live contract (verified against
-> `https://beeb.madebyhaithem.com`, 2026-06-09):
-> - `POST /api/captains/register` is **public** and returns the Captain object with **no token**
->   (status `pending`).
-> - `POST /api/captains/{id}/documents/upload-url` and `POST /api/captains/{id}/documents`
->   both **require a Bearer token** (401 without one).
-> - `POST /api/auth/captain/otp/verify` returns a token **only for approved captains** — a
->   pending captain gets **403, no token**.
-> - An admin **can't approve** until all 5 documents are uploaded.
->
-> So: register (no token) → can't upload docs (needs token) → can't get a token (not approved)
-> → can't be approved (no docs). **How is a pending captain meant to upload their documents?**
->
-> Preferred fix (smallest client impact): **`captain/otp/verify` returns a token for `pending`
-> captains too** (reserve 403 for `rejected`/`blocked`), so they can upload docs and read
-> `GET /api/captains/{id}` while pending. Alternatives that also work: return a short-lived
-> onboarding token in the `register` 201 body, or make the document + self-read endpoints accept
-> the captain id without a bearer. **Which will you do?**
->
-> (Pre-empting two likely questions: "register then log in after approval to upload" doesn't
-> work — approval *requires* the docs first, so docs must go up while pending. And the client is
-> already built to the preferred fix with token-acquisition isolated to one function, so a
-> different choice is a one-line change.)
->
-> **2. Staging test credentials.** To E2E the auth flow I need:
-> - the **MockSms fixed OTP code** on staging (123456/000000/111111/654321 all return 401), and
-> - the **captain test phone(s)** behind plates **STG-1001** (male) and **STG-1002** (female).
->
-> **3. Verification rigs for the later captain areas** (Activate Today → Online → Queue →
-> Live Trip → Earnings). The two seeded captains (STG-1001/STG-1002) are already approved +
-> activated + online, which is great for some paths but means a few states can never be reached
-> on them. Please provide / confirm:
->   - **(a) A captain who is approved but NOT yet activated today** — or a way to reset a
->     captain's daily activation (Asia/Baghdad date) — so the "Activate Today" CTA is reachable
->     and I can exercise the **402 insufficient-funds** path on `POST /api/captain/activation/today`.
->   - **(b) Confirm captains can call `GET /api/me/wallet` + `POST /api/me/wallet/topup`**
->     (owner_type derived from the captain JWT). Needed for the top-up-then-retry loop after a 402.
->   - **(c) A trip and/or open Abriyah room sitting in a captain's queue on demand** (or how the
->     seed harness creates one), so `GET /api/captain/trip-queue` returns an offer I can accept
->     and drive through arrive → start → complete.
->   - **(d) Is FCM configured on staging, or Mock-only?** Affects whether `POST /api/me/fcm-token`
->     does anything live (the push feature is deferred to a dev build either way).
->
-> **4. Minor.** No public cities endpoint (`/api/cities` → 404); I'm deriving `city_id` from
-> `GET /api/zones` (fine for one seeded city). A public active-cities list with display names
-> would help the registration city picker if multi-city goes live.
-
-**Status of this ask:**
-- **Hard blockers:** (1) the deadlock fix [gates document upload] and the **MockSms OTP code +
-  STG-1001/STG-1002 phones** under item 2 [gates *every* captain login → blocks live verification
-  of all 6 areas].
-- **Needed to verify Areas 2–6** but not to build: items 3(a)–(d).
-- **Nice-to-have:** item 4 (public cities list).
-
----
-
-## 8. `/api/places/nearby` is undocumented in the OpenAPI spec — ⏳ **OPEN (raised 2026-06-25)**
-
-`services/places-nearby.ts` depends on `GET /api/places/nearby`, but the endpoint
-is absent from both the committed `docs/openapi.json` and the live spec at
-`https://beeb.madebyhaithem.com/api-docs/openapi.json` (verified 2026-06-25).
-
-Reverse-engineered contract:
-- `bbox` mode: `?bbox=minLng,minLat,maxLng,maxLat&per_page=100&page=N[&category=...]`
-- `radius` mode: `?lat=&lng=&radius_m=<=50000&per_page=100&page=N`
-- Response: `{ items: BackendPlace[], total, page, per_page }`, `total` capped ~1000/viewport.
-- Auth: assumed public (no token) — inferred from the public sibling `/api/zones`; not confirmed.
-
-Action: ask backend to add this path to the OpenAPI spec and confirm the auth tier.
-
----
-
-## 7. Captain can't list a trip's stops (multi-stop "reach" unusable from the captain side) — ✅ **RESOLVED (backend shipped + client wired 2026-07-07)**
-
-**Found:** 2026-06-11 (Captain App, Area 5 live-trip) · **Status:** DONE — backend shipped
-`GET /api/captain/trips/{trip_id}/stops` (bare `TripStop[]`, verified live). Client wired:
-`services/captain-stops.ts` `getStops` now calls it (was a `[]` stub); `hooks/use-trip-stops.ts`
-+ `components/captain/stops-panel.tsx` render the stops with a "mark reached" action in
-`app/(trip)/[id].tsx` (regular trips, accepted/in_progress).
-
-The captain can mark a stop reached — `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach`
-(captain-scoped, verified present) — but there is **no captain-facing endpoint to LIST a trip's
-stops**, so the captain cannot obtain the `stop_id`s the reach endpoint requires.
-
-Verified live (2026-06-11):
-- The only stop-list endpoint is **`GET /api/rider/trips/{id}/stops`**, which is **rider-scoped** —
-  a captain token gets **403** (tested against trip `b96dc406-…`).
-- The `Trip` object does **not** embed stops (no `stops` field in the schema), so they can't be read
-  from `GET /api/trips/{id}` either.
-
-⇒ A captain on a multi-stop trip has no way to enumerate the stops, so the `…/reach` action is
-**unusable from the Captain App** as the contract stands.
-
-**What we need from backend — one of:**
-1. **A captain-scoped `GET /api/captain/trips/{trip_id}/stops`** returning `TripStop[]`
-   (`{id, lat, lng, address?, seq, status, reached_at?}`), assigned-captain-only. *(Preferred —
-   mirrors the existing reach endpoint's scoping.)*
-2. **Embed `stops: TripStop[]` in the `Trip` object** returned by `GET /api/trips/{id}` (the captain
-   already reads this), so no new endpoint is needed.
-
-**Client follow-up:** Captain App Area 5 ships the multi-stop **reach** wiring behind this gap — the
-stops list + per-stop "Reached" UI renders only when a stop source exists. Until the backend adds (1)
-or (2), the multi-stop panel shows nothing (regular 1:1 trips and Abriyah are unaffected). When the
-endpoint lands, the client adds a one-line `getStops()` call and the panel activates. The core legs
-(arrive/start/complete), masked call, navigate, cancel, rating, and the Abriyah roster are all fully
-supported and verified live.
-
----
-
-## 9. Trips/offers carry no address text — the rider's chosen place name never reaches the captain — ⏳ **OPEN (raised 2026-08-14)**
-
-**Found:** 2026-08-14 (fixing the from/to label quality in both apps).
-
-**Context.** Offer cards (`components/captain/offer-card.tsx` → `hooks/use-place-name.ts`)
-show pickup/dropoff text by **reverse-geocoding raw coordinates** through Nominatim,
-because that's the only address source the contract provides. Both clients now share a
-hardened label builder (`services/places.ts` → `buildAddressLabel`) that copes with
-Baghdad OSM data (numeric lane codes like `903-8`, quarter-first area names), so the
-geocoded labels are decent — but they can never equal what the **rider actually chose**:
-when the rider picks "مول المنصور" from search or taps a POI, that name exists in the
-rider app at booking time and is then **discarded**, because there is nowhere to send it.
-
-**Verified (2026-08-14, `docs/openapi.json` + live spec):**
-- `Trip` schema: only `pickup_lat/pickup_lng/dropoff_lat/dropoff_lng` — **no address props**.
-- `CaptainOffer` (trip-queue) schema: same — coordinates only.
-- Meanwhile `CreateScheduledTrip` / `ScheduledTrip` **do** carry `pickup_address` /
-  `dropoff_address`, and `TripStop` carries `address` — so the pattern already exists in
-  the API; it's just missing from the regular-trip path.
-
-**Ask (additive, mirrors the scheduled-trip shape):**
-1. Accept optional `pickup_address` / `dropoff_address` (short strings) on **`POST /api/trips`**.
-2. Return them on the **`Trip`** object and include them in **`GET /api/captain/trip-queue`
-   offers** (and the `rt:*` trip frames that feed the queue).
-
-**Client follow-up when it lands:** the rider app sends `pickupAddress`/`dropoffAddress`
-(already in state on the booking screens) at trip creation; the captain app's OfferCard and
-live-trip screen prefer the server-provided text and keep `usePlaceName` reverse-geocoding
-only as the fallback for trips created before the field existed. Until then, captains see
-geocoded labels (mahalla + quarter), never the rider's chosen place name.
-
----
-
-## 10. Rider cancel never reached the captain; offers never arrived over WS; captain could go offline mid-trip — ✅ **RESOLVED 2026-09-06 (backend + client shipped together)**
-
-**Found:** 2026-09-06 (owner report: cancellations invisible to the other party; rider's car freezing mid-ride).
-
-**Symptom.** After a rider cancelled, the captain's live-trip screen stayed on "Arrived at pickup" indefinitely; the Home "resume trip" banner just vanished on the next 30 s poll with no explanation. Separately, the rider's car froze whenever the captain opened a navigation app, and a captain tapping the online disc mid-trip silently killed the rider's live map.
-
-**Cause (verified in source):**
-1. `/ws/captain` fixed its channel list at handshake: `rt:captain:{id}:location` + `rt:trip:{id}` *only if a trip was already accepted*. A trip accepted after coming online was never on the socket. The hub is exact-match, so `rt:captain:{id}` — where dispatch offers are published — was never delivered either; the app lived on the 8 s queue poll.
-2. Even when subscribed, the cancel frame `{id, cancelled_by, reason, cancelled_at}` had no `event`/`status`, so `captain-socket.ts` dropped it. `use-live-trip.ts` had no poll backstop, so the screen never learned.
-3. `PUT /api/captain/online {online:false}` had no active-trip guard, and the offline/stale fade frames went only to `rt:captain:{id}:location` + `rt:admin:ops`, never to the rider's `rt:trip:{id}`.
-
-**Fix (backend, live in this tree):**
-- `/ws/captain` now carries three channels for the socket's life: own location echo, own offers/lifecycle (`rt:captain:{id}`), and the active trip. Every `trip_update` (accept/arrive/start/complete/**cancel**) is mirrored to `rt:captain:{captain_id}`; the cancel frame is a normal `trip_update` with `status:"cancelled"` + `cancelled_by`.
-- `set_online(false)` returns **409** `{"trip_id"}` while a trip is accepted/in_progress. Fade frames now carry `"event":"captain_location"` and are also published to `rt:trip:{id}` when the captain is on a trip.
-- Pushes: a single `trip_cancelled` per recipient with `data: {trip_id, cancelled_by, reason}`; admin/system cancels now push the captain too.
-
-**Client follow-up (captain, landed same day):** 10 s `refetchInterval` backstop on `useLiveTrip` while accepted/in_progress; one-shot remote-cancel alert (haptic + `captain.live.cancelledByRider` / `cancelledBySupport` by actor) arbitrated app-wide in `hooks/use-remote-trip-cancel.ts` so the trip screen and the Home tab never double-alert and the captain's own cancel is muted; legacy status-less cancel frame still parsed in `captain-socket.ts`; tab-bar refuses to go offline on a trip; `setOnline(false)` now calls the API first and keeps the session on 409. Location: trip-scoped background tracking via `expo-task-manager`, heading/speed/accuracy on every ping, active trip forces pinging on relaunch, Abriyah room screen included. **Needs a new native build.**
+- Captain-scoped (own record only); an admin-side equivalent on `/api/captains/{id}/vehicle`
+  would cover support fixes.
+- Re-runs the classifier on write **unless `star_overridden_at` is set**, in which case the
+  pinned grade stands and only the descriptive fields change — so an admin's deliberate
+  override is never silently undone by a captain editing their own row.
+- Worth gating (a cooldown, or approval while `status = approved`) so the field can't be
+  farmed for a better price between trips.
+
+**Client follow-up when it lands:** the profile vehicle card becomes editable (it currently
+shows make/model/year/plate read-only with a "contact support to correct your car details"
+caption, `app/(tabs)/profile.tsx`), reusing the same full-screen catalog picker the
+registration step already ships.
+
+### Related, not a bug — noted so it isn't rediscovered
+
+- `car_brand_id` / `car_model_id` are accepted on register and stored, but are **not** returned
+  on the `Captain` payload. The client therefore cannot pre-select the captain's current catalog
+  entry when an edit endpoint eventually exists, and has no way to tell "unresolved car" from
+  "resolved car" after the fact. Returning them alongside `car_year` would close that.
+- `car_make` / `car_model` remain **required strings** even when the catalog ids are sent. The
+  captain app populates them from the chosen entry's `name_en` so admin screens stay readable.
