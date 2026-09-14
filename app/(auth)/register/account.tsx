@@ -28,7 +28,12 @@ type Step = 'phone' | 'otp' | 'password'
 const RESEND_SECONDS = 30
 
 const phoneSchema = z.object({ phone: z.string().regex(/^0?7\d{9}$/, 'auth.phoneInvalid') })
-const passwordSchema = z.object({ password: z.string().min(8, 'captain.auth.passwordTooShort') })
+const passwordSchema = z
+  .object({
+    password: z.string().min(8, 'captain.auth.passwordTooShort'),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, { message: 'captain.auth.passwordMismatch', path: ['confirmPassword'] })
 type PhoneForm = z.infer<typeof phoneSchema>
 type PasswordForm = z.infer<typeof passwordSchema>
 
@@ -46,6 +51,7 @@ export default function AccountStep() {
   const [secondsLeft, setSecondsLeft] = useState(0)
   const [apiError, setApiError] = useState<string | null>(null)
   const codeRef = useRef<TextInput>(null)
+  const confirmRef = useRef<TextInput>(null)
 
   useEffect(() => {
     if (secondsLeft <= 0) return
@@ -60,7 +66,7 @@ export default function AccountStep() {
   })
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
-    defaultValues: { password: '' },
+    defaultValues: { password: '', confirmPassword: '' },
     mode: 'onChange',
   })
 
@@ -169,20 +175,48 @@ export default function AccountStep() {
             )}
 
             {step === 'password' && (
-              <Controller
-                control={passwordForm.control}
-                name="password"
-                render={({ field: { onChange, value } }) => (
-                  <PasswordField
-                    label={t('auth.password')}
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder={t('auth.passwordPlaceholder')}
-                    autoFocus
-                    error={passwordForm.formState.errors.password ? t(passwordForm.formState.errors.password.message ?? '') : undefined}
-                  />
-                )}
-              />
+              <>
+                <Controller
+                  control={passwordForm.control}
+                  name="password"
+                  render={({ field: { onChange, value } }) => (
+                    <PasswordField
+                      label={t('auth.password')}
+                      value={value}
+                      onChangeText={(v) => {
+                        onChange(v)
+                        // Re-check the confirm field so its mismatch error tracks edits here.
+                        if (passwordForm.getValues('confirmPassword')) passwordForm.trigger('confirmPassword')
+                      }}
+                      placeholder={t('auth.passwordPlaceholder')}
+                      autoFocus
+                      returnKeyType="next"
+                      onSubmitEditing={() => confirmRef.current?.focus()}
+                      error={passwordForm.formState.errors.password ? t(passwordForm.formState.errors.password.message ?? '') : undefined}
+                    />
+                  )}
+                />
+                <Controller
+                  control={passwordForm.control}
+                  name="confirmPassword"
+                  render={({ field: { onChange, value } }) => (
+                    <PasswordField
+                      ref={confirmRef}
+                      label={t('captain.auth.confirmPassword')}
+                      value={value}
+                      onChangeText={onChange}
+                      placeholder={t('captain.auth.confirmPasswordPlaceholder')}
+                      returnKeyType="done"
+                      onSubmitEditing={passwordForm.handleSubmit(onContinuePassword)}
+                      // Don't flag a mismatch while they're still typing the confirmation.
+                      error={passwordForm.formState.errors.confirmPassword
+                        && (passwordForm.formState.isSubmitted || value.length >= passwordForm.watch('password').length)
+                        ? t(passwordForm.formState.errors.confirmPassword.message ?? '')
+                        : undefined}
+                    />
+                  )}
+                />
+              </>
             )}
           </View>
 
@@ -206,7 +240,8 @@ export default function AccountStep() {
             // validation — so the button stayed disabled until you bounced back to
             // the OTP step and returned. handleSubmit still runs the full zod check,
             // so an <8-char password is rejected with the inline error here.
-            <Button label={t('captain.register.next')} disabled={passwordForm.watch('password').length < 8}
+            <Button label={t('captain.register.next')}
+              disabled={passwordForm.watch('password').length < 8 || passwordForm.watch('confirmPassword') !== passwordForm.watch('password')}
               onPress={passwordForm.handleSubmit(onContinuePassword)}
               trailing={<Icon name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color={colors.onTint} />} />
           )}

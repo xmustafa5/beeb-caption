@@ -3,6 +3,12 @@
     "name": "Beep Captain",
     "slug": "beeb-captain",
     "version": "1.2.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/300be89d-59a9-47cf-811c-8134475fbc73"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "beebcaptain",

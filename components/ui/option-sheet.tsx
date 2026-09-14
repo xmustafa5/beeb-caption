@@ -39,7 +39,7 @@ interface OptionSheetProps<T extends string> {
 
 // Tap-to-dismiss backdrop. Mirrors TAN's share/comments sheets: a full-screen
 // Pressable that's only interactive while the sheet is open (animatedIndex > -0.5).
-function SheetBackdrop({ animatedIndex, style, onClose }: BottomSheetBackdropProps & { onClose: () => void }) {
+export function SheetBackdrop({ animatedIndex, style, onClose }: BottomSheetBackdropProps & { onClose: () => void }) {
   const [active, setActive] = useState(false)
   useAnimatedReaction(
     () => animatedIndex.value > -0.5,

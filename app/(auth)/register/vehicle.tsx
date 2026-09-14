@@ -1,6 +1,6 @@
 // app/(auth)/register/vehicle.tsx
-import { useEffect, useState } from 'react'
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Pressable, TouchableOpacity, I18nManager } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Pressable, TouchableOpacity, I18nManager, Keyboard } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -12,6 +12,11 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Input } from '@/components/forms/input'
+import { SelectField } from '@/components/forms/select-field'
+import { SelectSheet, type SelectOption } from '@/components/ui/select-sheet'
+import type { OptionSheetRef } from '@/components/ui/option-sheet'
+import { ColorSwatch } from '@/components/ui/color-swatch'
+import { CAR_COLORS } from '@/constants/car-colors'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
@@ -21,17 +26,21 @@ import { registerCaptain } from '@/services/captain-auth'
 import { getCities } from '@/services/cities'
 import { useAuthStore } from '@/store/auth-store'
 import { parseApiError } from '@/lib/api'
-import { toAsciiDigits } from '@/lib/digits'
 
 // Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
 
-// Model-year bounds. The backend rejects anything outside 1970..=2100 with a 400;
-// we tighten the upper end to "next year" because next-model-year cars do ship
-// early and a 2087 typo must not sail through. Evaluated once per module load,
-// which is fine for an app process that never outlives a calendar year of use.
+// Model-year bounds for the year select. The backend rejects anything outside
+// 1970..=2100 with a 400, so the list stops at 1970 and runs up to the current
+// year. Evaluated once per module load, which is fine for an app process that
+// never outlives a calendar year of use.
 const MIN_CAR_YEAR = 1970
-const MAX_CAR_YEAR = new Date().getFullYear() + 1
+const MAX_CAR_YEAR = new Date().getFullYear()
+// Newest first — most captains drive a recent car.
+const YEAR_OPTIONS: SelectOption[] = Array.from({ length: MAX_CAR_YEAR - MIN_CAR_YEAR + 1 }, (_, i) => {
+  const year = String(MAX_CAR_YEAR - i)
+  return { value: year, label: year }
+})
 
 const schema = z
   .object({
@@ -76,10 +85,12 @@ export default function VehicleStep() {
   // Free-text escape hatch. Open it automatically for a draft that already holds
   // typed-in text but no catalog ids (a captain who came back to this step).
   const [manual, setManual] = useState(!draft.carBrandId && !!draft.carMake)
+  const yearSheetRef = useRef<OptionSheetRef>(null)
+  const colorSheetRef = useRef<OptionSheetRef>(null)
 
   const cities = useQuery({ queryKey: ['cities'], queryFn: getCities, staleTime: 1000 * 60 * 10 })
 
-  const { control, handleSubmit, setValue, clearErrors, formState: { errors, isValid } } = useForm<Form>({
+  const { control, handleSubmit, setValue, clearErrors, watch, formState: { errors, isValid } } = useForm<Form>({
     resolver: zodResolver(schema),
     defaultValues: {
       carBrandId: draft.carBrandId,
@@ -115,6 +126,26 @@ export default function VehicleStep() {
   // the tappable car field owns that error — border AND message read this one
   // expression so the red outline can never appear without its explanation.
   const carError = !manual && errors.carModel ? t(errors.carModel.message ?? '') : null
+
+  // car_color is stored in English (the rider app prints it beside the English
+  // make/model); the label follows the app language and the other language's
+  // name stays searchable.
+  const colorOptions = useMemo<SelectOption[]>(() => CAR_COLORS.map((c) => ({
+    value: c.en,
+    label: lang === 'ar' ? c.ar : c.en,
+    keywords: [lang === 'ar' ? c.en : c.ar, ...(c.keywords ?? [])],
+    leading: <ColorSwatch color={c.swatch} />,
+  })), [lang])
+  const carYear = watch('carYear')
+  const carColor = watch('carColor') ?? ''
+  // A draft from an older build can hold typed text that isn't in the list — it's shown as-is.
+  const chosenColor = CAR_COLORS.find((c) => c.en.toLowerCase() === carColor.toLowerCase())
+
+  const openSheet = (sheet: React.RefObject<OptionSheetRef | null>) => {
+    // A focused plate input would otherwise keep the keyboard up over the sheet.
+    Keyboard.dismiss()
+    sheet.current?.present()
+  }
 
   const onClearPicked = () => {
     draft.setCar({ carBrandId: '', carModelId: '', carBrandName: '', carModelName: '', carMake: '', carModel: '' })
@@ -280,22 +311,29 @@ export default function VehicleStep() {
               </>
             )}
 
-            {/* ── Model year (REQUIRED) ── Arabic-Indic digits from the AR keyboard are
-                 normalized to ASCII before the \D strip, exactly like the national-ID
-                 field; `numeric` pins the field LTR so the year isn't reordered in RTL. */}
-            <Controller control={control} name="carYear" render={({ field: { onChange, value } }) => (
-              <Input label={t('captain.register.carYear')} value={value}
-                onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))}
-                keyboardType="number-pad" maxLength={4} numeric
-                placeholder={String(MAX_CAR_YEAR - 1)}
+            {/* ── Model year (REQUIRED) ── picked from a list, so no typos to validate. */}
+            <Controller control={control} name="carYear" render={({ field: { value } }) => (
+              <SelectField label={t('captain.register.carYear')} value={value}
+                placeholder={t('captain.register.carYearPlaceholder')}
+                onPress={() => openSheet(yearSheetRef)}
+                leading={<Icon name="calendar-outline" size={18} color={colors.subtle} />}
                 error={errors.carYear ? t(errors.carYear.message ?? '') : undefined} />
             )} />
             <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
               {t('captain.register.carYearHint')}
             </Text>
 
-            <Controller control={control} name="carColor" render={({ field: { onChange, value } }) => (
-              <Input label={t('captain.register.carColor')} value={value ?? ''} onChangeText={onChange} />
+            {/* ── Color (optional) ── searchable list; clearable since it isn't required. */}
+            <Controller control={control} name="carColor" render={() => (
+              <SelectField label={t('captain.register.carColor')}
+                value={chosenColor ? (lang === 'ar' ? chosenColor.ar : chosenColor.en) : carColor}
+                placeholder={t('captain.register.carColorPlaceholder')}
+                onPress={() => openSheet(colorSheetRef)}
+                leading={chosenColor
+                  ? <ColorSwatch color={chosenColor.swatch} />
+                  : <Icon name="color-palette-outline" size={18} color={colors.subtle} />}
+                onClear={() => setValue('carColor', '', { shouldValidate: true })}
+                clearLabel={t('captain.register.carColorClear')} />
             )} />
             <Controller control={control} name="carPlate" render={({ field: { onChange, value } }) => (
               <Input label={t('captain.register.carPlate')} value={value} onChangeText={onChange} autoCapitalize="characters"
@@ -311,6 +349,14 @@ export default function VehicleStep() {
             trailing={<Icon name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color={colors.onTint} />} />
         </View>
       </ScrollView>
+
+      <SelectSheet ref={yearSheetRef} title={t('captain.register.carYear')} options={YEAR_OPTIONS}
+        selected={carYear} onSelect={(v) => setValue('carYear', v, { shouldValidate: true })} />
+      <SelectSheet ref={colorSheetRef} title={t('captain.register.carColorTitle')} options={colorOptions}
+        selected={chosenColor?.en ?? ''} onSelect={(v) => setValue('carColor', v, { shouldValidate: true })}
+        searchable searchPlaceholder={t('captain.register.carColorSearch')}
+        searchClearLabel={t('captain.register.carSearchClear')}
+        emptyText={t('captain.register.carColorNoResults')} />
     </KeyboardAvoidingView>
   )
 }
