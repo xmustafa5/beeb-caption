@@ -108,8 +108,12 @@ export async function getActiveCaptainTrip(captainId: string): Promise<Trip | nu
   return null
 }
 
-/** Pool statuses to scan for a room's rider trips (accepted/in_progress/completed). */
-const POOL_TRIP_STATUSES: TripStatus[] = ['accepted', 'in_progress', 'completed']
+/**
+ * Pool statuses to scan for a room's rider trips. `cancelled` is included so a
+ * rider who cancelled after dispatch shows as such — skipped by the next-stop
+ * rule instead of being driven to, and no longer holding the room open.
+ */
+const POOL_TRIP_STATUSES: TripStatus[] = ['accepted', 'in_progress', 'completed', 'cancelled']
 
 /**
  * All of the captain's trips that belong to one Abriyah room. There is no

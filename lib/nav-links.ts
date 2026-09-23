@@ -1,48 +1,43 @@
 /**
  * Turn-by-turn navigation deep links for the captain.
  *
- * Waze is the captain's preferred navigator, but it does NOT accept multiple
- * waypoints via a deep link — one destination per launch. So for a multi-stop /
- * Abriyah trip we open ONE leg at a time (nearest un-visited stop first; see
- * `nearestOf`), and re-open Waze for the next leg after the current one is done.
+ * The captain picks the navigator — Google Maps or Waze, one button each (see
+ * `NavigateButtons`). Neither app accepts a multi-stop route from a link, so a
+ * multi-stop or Nafarat trip is driven ONE leg at a time: the screen works out
+ * the next stop (nearest first, see `nearestOf`), the buttons route to it, and
+ * once it is done they move on to the one after.
  *
- * `openNavigation` tries the Waze app first (`waze://`) and falls back to Google
- * Maps directions if Waze isn't installed — so a captain without Waze still gets
- * routed with a single tap, and one with Waze lands straight in it.
+ * Each app is opened through its own URL scheme with no `canOpenURL` pre-check:
+ * on Android 11+ that check answers "no" for any app the manifest doesn't list
+ * under <queries> (none are), which quietly sent every Android captain to Google
+ * Maps even with Waze installed. If the app really is missing, `openURL` rejects
+ * and we fall back to the navigator's https link, which opens on the web.
  */
 import { Linking } from 'react-native'
 import type { LatLng } from '@/hooks/use-current-location'
 
-/** Waze app deep link that starts navigation to a single point. */
-function wazeAppUrl(dest: LatLng): string {
-  return `waze://?ll=${dest.latitude},${dest.longitude}&navigate=yes`
-}
+export type NavApp = 'google' | 'waze'
 
-/** Google Maps directions URL — the fallback when Waze isn't installed. */
-function googleMapsUrl(dest: LatLng): string {
+/** [app deep link, web fallback] that start driving directions to `dest`. */
+function navUrls(app: NavApp, dest: LatLng): [string, string] {
   const ll = `${dest.latitude},${dest.longitude}`
+  if (app === 'waze') {
+    return [`waze://?ll=${ll}&navigate=yes`, `https://waze.com/ul?ll=${ll}&navigate=yes`]
+  }
+  const web = `https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving&dir_action=navigate`
   return process.env.EXPO_OS === 'ios'
-    ? `https://maps.google.com/?daddr=${ll}`
-    : `https://www.google.com/maps/dir/?api=1&destination=${ll}`
+    ? [`comgooglemaps://?daddr=${ll}&directionsmode=driving`, web]
+    : [`google.navigation:q=${ll}&mode=d`, web] // Android: straight into turn-by-turn
 }
 
-/**
- * Start navigation to a single destination, preferring the Waze app and falling
- * back to Google Maps. `canOpenURL('waze://')` needs the scheme allow-listed in
- * app.json's `ios.infoPlist.LSApplicationQueriesSchemes` on iOS; if the check
- * can't run (or Waze is missing) we open Google Maps instead.
- */
-export async function openNavigation(dest: LatLng): Promise<void> {
+/** Start driving directions to one destination in the captain's chosen app. */
+export async function openNavigation(dest: LatLng, app: NavApp): Promise<void> {
+  const [appUrl, webUrl] = navUrls(app, dest)
   try {
-    const hasWaze = await Linking.canOpenURL('waze://')
-    if (hasWaze) {
-      await Linking.openURL(wazeAppUrl(dest))
-      return
-    }
+    await Linking.openURL(appUrl)
   } catch {
-    // canOpenURL threw (scheme not queryable) — fall through to Google Maps.
+    await Linking.openURL(webUrl).catch(() => {})
   }
-  await Linking.openURL(googleMapsUrl(dest)).catch(() => {})
 }
 
 /** Great-circle distance (km) between two points — haversine. */

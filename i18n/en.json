@@ -130,10 +130,7 @@
     "standardRideSubtitle": "Standard ride · pay cash",
     "stillSearching": "Still looking for a nearby captain…",
     "cancelPenaltyMessage": "A captain is on the way. Cancelling now may incur a small fee.",
-    "fareEstimate": "Estimated {{amount}}",
-    "vehicleBeepGo": "Beep Go",
-    "vehicleBeepComfort": "Beep Comfort",
-    "vehicleBeepXL": "Beep XL"
+    "fareEstimate": "Estimated {{amount}}"
   },
   "abriyah": {
     "introTitle": "What is Nafarat?",
@@ -220,9 +217,9 @@
     "statusStat": "Status",
     "documents": "My documents",
     "carClassLabel": "Car class",
-    "carClassStar1": "Beep Go",
-    "carClassStar2": "Beep Comfort",
-    "carClassStar3": "Beep Premium",
+    "carClassStar1": "1 Star",
+    "carClassStar2": "2 Stars",
+    "carClassStar3": "3 Stars",
     "carYearLabel": "Model year",
     "carClassAutoNote": "Your car class is set automatically from your car and its model year. Contact support to correct your car details."
   },
@@ -393,7 +390,6 @@
       "startTrip": "Start trip",
       "completeTrip": "Complete trip",
       "call": "Call",
-      "navigate": "Navigate",
       "cancel": "Cancel trip",
       "cancelTitle": "Cancel this trip?",
       "cancelConfirm": "Cancel trip",
@@ -431,7 +427,9 @@
       "offlineBlockedBody": "You cannot go offline while a trip is active.",
       "sharingLocation": "Sharing your location with the rider",
       "backgroundLocationTitle": "Allow background location",
-      "backgroundLocationBody": "Beep Captain needs background location so the rider keeps seeing your car when you switch to a navigation app."
+      "backgroundLocationBody": "Beep Captain needs background location so the rider keeps seeing your car when you switch to a navigation app.",
+      "navGoogleMaps": "Google Maps",
+      "navWaze": "Waze"
     },
     "nafarat": {
       "title": "Nafarat ride",
@@ -442,8 +440,9 @@
       "dropped": "Dropped off",
       "allDoneTitle": "All riders dropped off",
       "loadError": "Couldn't load this ride.",
-      "navigateNext": "Navigate to nearest ({{name}})",
-      "navigate": "Navigate"
+      "nextPickup": "Next: pick up {{name}}",
+      "nextDropoff": "Next: drop off {{name}}",
+      "cancelled": "Cancelled"
     },
     "earnings": {
       "tabLabel": "Earnings",

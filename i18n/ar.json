@@ -130,10 +130,7 @@
     "standardRideSubtitle": "رحلة عادية · الدفع نقدًا",
     "stillSearching": "ما زلنا نبحث عن سائق قريب…",
     "cancelPenaltyMessage": "السائق في الطريق. الإلغاء الآن قد يترتب عليه رسوم بسيطة.",
-    "fareEstimate": "تقريباً {{amount}}",
-    "vehicleBeepGo": "بيب جو",
-    "vehicleBeepComfort": "بيب كومفورت",
-    "vehicleBeepXL": "بيب إكس إل"
+    "fareEstimate": "تقريباً {{amount}}"
   },
   "abriyah": {
     "introTitle": "شنو نفرات؟",
@@ -220,9 +217,9 @@
     "statusStat": "الحالة",
     "documents": "مستنداتي",
     "carClassLabel": "فئة السيارة",
-    "carClassStar1": "بيب جو",
-    "carClassStar2": "بيب كومفورت",
-    "carClassStar3": "بيب بريميوم",
+    "carClassStar1": "نجمة واحدة",
+    "carClassStar2": "نجمتان",
+    "carClassStar3": "ثلاث نجوم",
     "carYearLabel": "سنة الصنع",
     "carClassAutoNote": "تُحدَّد فئة سيارتك تلقائيًا حسب سيارتك وسنة صنعها. تواصل مع الدعم لتصحيح بيانات سيارتك."
   },
@@ -393,7 +390,6 @@
       "startTrip": "ابدأ الرحلة",
       "completeTrip": "أكمل الرحلة",
       "call": "اتصال",
-      "navigate": "التنقل",
       "cancel": "إلغاء الرحلة",
       "cancelTitle": "إلغاء هذه الرحلة؟",
       "cancelConfirm": "إلغاء الرحلة",
@@ -431,7 +427,9 @@
       "offlineBlockedBody": "لا يمكنك إيقاف الاتصال أثناء وجود رحلة نشطة.",
       "sharingLocation": "تتم مشاركة موقعك مع الراكب",
       "backgroundLocationTitle": "السماح بالموقع في الخلفية",
-      "backgroundLocationBody": "يحتاج بيب كابتن إلى الموقع في الخلفية ليبقى الراكب يرى سيارتك عند انتقالك إلى تطبيق الملاحة."
+      "backgroundLocationBody": "يحتاج بيب كابتن إلى الموقع في الخلفية ليبقى الراكب يرى سيارتك عند انتقالك إلى تطبيق الملاحة.",
+      "navGoogleMaps": "خرائط جوجل",
+      "navWaze": "ويز"
     },
     "nafarat": {
       "title": "رحلة نفرات",
@@ -442,8 +440,9 @@
       "dropped": "تم الإنزال",
       "allDoneTitle": "تم إنزال جميع الركاب",
       "loadError": "تعذّر تحميل الرحلة.",
-      "navigateNext": "التوجّه إلى الأقرب ({{name}})",
-      "navigate": "التوجّه"
+      "nextPickup": "التالي: اصطحاب {{name}}",
+      "nextDropoff": "التالي: إنزال {{name}}",
+      "cancelled": "ملغاة"
     },
     "earnings": {
       "tabLabel": "الأرباح",

@@ -25,7 +25,8 @@ import { getRoomMembers } from '@/services/abriyah-members'
 import { getRoute } from '@/services/routing'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
-import { openNavigation, nearestOf } from '@/lib/nav-links'
+import { nearestOf } from '@/lib/nav-links'
+import { NavigateButtons } from '@/components/captain/navigate-buttons'
 import { parseApiError } from '@/lib/api'
 
 const isRTL = I18nManager.isRTL
@@ -49,8 +50,6 @@ export default function LiveTripScreen() {
   const status = trip?.status
   const pickup: LatLng | undefined = trip ? { latitude: trip.pickupLat, longitude: trip.pickupLng } : undefined
   const dropoff: LatLng | undefined = trip ? { latitude: trip.dropoffLat, longitude: trip.dropoffLng } : undefined
-  // Navigate/route target: pickup until started, dropoff once in_progress.
-  const target = status === 'in_progress' ? dropoff : pickup
 
   // Location tracking follows the TRIP, not the online toggle: a trip accepted
   // mid-session has to switch background tracking on (the launch-resume path only
@@ -73,6 +72,25 @@ export default function LiveTripScreen() {
   const stopsEnabled =
     trip?.tripType === 'regular' && (status === 'accepted' || status === 'in_progress')
   const { stops, reachStop, reachingId } = useTripStops(id, !!stopsEnabled)
+
+  // Un-reached intermediate stops as coordinates — the pending waypoints of a
+  // multi-stop trip. Empty for a plain point-to-point ride.
+  const pendingStops = stops
+    .filter((s) => s.status !== 'reached')
+    .map((s) => ({ latitude: s.lat, longitude: s.lng }))
+
+  // Where the captain drives next — for the drawn route AND the Google Maps /
+  // Waze buttons: the pickup until the rider is aboard, then any stops the rider
+  // added (nearest first), then the dropoff. Neither navigator takes more than
+  // one destination per link, so the target moves on as each stop is reached.
+  // (Stops used to be routed to while the captain was still on the way to the
+  // pickup, and skipped once the rider was aboard.)
+  const target: LatLng | undefined =
+    status !== 'in_progress'
+      ? pickup
+      : pendingStops.length > 0
+        ? (location && nearestOf(location, pendingStops)) || pendingStops[0]
+        : dropoff
 
   // Route line from captain → target.
   const routeTargetRef = useRef<string | null>(null)
@@ -111,27 +129,6 @@ export default function LiveTripScreen() {
     } catch {
       setError(t('captain.live.callUnavailable'))
     }
-  }
-
-  // Un-reached intermediate stops as coordinates — the pending waypoints of a
-  // multi-stop trip. Empty for a plain point-to-point ride.
-  const pendingStops = stops
-    .filter((s) => s.status !== 'reached')
-    .map((s) => ({ latitude: s.lat, longitude: s.lng }))
-
-  // Open Waze (Google Maps fallback). While riders remain to be picked up
-  // (status 'accepted'), route to the NEAREST un-reached stop first — Waze takes
-  // one destination per launch, so the captain marks it reached, then this button
-  // targets the next-nearest. Once in progress (heading to dropoff) or with no
-  // stops, navigate straight to `target` (pickup, then dropoff).
-  function onNavigate() {
-    if (status === 'accepted' && pendingStops.length > 0 && location) {
-      const next = nearestOf(location, pendingStops) ?? pendingStops[0]
-      void openNavigation(next)
-      return
-    }
-    if (!target) return
-    void openNavigation(target)
   }
 
   async function onCancelConfirm(reason: CancelReason, comment?: string) {
@@ -273,9 +270,10 @@ export default function LiveTripScreen() {
 
         <Button label={primaryLabel} loading={busy} onPress={onPrimary} />
 
+        <NavigateButtons destination={target} />
+
         <TripActionBar
           onCall={onCall}
-          onNavigate={onNavigate}
           onChat={() => router.push({ pathname: '/(chat)/[tripId]', params: { tripId: id } })}
           onCancel={status === 'accepted' ? () => setShowCancel(true) : undefined}
         />

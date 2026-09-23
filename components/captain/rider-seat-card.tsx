@@ -48,6 +48,11 @@ export function RiderSeatCard({ seat, busy, onPickup, onDropoff }: RiderSeatCard
               <Icon name="checkmark-circle" size={18} color={colors.success} />
               <Text style={{ ...Typography['caption-sm'], color: colors.success, fontStyle: 'normal' }}>{t('captain.nafarat.dropped')}</Text>
             </View>
+          ) : status === 'cancelled' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+              <Icon name="close-circle" size={18} color={colors.subtle} />
+              <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal' }}>{t('captain.nafarat.cancelled')}</Text>
+            </View>
           ) : status === 'in_progress' ? (
             <Button label={t('captain.nafarat.dropOff')} size="md" loading={busy} onPress={onDropoff} />
           ) : (
