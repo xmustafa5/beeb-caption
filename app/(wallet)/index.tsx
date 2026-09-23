@@ -26,7 +26,6 @@ const DEBIT_TYPES: Transaction['txType'][] = ['trip_fare', 'daily_fee', 'cancell
 
 export default function WalletScreen() {
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
@@ -79,7 +78,7 @@ export default function WalletScreen() {
             <Text style={{ ...Typography['body-md'], color: colors.onTint, textAlign: 'left' }}>{t('wallet.loadFailed')}</Text>
           ) : (
             <Text style={{ ...Typography['heading-lg'], fontSize: 32, color: colors.onTint, writingDirection: 'ltr', fontVariant: ['tabular-nums'], textAlign: 'left' }}>
-              {formatIqd(wallet.data?.balanceIqd ?? 0, isAr ? 'ar' : 'en')}
+              {formatIqd(wallet.data?.balanceIqd ?? 0, i18n.language)}
             </Text>
           )}
           <TouchableOpacity
@@ -124,7 +123,7 @@ export default function WalletScreen() {
             }}
           >
             {(txns.data ?? []).map((tx, i) => (
-              <TransactionRow key={tx.id} tx={tx} isFirst={i === 0} isAr={isAr} colors={colors} />
+              <TransactionRow key={tx.id} tx={tx} isFirst={i === 0} lang={i18n.language} colors={colors} />
             ))}
           </View>
         )}
@@ -138,11 +137,11 @@ export default function WalletScreen() {
 interface TransactionRowProps {
   tx: Transaction
   isFirst: boolean
-  isAr: boolean
+  lang: string
   colors: ReturnType<typeof useThemeColors>
 }
 
-function TransactionRow({ tx, isFirst, isAr, colors }: TransactionRowProps) {
+function TransactionRow({ tx, isFirst, lang, colors }: TransactionRowProps) {
   const { t } = useTranslation()
   const isDebit = DEBIT_TYPES.includes(tx.txType)
   const failed = tx.status === 'failed' || tx.status === 'reversed'
@@ -170,7 +169,7 @@ function TransactionRow({ tx, isFirst, isAr, colors }: TransactionRowProps) {
       </View>
       {/* Amount is western numeric — lock LTR + tabular figures under native forceRTL */}
       <Text style={{ ...Typography['body-md'], color: amountColor, writingDirection: 'ltr', fontVariant: ['tabular-nums'], textDecorationLine: failed ? 'line-through' : 'none' }}>
-        {sign}{formatIqd(tx.amountIqd, isAr ? 'ar' : 'en')}
+        {sign}{formatIqd(tx.amountIqd, lang)}
       </Text>
     </View>
   )
@@ -178,7 +177,6 @@ function TransactionRow({ tx, isFirst, isAr, colors }: TransactionRowProps) {
 
 function TopUpSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const qc = useQueryClient()
@@ -278,7 +276,7 @@ function TopUpSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
                   }}
                 >
                   <Text style={{ ...Typography['caption-sm'], color: active ? colors.onTint : colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-                    {formatIqd(p, isAr ? 'ar' : 'en')}
+                    {formatIqd(p, i18n.language)}
                   </Text>
                 </TouchableOpacity>
               )
@@ -301,7 +299,7 @@ function TopUpSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
           <FormError message={error} />
 
           <Button
-            label={`${t('wallet.confirmTopUp')} ${formatIqd(valid ? effectiveAmount : 0, isAr ? 'ar' : 'en')}`}
+            label={`${t('wallet.confirmTopUp')} ${formatIqd(valid ? effectiveAmount : 0, i18n.language)}`}
             loading={submitting}
             disabled={!valid}
             onPress={onSubmit}

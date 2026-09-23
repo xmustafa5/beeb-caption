@@ -12,6 +12,7 @@ import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
+import { LANGUAGES, isRtlLanguage, languageName, type AppLanguage } from '@/i18n/languages'
 import Constants from 'expo-constants'
 
 /**
@@ -30,7 +31,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets()
   const captain = useAuthStore((s) => s.captain)
   const router = useRouter()
-  const lang = i18n.language as 'en' | 'ar'
+  const lang = i18n.language as AppLanguage
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
   const langSheetRef = useRef<OptionSheetRef>(null)
@@ -45,13 +46,12 @@ export default function ProfileScreen() {
     .join('')
     .toUpperCase() || '?'
 
-  const languageLabel = lang === 'ar' ? 'العربية' : 'English'
-  const languageOptions: Option<'en' | 'ar'>[] = [
-    { value: 'en', label: 'English', icon: 'language-outline' },
-    { value: 'ar', label: 'العربية', icon: 'language-outline' },
-  ]
-  // Apply a language choice immediately (a real change flips RTL → app restart).
-  const onSelectLanguage = (next: 'en' | 'ar') => {
+  const languageLabel = languageName(lang)
+  const languageOptions = LANGUAGES.map((l): Option<AppLanguage> => (
+    { value: l.code, label: l.label, icon: 'language-outline' }
+  ))
+  // Apply a language choice immediately (a change to/from English flips RTL → app restart).
+  const onSelectLanguage = (next: AppLanguage) => {
     langSheetRef.current?.dismiss()
     if (next !== lang) changeLanguage(next)
   }
@@ -162,7 +162,7 @@ export default function ProfileScreen() {
             {t('captain.earnings.title')}
           </Text>
           {/* Chevron points toward the reading direction end — swap glyph in AR. */}
-          <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+          <Icon name={isRtlLanguage(lang) ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
         </TouchableOpacity>
 
         {/* ── Wallet ── */}
@@ -195,7 +195,7 @@ export default function ProfileScreen() {
             {t('wallet.title')}
           </Text>
           {/* Chevron points toward the reading direction end — swap glyph in AR. */}
-          <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+          <Icon name={isRtlLanguage(lang) ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
         </TouchableOpacity>
         )}
 
@@ -317,7 +317,7 @@ export default function ProfileScreen() {
                 {t('profile.deleteAccount')}
               </Text>
               {/* Chevron points toward the reading-direction end — swap glyph in AR. */}
-              <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+              <Icon name={isRtlLanguage(lang) ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
             </TouchableOpacity>
           </View>
         </View>

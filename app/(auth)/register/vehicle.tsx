@@ -16,7 +16,7 @@ import { SelectField } from '@/components/forms/select-field'
 import { SelectSheet, type SelectOption } from '@/components/ui/select-sheet'
 import type { OptionSheetRef } from '@/components/ui/option-sheet'
 import { ColorSwatch } from '@/components/ui/color-swatch'
-import { CAR_COLORS } from '@/constants/car-colors'
+import { CAR_COLORS, carColorName } from '@/constants/car-colors'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
@@ -80,7 +80,7 @@ export default function VehicleStep() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const draft = useRegistrationStore()
-  const lang = i18n.language as 'en' | 'ar'
+  const lang = i18n.language
   const [apiError, setApiError] = useState<string | null>(null)
   // Free-text escape hatch. Open it automatically for a draft that already holds
   // typed-in text but no catalog ids (a captain who came back to this step).
@@ -128,12 +128,12 @@ export default function VehicleStep() {
   const carError = !manual && errors.carModel ? t(errors.carModel.message ?? '') : null
 
   // car_color is stored in English (the rider app prints it beside the English
-  // make/model); the label follows the app language and the other language's
-  // name stays searchable.
+  // make/model); the label follows the app language and every language's name
+  // stays searchable.
   const colorOptions = useMemo<SelectOption[]>(() => CAR_COLORS.map((c) => ({
     value: c.en,
-    label: lang === 'ar' ? c.ar : c.en,
-    keywords: [lang === 'ar' ? c.en : c.ar, ...(c.keywords ?? [])],
+    label: carColorName(c, lang),
+    keywords: [c.en, c.ar, c.ckb, ...(c.keywords ?? [])],
     leading: <ColorSwatch color={c.swatch} />,
   })), [lang])
   const carYear = watch('carYear')
@@ -272,7 +272,7 @@ export default function VehicleStep() {
                   {picked ? carLabel : t('captain.register.carPickPrompt')}
                 </Text>
                 {/* Chevron points toward the reading-direction end — swap glyph in AR. */}
-                <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.muted} />
+                <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.muted} />
               </Pressable>
               {picked && (
                 <TouchableOpacity onPress={onClearPicked} activeOpacity={0.7} accessibilityRole="button" hitSlop={8}>
@@ -326,7 +326,7 @@ export default function VehicleStep() {
             {/* ── Color (optional) ── searchable list; clearable since it isn't required. */}
             <Controller control={control} name="carColor" render={() => (
               <SelectField label={t('captain.register.carColor')}
-                value={chosenColor ? (lang === 'ar' ? chosenColor.ar : chosenColor.en) : carColor}
+                value={chosenColor ? carColorName(chosenColor, lang) : carColor}
                 placeholder={t('captain.register.carColorPlaceholder')}
                 onPress={() => openSheet(colorSheetRef)}
                 leading={chosenColor

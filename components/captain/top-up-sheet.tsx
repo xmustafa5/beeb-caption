@@ -29,8 +29,6 @@ interface TopUpSheetProps {
 export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }: TopUpSheetProps) {
   const colors = useThemeColors()
   const { t, i18n } = useTranslation()
-  // Reactive locale for currency formatting (layout mirroring still uses module-scope isRTL).
-  const isAr = i18n.language === 'ar'
   const insets = useSafeAreaInsets()
   const [preset, setPreset] = useState<number | null>(PRESETS[0])
   const [custom, setCustom] = useState('')
@@ -80,7 +78,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
             {t('captain.activate.topUpTitle')}
           </Text>
           <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-            {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, isAr ? 'ar' : 'en'), fee: formatIqd(feeIqd, isAr ? 'ar' : 'en') })}
+            {t('captain.activate.insufficientBody', { balance: formatIqd(balanceIqd, i18n.language), fee: formatIqd(feeIqd, i18n.language) })}
           </Text>
 
           <View style={{ flexDirection: 'row', gap: Spacing.sm }}>{/* native forceRTL mirrors this row in AR — no manual flip */}
@@ -110,7 +108,7 @@ export function TopUpSheet({ visible, balanceIqd, feeIqd, onClose, onToppedUp }:
                       fontVariant: ['tabular-nums'],
                     }}
                   >
-                    {formatIqd(p, isAr ? 'ar' : 'en')}
+                    {formatIqd(p, i18n.language)}
                   </Text>
                 </TouchableOpacity>
               )

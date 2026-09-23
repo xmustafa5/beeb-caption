@@ -10,6 +10,7 @@ import { buildTierOpacityExpression, TIER_MIN_ZOOM } from '@/lib/poi-categories'
 import { POI_GLYPH_IMAGES } from '@/lib/poi-glyph-images'
 import { type Poi } from '@/services/places-nearby'
 import { buildPoiFeatureCollection } from './poi-feature-collection'
+import { contentLanguage } from '@/i18n/languages'
 
 interface PoiOverlayProps {
   /** POIs for the current viewport (already fetched/filtered by the caller). */
@@ -35,7 +36,7 @@ export function PoiOverlay({ pois, onSelectPoi }: PoiOverlayProps) {
   const colors = useThemeColors()
   const scheme = useThemeStore((s) => s.scheme)
   const { i18n } = useTranslation()
-  const lang = i18n.language === 'ar' ? 'ar' : 'en'
+  const lang = contentLanguage(i18n.language)
 
   const data = useMemo(() => buildPoiFeatureCollection(pois, lang, colors), [pois, lang, colors])
 

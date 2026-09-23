@@ -42,6 +42,7 @@ import {
 } from '@/services/places'
 import { describePlace } from '@/services/place-label'
 import { isPointInPolygon } from '@/lib/point-in-polygon'
+import { contentLanguage, type AppLanguage } from '@/i18n/languages'
 
 export interface LocationPickerResult {
   coord: LatLng
@@ -76,7 +77,8 @@ export function LocationPicker({
   const scheme = useThemeStore((s) => s.scheme)
   const insets = useSafeAreaInsets()
   const cameraRef = useRef<CameraRef>(null)
-  const lang = i18n.language as 'en' | 'ar'
+  const lang = i18n.language as AppLanguage
+  const names = contentLanguage(lang)
   const { location } = useCurrentLocation()
 
   // react-native-maps used latitudeDelta; MapLibre uses a zoom level.
@@ -114,7 +116,7 @@ export function LocationPicker({
 
   const popular = useRef<PlaceResult[] | null>(null)
   if (popular.current === null) {
-    popular.current = getPopularPlaces(initialCenter, lang, 8)
+    popular.current = getPopularPlaces(initialCenter, names, 8)
   }
 
   // Recenter on the rider's location the FIRST time a real fix arrives after mount
@@ -195,14 +197,14 @@ export function LocationPicker({
     }
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
-      const r = await searchPlaces(query, lang, cityPois, center)
+      const r = await searchPlaces(query, names, cityPois, center)
       setResults(r)
       setSearching(false)
     }, 250)
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current)
     }
-  }, [query, lang])
+  }, [query, names])
 
   const flyTo = (coord: LatLng) => {
     cameraRef.current?.easeTo({ center: toLngLat(coord), zoom: zoomLevel, duration: 450 })
@@ -226,7 +228,7 @@ export function LocationPicker({
   // Tapping a POI snaps the crosshair onto it and uses its name as the chosen address.
   const onSelectPoi = (poi: Poi) => {
     if (zonePolygon && !isPointInPolygon(poi.coord, zonePolygon)) return // reject silently (like onPickResult)
-    adoptPickedAddress(poi.coord, poiLabel(poi, lang))
+    adoptPickedAddress(poi.coord, poiLabel(poi, names))
     setCenter(poi.coord)
     // Ease IN past the gate so the zone-constrained picker (opens below it) keeps pins alive after a pick.
     cameraRef.current?.easeTo({

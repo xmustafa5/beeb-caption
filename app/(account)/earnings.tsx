@@ -20,6 +20,7 @@ import { EarningsSummary } from '@/components/captain/earnings-summary'
 import { useEarnings } from '@/hooks/use-earnings'
 import { formatIqd } from '@/lib/format-currency'
 import type { EarningsPeriod, EarningsHistoryItem } from '@/services/earnings'
+import { dateLocale } from '@/i18n/languages'
 
 // Stable for the session — forceRTL flips require a restart anyway.
 const isRTL = I18nManager.isRTL
@@ -37,7 +38,6 @@ export default function EarningsScreen() {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const isAr = i18n.language === 'ar'
   const [period, setPeriod] = useState<EarningsPeriod>('today')
   const { earnings, history, isLoading, isRefetching, refetch } = useEarnings(period)
 
@@ -138,7 +138,7 @@ export default function EarningsScreen() {
                     key={item.tripId}
                     item={item}
                     isFirst={i === 0}
-                    isAr={isAr}
+                    lang={i18n.language}
                     colors={colors}
                   />
                 ))}
@@ -154,15 +154,15 @@ export default function EarningsScreen() {
 interface HistoryRowProps {
   item: EarningsHistoryItem
   isFirst: boolean
-  isAr: boolean
+  lang: string
   colors: ReturnType<typeof useThemeColors>
 }
 
-function HistoryRow({ item, isFirst, isAr, colors }: HistoryRowProps) {
+function HistoryRow({ item, isFirst, lang, colors }: HistoryRowProps) {
   const { t } = useTranslation()
   const date = new Date(item.completedAt)
   // A malformed timestamp must not render "Invalid Date" next to a real fare.
-  const label = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(isAr ? 'ar' : undefined)
+  const label = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(dateLocale(lang))
 
   return (
     <View
@@ -220,7 +220,7 @@ function HistoryRow({ item, isFirst, isAr, colors }: HistoryRowProps) {
           fontVariant: ['tabular-nums'],
         }}
       >
-        {formatIqd(item.fareIqd, isAr ? 'ar' : 'en')}
+        {formatIqd(item.fareIqd, lang)}
       </Text>
     </View>
   )

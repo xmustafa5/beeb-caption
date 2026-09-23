@@ -62,7 +62,6 @@ function PlaceRow({ icon, color, label, name, loading }: PlaceRowProps) {
 
 export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress }: OfferCardProps) {
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
 
   const isRoom = offer.offerType === 'room'
@@ -113,7 +112,7 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
           )}
         </View>
         <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
-          {formatIqd(offer.fareIqd, isAr ? 'ar' : 'en')}
+          {formatIqd(offer.fareIqd, i18n.language)}
         </Text>
       </View>
 

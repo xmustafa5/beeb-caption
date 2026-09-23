@@ -7,6 +7,7 @@ import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { formatIqd } from '@/lib/format-currency'
 import type { RoomMembersData } from '@/services/abriyah-members'
+import { contentLanguage } from '@/i18n/languages'
 
 const isRTL = I18nManager.isRTL
 
@@ -16,14 +17,14 @@ interface MemberRosterProps {
 
 export function MemberRoster({ data }: MemberRosterProps) {
   const { t, i18n } = useTranslation()
-  // Reactive locale for currency suffix/grouping (د.ع vs IQD); layout uses module-scope isRTL.
-  const isAr = i18n.language === 'ar'
+  // Zone names only come in en/ar; Kurdish shows the Arabic one.
+  const names = contentLanguage(i18n.language)
   const colors = useThemeColors()
   if (!data || data.members.length === 0) return null
 
   const { dropoffZone, pickupBreakdown, members } = data
   const zoneLabel = (name: string | null, nameAr: string | null) =>
-    (isAr ? nameAr : name) ?? t('captain.live.unknownZone')
+    (names === 'ar' ? nameAr : name) ?? t('captain.live.unknownZone')
 
   return (
     <View style={{ gap: Spacing.md }}>
@@ -103,7 +104,7 @@ export function MemberRoster({ data }: MemberRosterProps) {
           >
             <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{m.name}</Text>
             <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-              {formatIqd(m.fareIqd, isAr ? 'ar' : 'en')} · {t('captain.live.distanceLabel', { km: m.distanceKm.toFixed(1) })}
+              {formatIqd(m.fareIqd, i18n.language)} · {t('captain.live.distanceLabel', { km: m.distanceKm.toFixed(1) })}
             </Text>
           </View>
         ))}

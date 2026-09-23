@@ -18,6 +18,7 @@ import { getRoute } from '@/services/routing'
 import { useActiveTrip } from '@/hooks/use-active-trip'
 import { parseApiError } from '@/lib/api'
 import type { CaptainOffer } from '@/services/captain-queue'
+import { isRtlLanguage } from '@/i18n/languages'
 
 // Home is the live map: current location + incoming offers carousel. Activation
 // and going online moved to the tab bar's center button (ActivateSheet). The map
@@ -252,7 +253,7 @@ export default function HomeScreen() {
 // screen after navigating away. Clears itself when the trip ends (the query polls).
 function ActiveTripBanner({ topInset }: { topInset: number }) {
   const { t, i18n } = useTranslation()
-  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
+  const isRTL = isRtlLanguage(i18n.language) || I18nManager.isRTL
   const colors = useThemeColors()
   const router = useRouter()
   const { data: trip } = useActiveTrip()

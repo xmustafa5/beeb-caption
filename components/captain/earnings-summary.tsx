@@ -16,8 +16,6 @@ interface EarningsSummaryProps {
 export function EarningsSummary({ earnings }: EarningsSummaryProps) {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
-  // Reactive locale for currency formatting (AR grouping + suffix); layout isRTL stays module-scope.
-  const isAr = i18n.language === 'ar'
 
   return (
     <View
@@ -30,13 +28,13 @@ export function EarningsSummary({ earnings }: EarningsSummaryProps) {
         boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
       }}
     >
-      <Row label={t('captain.earnings.gross')} value={formatIqd(earnings.grossIqd, isAr ? 'ar' : 'en')} colors={colors} />
-      <Row label={t('captain.earnings.activationFee')} value={`- ${formatIqd(earnings.activationFeeIqd, isAr ? 'ar' : 'en')}`} colors={colors} muted />
+      <Row label={t('captain.earnings.gross')} value={formatIqd(earnings.grossIqd, i18n.language)} colors={colors} />
+      <Row label={t('captain.earnings.activationFee')} value={`- ${formatIqd(earnings.activationFeeIqd, i18n.language)}`} colors={colors} muted />
       <View style={{ height: 1, backgroundColor: colors.border }} />
       {/* native forceRTL mirrors this row in AR — no manual flip */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{t('captain.earnings.net')}</Text>
-        <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(earnings.netIqd, isAr ? 'ar' : 'en')}</Text>
+        <Text style={{ ...Typography['heading-md'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(earnings.netIqd, i18n.language)}</Text>
       </View>
       <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
         {t('captain.earnings.tripCount', { count: earnings.tripCount })}

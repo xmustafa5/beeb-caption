@@ -2,6 +2,8 @@ import { BAGHDAD_PLACES, type Place } from '@/constants/places'
 import { haversineKm } from '@/hooks/use-distance'
 import type { LatLng } from '@/hooks/use-current-location'
 import type { Poi } from '@/services/places-nearby'
+import type { AppLanguage } from '@/i18n/languages'
+import { foldForSearch } from '@/lib/search-fold'
 
 export interface PlaceResult {
   id: string
@@ -12,11 +14,7 @@ export interface PlaceResult {
 }
 
 function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[ً-ْ]/g, '') // strip Arabic diacritics
-    .trim()
+  return foldForSearch(s.normalize('NFD'))
 }
 
 function placeToResult(place: Place, lang: 'en' | 'ar'): PlaceResult {
@@ -217,13 +215,13 @@ export function buildAddressLabel(
 export function combinePlaceLabel(
   address: string | null,
   landmark: string | null,
-  lang: 'en' | 'ar',
+  lang: AppLanguage,
 ): string | null {
   if (!landmark) return address
   if (address?.includes(landmark)) return address
-  const near = lang === 'ar' ? `قرب ${landmark}` : `near ${landmark}`
+  const near = lang === 'en' ? `near ${landmark}` : lang === 'ckb' ? `نزیک ${landmark}` : `قرب ${landmark}`
   if (!address) return near
-  return lang === 'ar' ? `${address}، ${near}` : `${address}, ${near}`
+  return lang === 'en' ? `${address}, ${near}` : `${address}، ${near}`
 }
 
 /** First meaningful address part to use as a concise title. */

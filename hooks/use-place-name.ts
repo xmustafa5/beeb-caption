@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { describePlace } from '@/services/place-label'
 import type { LatLng } from '@/hooks/use-current-location'
+import type { AppLanguage } from '@/i18n/languages'
 
 /**
  * Describes a coordinate as a rich place label (area، mahalla، street، nearest
@@ -11,7 +12,7 @@ import type { LatLng } from '@/hooks/use-current-location'
  */
 export function usePlaceName(coord: LatLng | null): { name: string | null; isLoading: boolean } {
   const { i18n } = useTranslation()
-  const lang = i18n.language === 'ar' ? 'ar' : 'en'
+  const lang = i18n.language as AppLanguage
   // ~11 m precision — enough to dedupe pickups/dropoffs without losing distinct places.
   const key = coord ? `${coord.latitude.toFixed(4)},${coord.longitude.toFixed(4)}` : null
 

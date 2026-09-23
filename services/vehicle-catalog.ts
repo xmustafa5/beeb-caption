@@ -1,5 +1,7 @@
 // services/vehicle-catalog.ts
 import { api } from '@/lib/api'
+import { contentLanguage } from '@/i18n/languages'
+import { toArabicLetters } from '@/lib/search-fold'
 
 /**
  * Public vehicle catalog (brands + models). All three endpoints are PUBLIC —
@@ -95,7 +97,8 @@ export async function getModels(brandId: string): Promise<VehicleModel[]> {
 
 /**
  * Bilingual model search (max 25 hits, best match first). 'corol', 'Corolla',
- * 'كورولا' and 'تويوتا' all work.
+ * 'كورولا' and 'تويوتا' all work — and so does 'تۆیۆتا' from a Kurdish keyboard,
+ * whose own letters are mapped onto the Arabic ones the catalog is spelled with.
  *
  * Short-circuits below 2 characters WITHOUT a request: the backend 400s on a
  * missing `q` and answers `200 []` for a 1-char one, so firing it is either an
@@ -105,7 +108,7 @@ export async function searchVehicles(q: string): Promise<VehicleSearchHit[]> {
   const term = q.trim()
   if (term.length < 2) return []
   const { data } = await api.get<BackendSearchHit[]>('/api/vehicle-catalog/search', {
-    params: { q: term },
+    params: { q: toArabicLetters(term) },
   })
   return (data ?? []).map((h) => ({
     ...toModel(h),
@@ -116,11 +119,14 @@ export async function searchVehicles(q: string): Promise<VehicleSearchHit[]> {
 
 type Lang = 'en' | 'ar' | string
 
-/** Pick the localized name, falling back to the other language when one is blank. */
+/**
+ * Pick the localized name, falling back to the other language when one is blank.
+ * The catalog has no Kurdish names; Kurdish reads the Arabic one.
+ */
 function localized(nameEn: string, nameAr: string, lang: Lang): string {
   const ar = (nameAr ?? '').trim()
   const en = (nameEn ?? '').trim()
-  return lang === 'ar' ? ar || en : en || ar
+  return contentLanguage(lang) === 'ar' ? ar || en : en || ar
 }
 
 export function brandName(b: Pick<VehicleBrand, 'nameEn' | 'nameAr'>, lang: Lang): string {

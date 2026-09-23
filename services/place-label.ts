@@ -8,6 +8,7 @@
 import { reverseGeocode, combinePlaceLabel } from '@/services/places'
 import { getRadiusPois } from '@/services/places-nearby'
 import type { LatLng } from '@/hooks/use-current-location'
+import { contentLanguage, type AppLanguage } from '@/i18n/languages'
 
 /** A landmark only "locates" a point when it is genuinely next to it (~150 m). */
 const LANDMARK_RADIUS_M = 150
@@ -28,12 +29,14 @@ async function nearestLandmark(coord: LatLng, lang: 'en' | 'ar'): Promise<string
 /**
  * Full human description of a coordinate for from/to rows:
  * geocoded address chain + nearest landmark. Either half is best-effort;
- * returns null only when both fail.
+ * returns null only when both fail. Kurdish gets the Arabic names (the data has
+ * no Kurdish ones) joined with a Kurdish "near".
  */
-export async function describePlace(coord: LatLng, lang: 'en' | 'ar' = 'ar'): Promise<string | null> {
+export async function describePlace(coord: LatLng, lang: AppLanguage = 'ar'): Promise<string | null> {
+  const names = contentLanguage(lang)
   const [address, landmark] = await Promise.all([
-    reverseGeocode(coord, lang),
-    nearestLandmark(coord, lang),
+    reverseGeocode(coord, names),
+    nearestLandmark(coord, names),
   ])
   return combinePlaceLabel(address, landmark, lang)
 }

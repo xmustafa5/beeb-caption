@@ -12,6 +12,7 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { SheetBackdrop, type OptionSheetRef } from '@/components/ui/option-sheet'
+import { foldForSearch } from '@/lib/search-fold'
 
 export interface SelectOption {
   value: string
@@ -39,15 +40,10 @@ interface SelectSheetProps {
 
 // Folds the Arabic spellings people type interchangeably (hamza forms of alef,
 // taa marbuta / haa, alef maqsura / yaa) and strips diacritics, so a search
-// matches whether or not the keyboard added a hamza or tashkeel.
+// matches whether or not the keyboard added a hamza or tashkeel — and whether
+// it was typed on an Arabic or a Kurdish keyboard (ک ی ە ۆ …).
 function normalize(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[أإآ]/g, 'ا')
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي')
-    .trim()
+  return foldForSearch(s)
 }
 
 /**

@@ -45,8 +45,10 @@ constants/
 └── Spacing.ts           # xs/sm/md/lg/xl
 i18n/
 ├── index.ts             # i18next + RTL flow + restart on lang change
+├── languages.ts         # AppLanguage ('en' | 'ar' | 'ckb') + RTL / content / date-locale rules
 ├── en.json
-└── ar.json
+├── ar.json
+└── ckb.json             # Central Kurdish (Sorani), the Kurdish of Iraq
 lib/
 └── restart.ts           # expo-updates reload (DevSettings in dev)
 store/
@@ -219,11 +221,13 @@ Errors render inline below each field, color `colors.destructive`. Use a toast f
 
 ## i18n / RTL
 
-`i18next` + `react-i18next`. Translation files in `i18n/{en,ar}.json`. Init in `i18n/index.ts`.
+`i18next` + `react-i18next`. Translation files in `i18n/{en,ar,ckb}.json` (`ckb` = Central Kurdish / Sorani). Init in `i18n/index.ts`; per-language rules in `i18n/languages.ts`.
 
 Read translations: `const { t, i18n } = useTranslation()`; `t('tabs.home')`.
 
-Switch language via the exported `changeLanguage('ar' | 'en')` — saves to AsyncStorage, calls `I18nManager.forceRTL(shouldBeRTL)`, restarts the app via `lib/restart.ts` if RTL flips.
+Switch language via the exported `changeLanguage('en' | 'ar' | 'ckb')` — saves to AsyncStorage, calls `I18nManager.forceRTL(shouldBeRTL)`, restarts the app via `lib/restart.ts` if RTL flips (Arabic ↔ Kurdish is RTL ↔ RTL, so that switch applies live).
+
+**Kurdish:** never branch on `i18n.language === 'ar'` — Kurdish silently takes the English path. Use `i18n/languages.ts`: `isRtlLanguage()` for direction-dependent choices (chevrons), `contentLanguage()` when picking a name from en/ar-only data (POIs, zones, curated places, the vehicle catalog — Kurdish shows the Arabic one), `dateLocale()` for `toLocale*String`, and pass `i18n.language` straight to `formatIqd`. Add every new key to all three JSON files — a key missing from `ckb.json` falls back to Arabic, not an error.
 
 ### RTL layout rules
 

@@ -18,7 +18,6 @@ interface RiderSeatCardProps {
 
 export function RiderSeatCard({ seat, busy, onPickup, onDropoff }: RiderSeatCardProps) {
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
   const colors = useThemeColors()
   const status = seat.tripStatus
 
@@ -28,7 +27,7 @@ export function RiderSeatCard({ seat, busy, onPickup, onDropoff }: RiderSeatCard
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{seat.name}</Text>
         <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
-          {formatIqd(seat.fareIqd, isAr ? 'ar' : 'en')}
+          {formatIqd(seat.fareIqd, i18n.language)}
         </Text>
       </View>
 

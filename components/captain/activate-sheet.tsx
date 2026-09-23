@@ -16,6 +16,7 @@ import { getWallet } from '@/services/wallet'
 import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
 import { formatIqd } from '@/lib/format-currency'
 import { parseApiError, apiErrorKey } from '@/lib/api'
+import { isRtlLanguage } from '@/i18n/languages'
 
 interface ActivateSheetProps {
   visible: boolean
@@ -33,7 +34,7 @@ interface ActivateSheetProps {
  */
 export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   const { t, i18n } = useTranslation()
-  const isRTL = i18n.language === 'ar' || I18nManager.isRTL
+  const isRTL = isRtlLanguage(i18n.language) || I18nManager.isRTL
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { query, activate } = useActivation()

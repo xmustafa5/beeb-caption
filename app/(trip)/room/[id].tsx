@@ -17,13 +17,15 @@ import { useCaptainPresence } from '@/providers/captain-presence'
 import { useCurrentLocation } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
 import { openNavigation, distanceKm } from '@/lib/nav-links'
+import { contentLanguage } from '@/i18n/languages'
 
 const isRTL = I18nManager.isRTL
 
 export default function NafaratRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
+  // Zone names only come in en/ar; Kurdish shows the Arabic one.
+  const names = contentLanguage(i18n.language)
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
@@ -77,7 +79,7 @@ export default function NafaratRoomScreen() {
         </View>
         <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>{t('captain.nafarat.allDoneTitle')}</Text>
         <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-          {t('captain.live.fareCollected', { fare: formatIqd(collected, isAr ? 'ar' : 'en') })}
+          {t('captain.live.fareCollected', { fare: formatIqd(collected, i18n.language) })}
         </Text>
         <Button label={t('captain.live.done')} onPress={() => router.replace('/(tabs)')} />
       </View>
@@ -86,7 +88,7 @@ export default function NafaratRoomScreen() {
 
   const pickups = seats.map((s) => s.pickup)
   const dropoffs = seats.map((s) => s.dropoff)
-  const zoneName = (isAr ? dropoffZone?.nameAr : dropoffZone?.name) ?? t('captain.live.unknownZone')
+  const zoneName = (names === 'ar' ? dropoffZone?.nameAr : dropoffZone?.name) ?? t('captain.live.unknownZone')
 
   // Nearest-first navigation. Each un-finished rider has ONE active target: their
   // pickup until they're aboard (in_progress → their dropoff). Waze takes a single
@@ -164,7 +166,7 @@ export default function NafaratRoomScreen() {
               <View key={p.zoneId ?? `u-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
                 <Icon name="location-outline" size={14} color={colors.subtle} />
                 <Text style={{ ...Typography['caption-sm'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
-                  {t('captain.live.pickupFromZone', { count: p.riderCount, zone: (isAr ? p.nameAr : p.name) ?? t('captain.live.unknownZone') })}
+                  {t('captain.live.pickupFromZone', { count: p.riderCount, zone: (names === 'ar' ? p.nameAr : p.name) ?? t('captain.live.unknownZone') })}
                 </Text>
               </View>
             ))}

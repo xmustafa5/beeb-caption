@@ -3,16 +3,20 @@ import { initReactI18next } from 'react-i18next'
 import { I18nManager } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { restartApp, consumeRestartFlag } from '@/lib/restart'
+import { isAppLanguage, isRtlLanguage, type AppLanguage } from './languages'
 import en from './en.json'
 import ar from './ar.json'
+import ckb from './ckb.json'
 
 i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
     ar: { translation: ar },
+    ckb: { translation: ckb },
   },
   lng: 'ar',
-  fallbackLng: 'en',
+  // A string missing from ckb.json falls back to Arabic (same script and direction) before English.
+  fallbackLng: { ckb: ['ar', 'en'], default: ['en'] },
   interpolation: { escapeValue: false },
 })
 
@@ -24,8 +28,8 @@ export const languageReady: Promise<void> = (async () => {
     consumeRestartFlag(),
   ])
   // Default to Arabic (Iraqi captains) on first launch; respect a saved choice thereafter.
-  const lang = (saved === 'ar' || saved === 'en') ? saved : 'ar'
-  const shouldBeRTL = lang === 'ar'
+  const lang: AppLanguage = isAppLanguage(saved) ? saved : 'ar'
+  const shouldBeRTL = isRtlLanguage(lang)
 
   if (I18nManager.isRTL !== shouldBeRTL && !justRestarted) {
     I18nManager.forceRTL(shouldBeRTL)
@@ -38,10 +42,12 @@ export const languageReady: Promise<void> = (async () => {
   }
 })()
 
-export async function changeLanguage(lang: 'en' | 'ar') {
+// Arabic ↔ Kurdish keeps the direction, so it switches live; only a change to or
+// from English flips RTL and needs the restart.
+export async function changeLanguage(lang: AppLanguage) {
   i18n.changeLanguage(lang)
   await AsyncStorage.setItem('language', lang)
-  const shouldBeRTL = lang === 'ar'
+  const shouldBeRTL = isRtlLanguage(lang)
   if (I18nManager.isRTL !== shouldBeRTL) {
     I18nManager.forceRTL(shouldBeRTL)
     await restartApp()

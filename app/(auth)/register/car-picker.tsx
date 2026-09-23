@@ -1,6 +1,6 @@
 // app/(auth)/register/car-picker.tsx
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, FlatList, Pressable, ActivityIndicator, TouchableOpacity, BackHandler } from 'react-native'
+import { View, Text, FlatList, Pressable, ActivityIndicator, TouchableOpacity, BackHandler, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -24,6 +24,9 @@ import {
   type VehicleModel,
   type VehicleSearchHit,
 } from '@/services/vehicle-catalog'
+import { contentLanguage } from '@/i18n/languages'
+
+const isRTL = I18nManager.isRTL
 
 /**
  * Popular-in-Iraq makes, pinned to the top of the browse list.
@@ -70,7 +73,8 @@ export default function CarPickerScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const setCar = useRegistrationStore((s) => s.setCar)
-  const lang = i18n.language as 'en' | 'ar'
+  // Catalog names come in en/ar only; Kurdish reads (and sorts) the Arabic ones.
+  const lang = contentLanguage(i18n.language)
 
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -225,7 +229,7 @@ export default function CarPickerScreen() {
             {brandName(b, lang)}
           </Text>
           {/* Chevron points toward the reading-direction end — swap glyph in AR. */}
-          <Icon name={lang === 'ar' ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.muted} />
+          <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={colors.muted} />
         </RowButton>
       )
     }
@@ -269,7 +273,7 @@ export default function CarPickerScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
           <TouchableOpacity onPress={onBack} activeOpacity={0.7} accessibilityRole="button" hitSlop={10}>
             {/* Back glyph points toward the reading start — swap glyph in AR. */}
-            <Icon name={lang === 'ar' ? 'chevron-forward' : 'chevron-back'} size={24} color={colors.text} />
+            <Icon name={isRTL ? 'chevron-forward' : 'chevron-back'} size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={{ ...Typography['heading-md'], color: colors.text, flex: 1, textAlign: 'left' }} numberOfLines={1}>
             {title}
