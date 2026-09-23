@@ -1,5 +1,6 @@
 // services/captain-queue.ts
 import { api } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 export type OfferType = 'trip' | 'room'
 export type RoomType = 'mixed' | 'women_only'
@@ -49,8 +50,9 @@ function toOffer(b: BackendOffer): CaptainOffer {
     pickupLng: b.pickup_lng,
     dropoffLat: b.dropoff_lat,
     dropoffLng: b.dropoff_lng,
-    pickupAddress: b.pickup_address ?? undefined,
-    dropoffAddress: b.dropoff_address ?? undefined,
+    // Western digits in every language (the backend fills these from POI names).
+    pickupAddress: b.pickup_address ? toAsciiDigits(b.pickup_address) : undefined,
+    dropoffAddress: b.dropoff_address ? toAsciiDigits(b.dropoff_address) : undefined,
     fareIqd: b.fare_iqd,
     createdAt: b.created_at,
   }

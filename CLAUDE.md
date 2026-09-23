@@ -227,7 +227,9 @@ Read translations: `const { t, i18n } = useTranslation()`; `t('tabs.home')`.
 
 Switch language via the exported `changeLanguage('en' | 'ar' | 'ckb')` — saves to AsyncStorage, calls `I18nManager.forceRTL(shouldBeRTL)`, restarts the app via `lib/restart.ts` if RTL flips (Arabic ↔ Kurdish is RTL ↔ RTL, so that switch applies live).
 
-**Kurdish:** never branch on `i18n.language === 'ar'` — Kurdish silently takes the English path. Use `i18n/languages.ts`: `isRtlLanguage()` for direction-dependent choices (chevrons), `contentLanguage()` when picking a name from en/ar-only data (POIs, zones, curated places, the vehicle catalog — Kurdish shows the Arabic one), `dateLocale()` for `toLocale*String`, and pass `i18n.language` straight to `formatIqd`. Add every new key to all three JSON files — a key missing from `ckb.json` falls back to Arabic, not an error.
+**Kurdish:** never branch on `i18n.language === 'ar'` — Kurdish silently takes the English path. Use `i18n/languages.ts`: `isRtlLanguage()` for direction-dependent choices (chevrons), `contentLanguage()` when picking a name from en/ar-only data (POIs, zones, curated places, the vehicle catalog — Kurdish shows the Arabic one), `formatDate` / `formatTime` / `formatDateTime` for dates (never `toLocale*String` directly), and pass `i18n.language` straight to `formatIqd`. Add every new key to all three JSON files — a key missing from `ckb.json` falls back to Arabic, not an error.
+
+**Numbers are always Western digits (0-9), in every language** (product rule, 2026-09-23): those helpers and `formatIqd` guarantee it; text read in from the backend or OSM (POI names, addresses) goes through `toAsciiDigits` in the services layer; the iOS date picker gets `pickerLocale()`.
 
 ### RTL layout rules
 

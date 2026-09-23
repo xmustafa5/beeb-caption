@@ -1,5 +1,6 @@
 // services/captain-stops.ts
 import { api } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 export type TripStopStatus = 'pending' | 'reached'
 
@@ -32,7 +33,7 @@ function toTripStop(b: BackendTripStop): TripStop {
     lng: b.lng,
     seq: b.seq,
     status: b.status === 'reached' ? 'reached' : 'pending',
-    address: b.address ?? null,
+    address: b.address ? toAsciiDigits(b.address) : null,
     reachedAt: b.reached_at ?? null,
   }
 }

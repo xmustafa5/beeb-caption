@@ -16,6 +16,7 @@ import axios from 'axios'
 import { api } from '@/lib/api'
 import type { LatLng } from '@/hooks/use-current-location'
 import { roundBbox, assertBboxOrder, type Bbox } from '@/lib/map-style'
+import { toAsciiDigits } from '@/lib/digits'
 
 /** OSM POI category. Open string — the backend can add categories without a client change. */
 export type PoiCategory = 'cafe' | 'restaurant' | 'shop' | 'company' | (string & {})
@@ -58,8 +59,9 @@ function toPoi(b: BackendPlace): Poi {
   return {
     id: b.id,
     category: b.category,
-    name: b.name,
-    nameAr: b.name_ar,
+    // Western digits in every language — OSM names occasionally carry ٠-٩.
+    name: b.name && toAsciiDigits(b.name),
+    nameAr: b.name_ar && toAsciiDigits(b.name_ar),
     coord: { latitude: b.lat, longitude: b.lng },
     distanceM: b.distance_m,
   }

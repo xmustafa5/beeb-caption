@@ -4,6 +4,7 @@ import type { LatLng } from '@/hooks/use-current-location'
 import type { Poi } from '@/services/places-nearby'
 import type { AppLanguage } from '@/i18n/languages'
 import { foldForSearch } from '@/lib/search-fold'
+import { toAsciiDigits } from '@/lib/digits'
 
 export interface PlaceResult {
   id: string
@@ -336,7 +337,10 @@ export async function searchPlaces(
       if (!isNearDuplicate(g, merged)) merged.push(g)
     }
   }
-  return merged.slice(0, 8)
+  // Western digits in every language — geocoder names occasionally carry ٠-٩.
+  return merged
+    .slice(0, 8)
+    .map((r) => ({ ...r, title: toAsciiDigits(r.title), subtitle: toAsciiDigits(r.subtitle) }))
 }
 
 export async function reverseGeocode(coord: LatLng, lang: 'en' | 'ar' = 'ar'): Promise<string | null> {
@@ -352,7 +356,8 @@ export async function reverseGeocode(coord: LatLng, lang: 'en' | 'ar' = 'ar'): P
     const res = await fetch(`${REVERSE_URL}?${params.toString()}`, { headers: GEOCODER_HEADERS })
     if (!res.ok) return null
     const r = (await res.json()) as NominatimResult
-    return buildAddressLabel(r)
+    const label = buildAddressLabel(r)
+    return label && toAsciiDigits(label)
   } catch {
     return null
   }

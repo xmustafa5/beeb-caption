@@ -20,7 +20,7 @@ import { EarningsSummary } from '@/components/captain/earnings-summary'
 import { useEarnings } from '@/hooks/use-earnings'
 import { formatIqd } from '@/lib/format-currency'
 import type { EarningsPeriod, EarningsHistoryItem } from '@/services/earnings'
-import { dateLocale } from '@/i18n/languages'
+import { formatDate } from '@/i18n/languages'
 
 // Stable for the session — forceRTL flips require a restart anyway.
 const isRTL = I18nManager.isRTL
@@ -162,7 +162,7 @@ function HistoryRow({ item, isFirst, lang, colors }: HistoryRowProps) {
   const { t } = useTranslation()
   const date = new Date(item.completedAt)
   // A malformed timestamp must not render "Invalid Date" next to a real fare.
-  const label = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(dateLocale(lang))
+  const label = Number.isNaN(date.getTime()) ? '' : formatDate(date, lang)
 
   return (
     <View

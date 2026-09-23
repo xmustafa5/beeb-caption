@@ -1,6 +1,8 @@
 // The languages the app ships and the rules that follow from each. Kept free of
 // side effects (no i18next init, no AsyncStorage) so services and tests can import it.
 
+import { toAsciiDigits } from '@/lib/digits'
+
 /** 'ckb' is Central Kurdish (Sorani) — the Kurdish written and spoken in Iraq. */
 export type AppLanguage = 'en' | 'ar' | 'ckb'
 
@@ -51,4 +53,22 @@ const hasKurdishDates = (() => {
 export function dateLocale(lang: string): string | undefined {
   if (lang === 'ckb') return hasKurdishDates ? 'ckb' : 'ar'
   return lang === 'ar' ? 'ar' : undefined
+}
+
+/**
+ * Dates and times in the app language — Arabic / Kurdish month and day names —
+ * written with Western digits (0-9) like every number in the app. Engines print
+ * Arabic-Indic digits for 'ar'/'ckb' and don't all honour a `-u-nu-latn` tag,
+ * so the digits are converted after formatting.
+ */
+export function formatDate(date: Date, lang: string, options?: Intl.DateTimeFormatOptions): string {
+  return toAsciiDigits(date.toLocaleDateString(dateLocale(lang), options))
+}
+
+export function formatTime(date: Date, lang: string, options?: Intl.DateTimeFormatOptions): string {
+  return toAsciiDigits(date.toLocaleTimeString(dateLocale(lang), options))
+}
+
+export function formatDateTime(date: Date, lang: string, options?: Intl.DateTimeFormatOptions): string {
+  return toAsciiDigits(date.toLocaleString(dateLocale(lang), options))
 }
