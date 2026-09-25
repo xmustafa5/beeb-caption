@@ -91,11 +91,17 @@ api.interceptors.response.use(
 if (__DEV__) {
   // recipient_phone: a Box recipient's number (GET /api/trips/{id}/box) — third-party PII.
   const REDACT = new Set(['token', 'card_number', 'gateway_token', 'password', 'code', 'recipient_phone'])
+  // A GeoJSON geometry (GET /api/routes/driving's road line) is hundreds of [lng, lat] pairs, and
+  // the live-trip screen re-routes on every GPS fix — log its point count, not the points.
+  const isGeometry = (v: unknown): v is { type?: unknown; coordinates: unknown[] } =>
+    !!v && typeof v === 'object' && Array.isArray((v as { coordinates?: unknown }).coordinates)
   const trim = (data: unknown): unknown => {
     if (!data || typeof data !== 'object') return data
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
-      out[k] = REDACT.has(k) ? '«redacted»' : v
+      if (REDACT.has(k)) out[k] = '«redacted»'
+      else if (isGeometry(v)) out[k] = { type: v.type, coordinates: `[${v.coordinates.length} points]` }
+      else out[k] = v
     }
     return out
   }

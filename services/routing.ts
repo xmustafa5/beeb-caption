@@ -1,3 +1,4 @@
+import { api } from '@/lib/api'
 import type { LatLng } from '@/hooks/use-current-location'
 
 export interface RouteResult {
@@ -6,7 +7,33 @@ export interface RouteResult {
   durationS: number
 }
 
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving'
+/**
+ * Wire shape of `GET /api/routes/driving`. The backend asks its own OSRM (the same router the
+ * fare is priced on) and returns the road line as GeoJSON — so every pair is **[lng, lat]**,
+ * longitude first.
+ */
+interface RouteGeometryResponse {
+  distance_m: number
+  duration_s: number
+  geometry: {
+    type: 'LineString'
+    coordinates: [number, number][]
+  }
+}
+
+/**
+ * Longer than the backend's own 5 s OSRM budget, so a slow router comes back as its clean 503
+ * rather than a client-side abort, but well under the api instance's 30 s default: a route line
+ * nobody sees for half a minute is worse than the caller's straight-line fallback.
+ */
+const ROUTE_TIMEOUT_MS = 8000
+
+/**
+ * Most distinct routes kept in memory. The captain's live-trip screen asks for a new route on
+ * every GPS fix, and each answer is a few hundred points, so an unbounded map would grow for the
+ * whole shift. The oldest entry goes first (a Map iterates in insertion order).
+ */
+const CACHE_MAX_ENTRIES = 64
 
 const cache = new Map<string, RouteResult>()
 
@@ -14,25 +41,56 @@ function cacheKey(a: LatLng, b: LatLng): string {
   return `${a.latitude.toFixed(5)},${a.longitude.toFixed(5)}|${b.latitude.toFixed(5)},${b.longitude.toFixed(5)}`
 }
 
+function isPoint(pair: unknown): pair is [number, number] {
+  return (
+    Array.isArray(pair) &&
+    pair.length >= 2 &&
+    Number.isFinite(pair[0]) &&
+    Number.isFinite(pair[1])
+  )
+}
+
+/** The road line as app coordinates, or null when it is not a drawable line (fewer than 2 points). */
+function toRouteResult(data: RouteGeometryResponse | undefined): RouteResult | null {
+  const pairs: unknown = data?.geometry?.coordinates
+  if (!Array.isArray(pairs) || pairs.length < 2 || !pairs.every(isPoint)) return null
+  return {
+    coords: pairs.map(([lng, lat]) => ({ latitude: lat, longitude: lng })),
+    distanceM: data?.distance_m ?? 0,
+    durationS: data?.duration_s ?? 0,
+  }
+}
+
+/**
+ * Road route from `a` to `b`, from our backend's routing endpoint.
+ *
+ * Returns null on ANY failure — no route between the points (404), router down (503), offline,
+ * timeout, rate limit, or a malformed body — and every caller falls back to its straight line.
+ * Only successes are cached, so a failed pair is asked for again on the next call.
+ *
+ * A 401 here goes through the api interceptor like any other authenticated call: the token was
+ * sent and is dead, so the user is signed out. Every screen that draws a route is behind login.
+ */
 export async function getRoute(a: LatLng, b: LatLng): Promise<RouteResult | null> {
   const key = cacheKey(a, b)
   const cached = cache.get(key)
   if (cached) return cached
 
-  const url = `${OSRM_BASE}/${a.longitude},${a.latitude};${b.longitude},${b.latitude}?overview=full&geometries=geojson`
   try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = await res.json()
-    const route = data.routes?.[0]
-    if (!route?.geometry?.coordinates) return null
-    const coords: LatLng[] = route.geometry.coordinates.map(
-      (pair: number[]) => ({ latitude: pair[1], longitude: pair[0] }),
-    )
-    const result: RouteResult = {
-      coords,
-      distanceM: route.distance ?? 0,
-      durationS: route.duration ?? 0,
+    const { data } = await api.get<RouteGeometryResponse>('/api/routes/driving', {
+      params: {
+        from_lat: a.latitude,
+        from_lng: a.longitude,
+        to_lat: b.latitude,
+        to_lng: b.longitude,
+      },
+      timeout: ROUTE_TIMEOUT_MS,
+    })
+    const result = toRouteResult(data)
+    if (!result) return null
+    if (cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) cache.delete(oldest)
     }
     cache.set(key, result)
     return result
