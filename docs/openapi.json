@@ -15,7 +15,7 @@
           "Abriyah"
         ],
         "summary": "Join or create an Abriyah shared room",
-        "description": "Match the calling rider into an Abriyah shared-ride room for their zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Computes the per-rider fare from the PICKUP zone (its Abriyah params when Abriyah-enabled, falling back to the settings regular fare otherwise).\n- Computes a per-rider fare as base + round(haversine_km * per_km), in integer IQD; coordinates are WGS84 lng/lat.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room.opened/room.joined and trip.requested realtime events.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only requests require a female rider (gender 'f') and a zone that allows women-only rooms.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One active room per rider; joining again while already in a room is rejected.\n- Returns 400 `{\"error\":\"outside_abriyah_area\"}` when the dropoff is not in an Abriyah-enabled zone or the pickup is outside any active service zone (Nafarat is Baghdad-only for now: clients show it as \"coming soon\"); plain 400 when women-only is not allowed in the dropoff zone or `room_type` is invalid.\n- The join that brings a room to `room.min_riders_to_offer` live riders (default 2) pushes it to nearby Abriyah captains (WS `rt:captain:{id}` + FCM `new_trip_in_queue` with `room_id`) and restarts its wait window.",
+        "description": "Match the calling rider into an Abriyah shared-ride room for their zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Computes the per-rider fare from the PICKUP zone (its Abriyah params when Abriyah-enabled, falling back to the settings regular fare otherwise).\n- Computes a per-rider fare with the tiered model (base + tiered per-km charge, rounded up to `pricing.round_to_iqd`), in integer IQD, over the ROAD distance from the routing engine (OSRM); when routing is unavailable the straight-line distance x `pricing.road_fallback_factor_percent` / 100 is used (plain straight line when `pricing.use_road_distance = 'false'`). No peak-time surcharge applies to Abriyah. Coordinates are WGS84 lng/lat.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room.opened/room.joined and trip.requested realtime events.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only requests require a female rider (gender 'f') and a zone that allows women-only rooms.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One active room per rider; joining again while already in a room is rejected.\n- Returns 400 `{\"error\":\"outside_abriyah_area\"}` when the dropoff is not in an Abriyah-enabled zone or the pickup is outside any active service zone (Nafarat is Baghdad-only for now: clients show it as \"coming soon\"); plain 400 when women-only is not allowed in the dropoff zone or `room_type` is invalid.\n- The join that brings a room to `room.min_riders_to_offer` live riders (default 2) pushes it to nearby Abriyah captains (WS `rt:captain:{id}` + FCM `new_trip_in_queue` with `room_id`) and restarts its wait window.",
         "operationId": "join_room",
         "requestBody": {
           "content": {
@@ -2091,6 +2091,265 @@
         ]
       }
     },
+    "/api/admin/pricing/peak-rules": {
+      "get": {
+        "tags": [
+          "Pricing"
+        ],
+        "summary": "List peak-time rules",
+        "description": "List every peak-time surcharge rule, enabled or not.\n\n**Features:**\n- Returns `{ \"rules\": PeakRule[] }`, ordered by `start_time`, then `name`. Not paginated (the table holds a handful of rules).\n- Times are `\"HH:MM\"` Asia/Baghdad local time; days are 0 = Sunday ... 6 = Saturday; dates are `\"YYYY-MM-DD\"` or null.\n- An `end_time` earlier than `start_time` is an overnight window that belongs to the day it starts on.\n- Rules apply only while the `pricing.peak_enabled` setting is `'true'`; the highest matching percent wins, capped by `pricing.peak_max_percent`.\n\n**Use Cases:**\n- Dashboard Setup > Peak times: the rules table and the weekly overview grid.",
+        "operationId": "list_peak_rules",
+        "responses": {
+          "200": {
+            "description": "All peak-time rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakRuleList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not an admin"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Pricing"
+        ],
+        "summary": "Create a peak-time rule",
+        "description": "Create a peak-time surcharge rule. It applies to new fares immediately (estimates and bookings read the rules on every request).\n\n**Features:**\n- Name is trimmed; days are stored sorted; trip types are stored in `regular, box` order; blank dates are stored as null.\n- `trip_types` defaults to both and `enabled` to true when omitted; empty or omitted `zone_ids` = all zones.\n- Publishes a `pricing.peak_rule.created` event on `rt:admin:ops` (audit log + live admin feed).\n\n**Behavior:**\n1. Validate every field (see Restrictions), then check each zone id exists.\n2. Insert the rule with `updated_by` = the caller.\n3. Return the stored rule (201).\n\n**Restrictions:**\n- Super-admin only.\n- Any invalid field is 400 `{\"error\":\"invalid_peak_rule: <field>\"}`, naming the first failing field: `name` (trimmed 1..80 characters, no control characters), `days_of_week` (non-empty, unique, each 0..6), `start_time` / `end_time` (`\"HH:MM\"` 24h; `end_time` also when equal to `start_time`), `surcharge_percent` (1..200), `trip_types` (non-empty subset of `regular`, `box`), `zone_ids` (every id must exist), `valid_from` / `valid_to` (`\"YYYY-MM-DD\"`; `valid_to` also when before `valid_from`).",
+        "operationId": "create_peak_rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeakRuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Rule created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid field: `{\"error\":\"invalid_peak_rule: <field>\"}`"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not a super-admin"
+          },
+          "422": {
+            "description": "Body is not valid JSON of this shape (e.g. a missing required field or a non-integer day)"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/pricing/peak-rules/preview": {
+      "get": {
+        "tags": [
+          "Pricing"
+        ],
+        "summary": "Preview peak pricing at a moment",
+        "description": "Report what peak pricing would charge at a given moment, for the dashboard's \"Test a time\" panel.\n\n**Returns:**\n- `peak_enabled` and `max_percent`: the current master switch and cap settings.\n- `peak_percent`: the percent a trip would be charged (highest matching rule, capped at `max_percent`); 0 when the switch is off or nothing matches.\n- `rule`: the winning rule, or null whenever `peak_percent` is 0.\n- `matched_rule_ids`: every enabled rule that matches the moment, listed by start time then name -- reported even while the switch is off.\n\n**Behavior:**\n- `at` (RFC3339, default now) is converted to Asia/Baghdad local time; a window's day and date are those it starts on.\n- `trip_type` is `regular` (default) or `box`.\n- With `lat` + `lng`, zone-limited rules match when that pickup point is inside one of their zones; without a point they never match.\n\n**Use Cases:**\n- Checking a schedule before or after an edit (\"Peak +20% -- Morning rush\" or \"No peak at this time\").\n\n**Restrictions:**\n- Any admin role.\n- A bad parameter is 400 `{\"error\":\"invalid_peak_preview: <param>\"}` (`at` not RFC3339, `trip_type` not regular/box, `lat`/`lng` out of range or only one of them sent).",
+        "operationId": "preview_peak_rules",
+        "parameters": [
+          {
+            "name": "at",
+            "in": "query",
+            "description": "The moment to test, RFC3339 (e.g. `2026-09-27T07:45:00+03:00` or\n`2026-09-27T04:45:00Z`). Omitted = now. Evaluated in Asia/Baghdad time.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trip_type",
+            "in": "query",
+            "description": "`\"regular\"` (default) or `\"box\"`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "description": "Pickup latitude (WGS84). Send with `lng` to test zone-limited rules;\nwithout a point, zone-limited rules never match. A non-numeric value\nreturns 400 `invalid_peak_preview: lat` (parsed by hand for that code).",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "description": "Pickup longitude (WGS84). Send with `lat`.",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Peak pricing at that moment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad parameter: `{\"error\":\"invalid_peak_preview: <param>\"}`"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not an admin"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/pricing/peak-rules/{id}": {
+      "put": {
+        "tags": [
+          "Pricing"
+        ],
+        "summary": "Replace a peak-time rule",
+        "description": "Replace every editable field of a peak-time rule (a full PUT, not a partial update). Used for edits and for the inline enabled toggle (send the whole rule with `enabled` flipped).\n\n**Updatable Fields:**\n- `name`, `days_of_week`, `start_time`, `end_time`, `surcharge_percent`, `trip_types`, `zone_ids`, `valid_from`, `valid_to`, `enabled`. Omitted optional fields take their defaults (`trip_types` both, `zone_ids` empty, dates null, `enabled` true), exactly as on create.\n- `updated_at` is set to now and `updated_by` to the caller; `created_at` is kept.\n- Publishes a `pricing.peak_rule.updated` event on `rt:admin:ops` with the before/after rule.\n\n**Restrictions:**\n- Super-admin only.\n- 404 when no rule has this id (checked before validation).\n- The same field rules as create: 400 `{\"error\":\"invalid_peak_rule: <field>\"}`.",
+        "operationId": "update_peak_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Peak rule id (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeakRuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Rule replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid field: `{\"error\":\"invalid_peak_rule: <field>\"}`"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not a super-admin"
+          },
+          "404": {
+            "description": "No rule with this id"
+          },
+          "422": {
+            "description": "Body is not valid JSON of this shape"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Pricing"
+        ],
+        "summary": "Delete a peak-time rule",
+        "description": "Permanently delete a peak-time rule.\n\n**Behavior:**\n- The rule stops applying to new fares at once. Trips already booked keep their `peak_percent` / `peak_extra_iqd` snapshot.\n- Publishes a `pricing.peak_rule.deleted` event on `rt:admin:ops` with the deleted rule as `before`.\n- Returns 204 with no body.\n\n**Restrictions:**\n- Super-admin only.\n- Irreversible; to pause a rule instead, PUT it with `enabled: false`.\n- 404 when no rule has this id.",
+        "operationId": "delete_peak_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Peak rule id (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Rule deleted"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not a super-admin"
+          },
+          "404": {
+            "description": "No rule with this id"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/admin/promo-codes": {
       "get": {
         "tags": [
@@ -2817,7 +3076,7 @@
           "Admin Operations"
         ],
         "summary": "Update a setting value",
-        "description": "Update one org setting after key, read-only, and per-key range validation.\n\n**Updatable Fields:**\n- `value` only; the key is taken from the path. Always sent as a string.\n\n**Behavior:**\n1. Verifies the key exists; unknown keys 404.\n2. Rejects read-only keys (`general.timezone`, `general.currency`) with 400.\n3. Range/format-checks the value per key (e.g. `pricing.*_per_km_iqd` incl. tier1/tier2 100-10000, `pricing.tier_threshold_km` 1-100, `pricing.round_to_iqd` 1-1000, `pricing.box_surcharge_iqd` 0-20000 (integer IQD Box fee), `room.default_max_riders` 2-6, `room.min_riders_to_offer` 1-6, `general.locale` ar-IQ|en, phone keys E.164-ish).\n4. Persists and publishes a `setting.updated` audit event with before/after.\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- Out-of-range, unparseable, or read-only values return 400.",
+        "description": "Update one org setting after key, read-only, and per-key range validation.\n\n**Updatable Fields:**\n- `value` only; the key is taken from the path. Always sent as a string.\n\n**Behavior:**\n1. Verifies the key exists; unknown keys 404.\n2. Rejects read-only keys (`general.timezone`, `general.currency`) with 400.\n3. Range/format-checks the value per key (e.g. `pricing.*_per_km_iqd` incl. tier1/tier2 100-10000, `pricing.tier_threshold_km` 1-100, `pricing.round_to_iqd` 1-1000, `pricing.box_surcharge_iqd` 0-20000 (integer IQD Box fee), `pricing.peak_enabled` and `pricing.use_road_distance` true|false, `pricing.peak_max_percent` 0-200, `pricing.road_fallback_factor_percent` 100-250, `room.default_max_riders` 2-6, `room.min_riders_to_offer` 1-6, `general.locale` ar-IQ|en, phone keys E.164-ish).\n4. Persists and publishes a `setting.updated` audit event with before/after.\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- Out-of-range, unparseable, or read-only values return 400.",
         "operationId": "update_setting",
         "parameters": [
           {
@@ -8173,7 +8432,7 @@
           "Scheduling"
         ],
         "summary": "Book a scheduled trip",
-        "description": "Creates a future scheduled trip intent for the authenticated rider. The trip is stored as 'pending' and later promoted to a live REQUESTED trip by the scheduler worker when it comes due.\n\n**Features:**\n- Sets `rider_id` from the JWT and starts the trip in 'pending' status.\n- Publishes a `beep.scheduled_trip.created` realtime event on the rider channel.\n- Promotion to a live trip happens later via the 60-second scheduler tick, not on this call.\n- `star` books a car class (1, 2, or 3; omitted = 1). It is priced from the same per-star per-km rates as an immediate `POST /api/trips` request, and is carried onto the promoted trip's `requested_star` so dispatch looks for the class that was paid for.\n\n**Behavior:**\n1. Validate `scheduled_for` is at least 30 minutes and at most 7 days from now.\n2. Validate `trip_type` is exactly 'regular' (Abriyah scheduling is not supported in v1).\n3. Validate `star` is 1, 2, or 3 when supplied.\n4. Persist the pending scheduled trip and emit the created event.\n\n**Restrictions:**\n- `scheduled_for` is RFC3339/ISO 8601 UTC; under 30 minutes ahead returns 400, over 7 days ahead returns 400.\n- `trip_type` must be 'regular'; any other value returns 400.\n- `star` must be 1, 2, or 3; any other value returns 400 (it is rejected, not clamped). The class cannot be changed afterwards -- cancel and rebook.\n- The fare is not computed or quoted here; it is struck at promotion from the rates in force at that moment. Use `GET /api/trips/estimate` with the same `star` for a pre-booking figure.\n- Pickup and dropoff must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- Coordinates are WGS84 lat/lng.",
+        "description": "Creates a future scheduled trip intent for the authenticated rider. The trip is stored as 'pending' and later promoted to a live REQUESTED trip by the scheduler worker when it comes due.\n\n**Features:**\n- Sets `rider_id` from the JWT and starts the trip in 'pending' status.\n- Publishes a `beep.scheduled_trip.created` realtime event on the rider channel.\n- Promotion to a live trip happens later via the 60-second scheduler tick, not on this call.\n- `star` books a car class (1, 2, or 3; omitted = 1). It is priced from the same per-star per-km rates as an immediate `POST /api/trips` request, and is carried onto the promoted trip's `requested_star` so dispatch looks for the class that was paid for.\n\n**Behavior:**\n1. Validate `scheduled_for` is at least 30 minutes and at most 7 days from now.\n2. Validate `trip_type` is exactly 'regular' (Abriyah scheduling is not supported in v1).\n3. Validate `star` is 1, 2, or 3 when supplied.\n4. Persist the pending scheduled trip and emit the created event.\n\n**Restrictions:**\n- `scheduled_for` is RFC3339/ISO 8601 UTC; under 30 minutes ahead returns 400, over 7 days ahead returns 400.\n- `trip_type` must be 'regular'; any other value returns 400.\n- `star` must be 1, 2, or 3; any other value returns 400 (it is rejected, not clamped). The class cannot be changed afterwards -- cancel and rebook.\n- The fare is not computed or quoted here; it is struck at promotion from the rates in force at that moment. Use `GET /api/trips/estimate` with the same `star` and `scheduled_for=<RFC3339 pickup time>` for a pre-booking figure; `scheduled_for` makes it include the peak-time surcharge in force at pickup, which is what promotion charges.\n- Pickup and dropoff must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- Coordinates are WGS84 lat/lng.",
         "operationId": "create_scheduled_trip",
         "requestBody": {
           "content": {
@@ -8897,7 +9156,7 @@
           "Trips"
         ],
         "summary": "Request a regular trip",
-        "description": "Create a regular point-to-point trip request as the authenticated rider.\n\n**Features:**\n- Fare is computed server-side from a haversine distance between pickup and dropoff (WGS84 lat/lng) using the admin-configurable tiered normal-taxi rate.\n- Tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, then rounded UP to the nearest `round_to_iqd`. Defaults: base 2000, 250 IQD/km up to 10 km, 125 IQD/km beyond, rounded up to 250 IQD. All values are editable from admin settings (`pricing.regular_*`, `pricing.tier_threshold_km`, `pricing.round_to_iqd`).\n- Fare and base fare are returned in integer IQD (no decimals).\n- On creation the trip is fire-and-forget dispatched: a background broadcast publishes `beep.trip.requested` to the nearest captains.\n\n**Behavior:**\n1. Reject if the rider already has an active (non-terminal) trip.\n2. Compute distance, per-km rate, and total fare; create the trip in status `requested`.\n3. Spawn the dispatch broadcast (failures are logged, not surfaced to the caller).\n\n**Restrictions:**\n- Requires a valid bearer token; `claims.sub` is used as the rider id.\n- One active trip per rider; a second concurrent request is rejected with 409.\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.",
+        "description": "Create a regular point-to-point trip request as the authenticated rider.\n\n**Features:**\n- Fare is computed server-side from the ROAD distance between pickup and dropoff (WGS84 lat/lng), from the self-hosted routing engine (OSRM), using the admin-configurable tiered rate of the requested `star`. When routing is unavailable (error, 2.5 s timeout, or not configured) the straight-line distance x `pricing.road_fallback_factor_percent` / 100 (default 140) is used instead, so booking never fails because routing is down; with `pricing.use_road_distance = 'false'` the plain straight line is used. `distance_km` on the trip is the km actually priced.\n- Tiered model: `ride = base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`; during a peak-time rule `round(ride * peak_percent / 100)` is added; the total is rounded UP to the nearest `round_to_iqd`. All values are admin settings (`pricing.star{1,2,3}_tier{1,2}_per_km_iqd`, `pricing.regular_base_fare_iqd`, `pricing.tier_threshold_km`, `pricing.round_to_iqd`) or peak rules (`/api/admin/pricing/peak-rules`).\n- The trip snapshots `peak_percent` and `peak_extra_iqd` (what peak added after rounding, already inside `fare_iqd`). The price equals what `GET /api/trips/estimate` quoted for the same route, star and moment.\n- Fare and base fare are returned in integer IQD (no decimals).\n- On creation the trip is fire-and-forget dispatched: a background broadcast publishes `beep.trip.requested` to the nearest captains.\n\n**Behavior:**\n1. Reject if the rider already has an active (non-terminal) trip.\n2. Compute distance, per-km rate, and total fare; create the trip in status `requested`.\n3. Spawn the dispatch broadcast (failures are logged, not surfaced to the caller).\n\n**Restrictions:**\n- Requires a valid bearer token; `claims.sub` is used as the rider id.\n- One active trip per rider; a second concurrent request is rejected with 409.\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.",
         "operationId": "request_trip",
         "requestBody": {
           "content": {
@@ -8980,7 +9239,7 @@
           "Trips"
         ],
         "summary": "Book a Box (parcel delivery) trip",
-        "description": "Create a Box trip as the authenticated rider: a captain picks up the rider's items at the pickup pin and delivers them to a recipient at the dropoff pin.\n\n**Features:**\n- Priced server-side for the requested `star` exactly like a regular trip, plus the admin-editable Box fee (`pricing.box_surcharge_iqd`, seeded 500) added BEFORE the round-up to `pricing.round_to_iqd`. `GET /api/trips/estimate?trip_type=box&star=N` returns the same number.\n- A promo code applies to the Box gross fare (fee included) exactly as for a regular trip; the returned `fare_iqd` is net of `discount_iqd`.\n- Addresses are trimmed, blanks become null, and a missing one is filled from the nearest known place.\n- The trip row (`trip_type='box'`, `status='requested'`, `requested_star=star`) and its parcel row are inserted in ONE transaction, so a Box trip never exists without its parcel.\n- Dispatch is fire-and-forget and identical to regular: exact-star captains first, then higher stars after `dispatch.star_widen_after_seconds`. Captains see the description and first photo, never the recipient phone.\n\n**Behavior:**\n1. 400 `outside_service_area` if either pin is outside Iraq.\n2. 400 `invalid_box_description` unless the trimmed `description` is 3-500 characters with no control characters other than line breaks and tabs (missing or null is the same 400).\n3. 400 `invalid_recipient_phone` unless `recipient_phone` normalizes to `9647XXXXXXXXX` (accepts `07XXXXXXXXX`, `7XXXXXXXXX`, `9647XXXXXXXXX`, `+9647XXXXXXXXX`, `009647XXXXXXXXX`; Arabic-Indic digits and spaces tolerated).\n4. 400 `invalid_box_photos` for more than 3 `photo_keys`, a duplicate, a key that is not `box-photos/{your rider id}/{lowercase uuid}`, or a photo that is missing from storage, is not an image, or is larger than 8 MiB (each key is checked with a HEAD).\n5. 409 `{\"error\":\"rider already has an active trip\",\"active_trip_id\":\"...\"}` when the rider already has a non-terminal trip.\n6. Price, resolve the promo (existing promo 400s unchanged), insert trip + parcel, commit the promo reservation (on failure the trip and parcel are deleted and the promo error is returned).\n7. Return 201 with the `Trip` (`trip_type: \"box\"`) and start the dispatch broadcast.\n\n**Restrictions:**\n- Rider role only; any other role gets 403.\n- One active trip per rider (any type).\n- `recipient_name` has control characters removed, is trimmed, blank becomes null, capped at 120 characters.\n- The parcel (description, photos, recipient) is NOT on the `Trip`; read it with `GET /api/trips/{id}/box`.",
+        "description": "Create a Box trip as the authenticated rider: a captain picks up the rider's items at the pickup pin and delivers them to a recipient at the dropoff pin.\n\n**Features:**\n- Priced server-side for the requested `star` exactly like a regular trip (ROAD distance from the routing engine, falling back to the straight line x `pricing.road_fallback_factor_percent` / 100 when routing is unavailable; any peak-time surcharge in force now, applied to the ride part only), plus the admin-editable Box fee (`pricing.box_surcharge_iqd`, seeded 500) added BEFORE the round-up to `pricing.round_to_iqd`. `GET /api/trips/estimate?trip_type=box&star=N` returns the same number. The trip snapshots `peak_percent` and `peak_extra_iqd`.\n- A promo code applies to the Box gross fare (fee included) exactly as for a regular trip; the returned `fare_iqd` is net of `discount_iqd`.\n- Addresses are trimmed, blanks become null, and a missing one is filled from the nearest known place.\n- The trip row (`trip_type='box'`, `status='requested'`, `requested_star=star`) and its parcel row are inserted in ONE transaction, so a Box trip never exists without its parcel.\n- Dispatch is fire-and-forget and identical to regular: exact-star captains first, then higher stars after `dispatch.star_widen_after_seconds`. Captains see the description and first photo, never the recipient phone.\n\n**Behavior:**\n1. 400 `outside_service_area` if either pin is outside Iraq.\n2. 400 `invalid_box_description` unless the trimmed `description` is 3-500 characters with no control characters other than line breaks and tabs (missing or null is the same 400).\n3. 400 `invalid_recipient_phone` unless `recipient_phone` normalizes to `9647XXXXXXXXX` (accepts `07XXXXXXXXX`, `7XXXXXXXXX`, `9647XXXXXXXXX`, `+9647XXXXXXXXX`, `009647XXXXXXXXX`; Arabic-Indic digits and spaces tolerated).\n4. 400 `invalid_box_photos` for more than 3 `photo_keys`, a duplicate, a key that is not `box-photos/{your rider id}/{lowercase uuid}`, or a photo that is missing from storage, is not an image, or is larger than 8 MiB (each key is checked with a HEAD).\n5. 409 `{\"error\":\"rider already has an active trip\",\"active_trip_id\":\"...\"}` when the rider already has a non-terminal trip.\n6. Price, resolve the promo (existing promo 400s unchanged), insert trip + parcel, commit the promo reservation (on failure the trip and parcel are deleted and the promo error is returned).\n7. Return 201 with the `Trip` (`trip_type: \"box\"`) and start the dispatch broadcast.\n\n**Restrictions:**\n- Rider role only; any other role gets 403.\n- One active trip per rider (any type).\n- `recipient_name` has control characters removed, is trimmed, blank becomes null, capped at 120 characters.\n- The parcel (description, photos, recipient) is NOT on the `Trip`; read it with `GET /api/trips/{id}/box`.",
         "operationId": "request_box_trip",
         "requestBody": {
           "content": {
@@ -9029,7 +9288,7 @@
           "Trips"
         ],
         "summary": "Estimate a fare before requesting",
-        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals).\n- `distance_km`: the haversine distance between pickup and dropoff (WGS84 lat/lng) in km.\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- `discount_iqd` / `final_fare_iqd`: the potential promo discount and `max(0, fare_iqd - discount_iqd)`.\n- `surcharge_iqd`: the Box fee already included in `fare_iqd` (the current `pricing.box_surcharge_iqd`); 0 for regular and Abriyah.\n- Fare uses the admin-configurable tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, rounded UP to the nearest `round_to_iqd`. `trip_type=abriyah` selects the Abriyah tiers/base; `trip_type=box` uses the `star` normal-taxi tiers with the Box fee added BEFORE the round-up (so Box fares stay on the same grid, and equal what `POST /api/trips/box` charges); any other value (or omitted) uses the `star` normal-taxi tiers. `zone_id` no longer changes the per-km rate (pricing is global per type).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Abriyah pricing preview by passing `trip_type=abriyah`.\n- Box price preview by passing `trip_type=box&star=1|2|3`.\n\n**Restrictions:**\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.",
+        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals), Box fee and peak surcharge included.\n- `distance_km`: the pricing distance in km -- the ROAD distance from the routing engine (OSRM) when `distance_source` is `road`.\n- `distance_source`: `road` | `straight_fallback` (routing unavailable: error, 2.5 s timeout or not configured; straight line x `pricing.road_fallback_factor_percent` / 100, default 140) | `straight` (`pricing.use_road_distance = 'false'`: plain straight line).\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- `discount_iqd` / `final_fare_iqd`: the potential promo discount (applied to `fare_iqd`) and `max(0, fare_iqd - discount_iqd)`.\n- `surcharge_iqd`: the Box fee already included in `fare_iqd` (the current `pricing.box_surcharge_iqd`); 0 for regular and Abriyah.\n- `peak_percent` / `peak_extra_iqd` / `peak_label`: the peak-time surcharge in force (0 / 0 / null when none), the IQD it adds after rounding (already inside `fare_iqd`), and the rule's name. Always 0 / 0 / null for Abriyah.\n- Fare model: `ride = base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`; `fare = round_up_to(round_to_iqd, ride + round(ride * peak_percent / 100) + box_fee)`; `peak_extra_iqd = fare - round_up_to(round_to_iqd, ride + box_fee)`. `trip_type=abriyah` selects the Abriyah tiers/base (no peak); `trip_type=box` uses the `star` normal-taxi tiers plus the Box fee (equal to what `POST /api/trips/box` charges); any other value (or omitted) uses the `star` normal-taxi tiers (equal to what `POST /api/trips` charges). `zone_id` no longer changes the per-km rate (pricing is global per type). The three star estimates and the booking share one cached route (900 s), so they always agree.\n- Peak time is evaluated in Asia/Baghdad time NOW, or at `scheduled_for` when given (a scheduled trip is charged at its scheduled pickup time).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Abriyah pricing preview by passing `trip_type=abriyah`.\n- Box price preview by passing `trip_type=box&star=1|2|3`.\n\n**Restrictions:**\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- `scheduled_for`, when given, must be RFC3339, else 400 `{\"error\":\"invalid_scheduled_for\"}`.",
         "operationId": "fare_estimate_public",
         "parameters": [
           {
@@ -9116,6 +9375,18 @@
               ],
               "format": "int32"
             }
+          },
+          {
+            "name": "scheduled_for",
+            "in": "query",
+            "description": "Optional RFC3339 pickup time for a SCHEDULED trip (e.g.\n`2026-09-27T07:45:00+03:00`): peak time is evaluated at that moment,\nexactly as the scheduled promotion will charge. Omitted = now.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -9130,7 +9401,7 @@
             }
           },
           "400": {
-            "description": "Malformed or missing query parameters, or a point outside Iraq (`{\"error\":\"outside_service_area\"}`)"
+            "description": "Malformed or missing query parameters, a point outside Iraq (`{\"error\":\"outside_service_area\"}`), or a bad `scheduled_for` (`{\"error\":\"invalid_scheduled_for\"}`)"
           }
         }
       }
@@ -12714,6 +12985,15 @@
           }
         }
       },
+      "DistanceSource": {
+        "type": "string",
+        "description": "Where a trip's pricing distance came from.",
+        "enum": [
+          "road",
+          "straight_fallback",
+          "straight"
+        ]
+      },
       "DocumentCompletenessResponse": {
         "type": "object",
         "description": "Document-upload completeness for a captain (drives the approval gate).",
@@ -12940,7 +13220,10 @@
           "currency",
           "discount_iqd",
           "final_fare_iqd",
-          "surcharge_iqd"
+          "surcharge_iqd",
+          "peak_percent",
+          "peak_extra_iqd",
+          "distance_source"
         ],
         "properties": {
           "base_fare_iqd": {
@@ -12960,17 +13243,41 @@
           "distance_km": {
             "type": "number",
             "format": "double",
-            "description": "Estimated trip distance in kilometres."
+            "description": "The pricing distance in kilometres: road km when `distance_source` is\n`\"road\"`, otherwise the straight-line fallback (see `distance_source`)."
+          },
+          "distance_source": {
+            "$ref": "#/components/schemas/DistanceSource",
+            "description": "Where `distance_km` came from: `\"road\"` (routing engine), `\"straight_fallback\"`\n(routing unavailable: straight line x `pricing.road_fallback_factor_percent`),\nor `\"straight\"` (road pricing switched off)."
           },
           "fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "Estimated total fare in integer IQD (no decimals)."
+            "description": "Estimated total fare in integer IQD (no decimals). Includes the Box fee\n(`surcharge_iqd`) and any peak surcharge (`peak_extra_iqd`)."
           },
           "final_fare_iqd": {
             "type": "integer",
             "format": "int64",
             "description": "Fare after the discount: max(0, fare_iqd - discount_iqd)."
+          },
+          "peak_extra_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Integer IQD the peak surcharge adds after rounding; already included in\n`fare_iqd`. 0 when there is no peak.",
+            "example": 750
+          },
+          "peak_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of the peak-time rule in force (admin-entered, may be Arabic);\nnull when `peak_percent` is 0.",
+            "example": "Morning rush"
+          },
+          "peak_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Peak-time surcharge percent in force for this trip (0 when none; always\n0 for Abriyah).",
+            "example": 20
           },
           "surcharge_iqd": {
             "type": "integer",
@@ -13908,6 +14215,268 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp of the last status change (RFC3339)."
+          }
+        }
+      },
+      "PeakPreviewResponse": {
+        "type": "object",
+        "description": "`GET /api/admin/pricing/peak-rules/preview` body: what peak pricing would\ncharge at a given moment.",
+        "required": [
+          "peak_enabled",
+          "max_percent",
+          "peak_percent",
+          "matched_rule_ids"
+        ],
+        "properties": {
+          "matched_rule_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Every enabled rule whose days, time window, dates, trip type and zones\nmatch that moment, in list order -- reported even when the master\nswitch is off, so admins can see what would apply."
+          },
+          "max_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current `pricing.peak_max_percent` cap (0..200).",
+            "example": 50
+          },
+          "peak_enabled": {
+            "type": "boolean",
+            "description": "Current `pricing.peak_enabled` master switch."
+          },
+          "peak_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Percent a trip would be charged at that moment: the highest matching\nrule, capped at `max_percent`; 0 when the switch is off or nothing\nmatches.",
+            "example": 20
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PeakRule",
+                "description": "The winning rule; null whenever `peak_percent` is 0."
+              }
+            ]
+          }
+        }
+      },
+      "PeakRule": {
+        "type": "object",
+        "description": "A peak-time surcharge rule, evaluated in Asia/Baghdad local time.\n\nWhile a rule applies, `surcharge_percent` is added to the ride fare of a\nregular or Box trip (never to the Box fee). When several rules apply the\nHIGHEST percent wins, capped by the `pricing.peak_max_percent` setting, and\nnothing applies while `pricing.peak_enabled` is `'false'`.",
+        "required": [
+          "id",
+          "name",
+          "days_of_week",
+          "start_time",
+          "end_time",
+          "surcharge_percent",
+          "trip_types",
+          "zone_ids",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rule was created (RFC3339)."
+          },
+          "days_of_week": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Days the window STARTS on, Baghdad local: 0 = Sunday ... 6 = Saturday.\nUnique, sorted ascending, never empty.",
+            "example": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Disabled rules are kept but never apply."
+          },
+          "end_time": {
+            "type": "string",
+            "description": "Window end, 24h `\"HH:MM\"` Baghdad local time (exclusive). Earlier than\n`start_time` means the window crosses midnight and belongs to the day\nit starts on (e.g. Thursday 22:00-02:00 covers Friday 00:00-02:00).",
+            "example": "09:00"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Rule id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Admin-entered name (may be Arabic), 1..80 characters. Shown as the peak\nlabel on fare estimates.",
+            "example": "Morning rush"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "Window start, 24h `\"HH:MM\"` Baghdad local time (inclusive).",
+            "example": "07:30"
+          },
+          "surcharge_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Surcharge on the ride fare while the rule applies, 1..200 percent.",
+            "example": 20
+          },
+          "trip_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Trip types the rule prices: a non-empty subset of `\"regular\"`, `\"box\"`.",
+            "example": [
+              "regular",
+              "box"
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rule was last changed (RFC3339)."
+          },
+          "valid_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "First Baghdad calendar date (inclusive) the rule applies on, as\n`\"YYYY-MM-DD\"`; null = no start limit. Compared with the date the\nwindow starts on."
+          },
+          "valid_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Last Baghdad calendar date (inclusive) the rule applies on, as\n`\"YYYY-MM-DD\"`; null = no end limit."
+          },
+          "zone_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Zones the PICKUP point must be inside for the rule to apply. Empty =\neverywhere."
+          }
+        }
+      },
+      "PeakRuleInput": {
+        "type": "object",
+        "description": "Create / replace body for a peak-time rule: [`PeakRule`] without `id`,\n`created_at` and `updated_at`. A PUT replaces every field.\n\nAny invalid field is a 400 `{\"error\":\"invalid_peak_rule: <field>\"}` naming\nthe first offending field.",
+        "required": [
+          "name",
+          "days_of_week",
+          "start_time",
+          "end_time",
+          "surcharge_percent"
+        ],
+        "properties": {
+          "days_of_week": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Non-empty, unique, each 0 (Sunday) ..6 (Saturday). Stored sorted.",
+            "example": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Defaults to true when omitted."
+          },
+          "end_time": {
+            "type": "string",
+            "description": "24h `\"HH:MM\"`, Baghdad local time; must differ from `start_time`. An end\nbefore the start means an overnight window.",
+            "example": "09:00"
+          },
+          "name": {
+            "type": "string",
+            "description": "Trimmed to 1..80 characters; no control characters.",
+            "example": "Morning rush"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "24h `\"HH:MM\"`, Baghdad local time.",
+            "example": "07:30"
+          },
+          "surcharge_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1..200.",
+            "example": 20
+          },
+          "trip_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Non-empty subset of `\"regular\"`, `\"box\"`. Defaults to both when omitted.",
+            "example": [
+              "regular",
+              "box"
+            ]
+          },
+          "valid_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "`\"YYYY-MM-DD\"` or null (an empty string is read as null).",
+            "example": "2026-10-01"
+          },
+          "valid_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "`\"YYYY-MM-DD\"` or null (an empty string is read as null); not before\n`valid_from`.",
+            "example": "2026-12-31"
+          },
+          "zone_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Pickup zones the rule is limited to; every id must exist. Empty or\nomitted = all zones."
+          }
+        }
+      },
+      "PeakRuleList": {
+        "type": "object",
+        "description": "`GET /api/admin/pricing/peak-rules` body.",
+        "required": [
+          "rules"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PeakRule"
+            },
+            "description": "Every rule (enabled or not), ordered by `start_time`, then `name`."
           }
         }
       },
@@ -15721,6 +16290,8 @@
           "base_fare_iqd",
           "currency",
           "discount_iqd",
+          "peak_percent",
+          "peak_extra_iqd",
           "requested_at",
           "version",
           "updated_at"
@@ -15796,7 +16367,7 @@
           "distance_km": {
             "type": "number",
             "format": "double",
-            "description": "Estimated trip distance in kilometres."
+            "description": "The distance the fare was priced from, in kilometres: the road distance\nwhen routing was available, otherwise the straight line x the fallback\nfactor (or the plain straight line when road pricing is switched off)."
           },
           "distance_per_rider_km": {
             "type": [
@@ -15838,6 +16409,16 @@
             "type": "string",
             "format": "uuid",
             "description": "Unique trip identifier."
+          },
+          "peak_extra_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Integer IQD the peak surcharge added to the fare after rounding; 0 when\nnone. Already included in `fare_iqd` (it is not an extra charge on top)."
+          },
+          "peak_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Peak-time surcharge percent applied when the fare was struck (at booking,\nor at the scheduled pickup time for a scheduled trip); 0 when none.\nAlways 0 for Abriyah."
           },
           "pickup_address": {
             "type": [
@@ -17554,6 +18135,10 @@
     {
       "name": "Promo",
       "description": "Promo codes and rider discounts"
+    },
+    {
+      "name": "Pricing",
+      "description": "Peak-time surcharge rules (Asia/Baghdad schedule) and a pricing preview"
     }
   ]
 }
