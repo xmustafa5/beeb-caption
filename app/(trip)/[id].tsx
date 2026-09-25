@@ -29,9 +29,28 @@ import { getRoute } from '@/services/routing'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
 import { openDialer } from '@/lib/phone'
-import { nearestOf } from '@/lib/nav-links'
+import { distanceKm, nearestOf } from '@/lib/nav-links'
 import { NavigateButtons } from '@/components/captain/navigate-buttons'
 import { parseApiError } from '@/lib/api'
+
+/**
+ * How far the captain must drive before we ask for a new route line.
+ *
+ * GPS fixes land every 15 m (the watch's distanceInterval; its timeInterval is
+ * Android-only), about one a second at city speed. Every fix is a new origin, so
+ * re-routing on each one misses both the app's and the backend's route cache and
+ * runs a fresh OSRM query each time. The rider's in-progress screen gates its
+ * line the same way; at 150 m a city drive re-routes roughly every half minute.
+ */
+const ROUTE_ORIGIN_MIN_MOVE_M = 150
+
+/** One leg of the drawn route: from where the captain was to the current target. */
+interface RouteLeg {
+  from: LatLng
+  to: LatLng
+  /** `lat,lng` of `to` — a change means a new target, not just a moved captain. */
+  targetKey: string
+}
 
 export default function LiveTripScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -104,23 +123,59 @@ export default function LiveTripScreen() {
         ? (location && nearestOf(location, pendingStops)) || pendingStops[0]
         : dropoff
 
-  // Route line from captain → target.
-  const routeTargetRef = useRef<string | null>(null)
+  // The leg the route line is drawn for: captain → target. Held in state rather
+  // than read straight off the GPS so it only advances in ROUTE_ORIGIN_MIN_MOVE_M
+  // steps (see the constant), or at once when the target itself changes.
+  const [routeLeg, setRouteLeg] = useState<RouteLeg | null>(null)
   useEffect(() => {
-    let cancelled = false
-    if (!location || !target) { setRouteCoords([]); routeTargetRef.current = null; return }
-    // Target flip (pickup → dropoff on trip start): drop the stale route right away
-    // instead of showing the old line until the new OSRM response lands. Ordinary
-    // GPS ticks keep the same target, so the line doesn't blink while driving.
+    if (!location || !target) { setRouteLeg(null); return }
     const targetKey = `${target.latitude},${target.longitude}`
-    if (routeTargetRef.current !== targetKey) {
-      routeTargetRef.current = targetKey
-      setRouteCoords([])
-    }
-    getRoute(location, target).then((r) => { if (!cancelled) setRouteCoords(r?.coords ?? []) })
-    return () => { cancelled = true }
+    setRouteLeg((prev) =>
+      prev &&
+      prev.targetKey === targetKey &&
+      distanceKm(prev.from, location) * 1000 < ROUTE_ORIGIN_MIN_MOVE_M
+        ? prev
+        : { from: location, to: target, targetKey },
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, target?.latitude, target?.longitude])
+
+  // Route line from captain → target.
+  const routeTargetRef = useRef<string | null>(null)
+  // Whether the line on screen is a road route (vs the straight-line fallback).
+  const hasRoadLineRef = useRef(false)
+  useEffect(() => {
+    let cancelled = false
+    if (!routeLeg) {
+      setRouteCoords([])
+      routeTargetRef.current = null
+      hasRoadLineRef.current = false
+      return
+    }
+    // Target flip (pickup → dropoff on trip start): drop the stale route right away
+    // instead of showing the old line until the new OSRM response lands. A new
+    // origin to the same target keeps the line, so it doesn't blink while driving.
+    if (routeTargetRef.current !== routeLeg.targetKey) {
+      routeTargetRef.current = routeLeg.targetKey
+      hasRoadLineRef.current = false
+      setRouteCoords([])
+    }
+    const { from, to } = routeLeg
+    getRoute(from, to).then((r) => {
+      if (cancelled) return
+      if (r) {
+        hasRoadLineRef.current = true
+        setRouteCoords(r.coords)
+        return
+      }
+      // No route (router down, rate limited, offline, timeout): keep the road line
+      // already drawn to this same target rather than wiping it mid-drive; with none
+      // to keep, draw the straight line so the captain still sees where to head.
+      const keepRoadLine = hasRoadLineRef.current
+      setRouteCoords((prev) => (keepRoadLine && prev.length >= 2 ? prev : [from, to]))
+    })
+    return () => { cancelled = true }
+  }, [routeLeg])
 
   async function onPrimary() {
     setError(null)

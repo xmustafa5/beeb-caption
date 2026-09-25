@@ -9071,6 +9071,94 @@
         ]
       }
     },
+    "/api/routes/driving": {
+      "get": {
+        "tags": [
+          "Routing"
+        ],
+        "summary": "Get the driving route line between two points",
+        "description": "Return the road route from one point to another as a GeoJSON LineString for the rider and captain apps to draw on the map, from the backend's own routing engine (OSRM, car profile, Iraq map). The router itself is never exposed to the apps.\n\n**Features:**\n- `geometry.coordinates` is the full road polyline as `[longitude, latitude]` pairs (GeoJSON order, WGS84), at least 2 points, from the start to the end point (both snapped onto the nearest road). `distance_m` is the road length in metres and `duration_s` the driving time in seconds (no live traffic).\n- Same router, rounding and cache as fare pricing: the four coordinates are rounded to 5 decimals (about 1.1 m); a success is cached for 900 s (except a line of more than 2,000 points, such as a long intercity route, which is returned but not kept), and its distance is always also stored in the pricing route cache, so, while `pricing.use_road_distance` is on, a fare estimate for the same pickup and dropoff made afterwards reuses this exact answer (`distance_km` = `distance_m` / 1000 with `distance_source: \"road\"`).\n- Not affected by `pricing.use_road_distance` (that setting only changes how fares are priced).\n\n**Behavior:**\n1. Validate the four query parameters, else 400 `{\"error\":\"invalid_route_query: <param>\"}`.\n2. Both points must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n3. Return the cached route when there is one; otherwise ask the router (5 s budget, 1 s to connect).\n4. The router answers but finds no road (OSRM `NoRoute` / `NoSegment`, no routes, or fewer than 2 points): 404 `{\"error\":\"no_route\"}`.\n5. The router is not configured, unreachable, times out, or answers a 5xx or an unreadable body: 503 `{\"error\":\"routing_unavailable\"}` and a warning is logged.\n6. Only successes are cached.\n\n**Use Cases:**\n- Rider and captain apps: any route line on a map (for example pickup to dropoff while booking, or the car's way to the pickup).\n- On any non-200 answer, or a network failure, the app draws a straight line between the two points instead; no retry loop is needed.\n\n**Restrictions:**\n- Any valid bearer token (rider, captain or admin), else 401.\n- `from_lat`, `from_lng`, `to_lat`, `to_lng` are all required, in decimal degrees: latitudes -90..90, longitudes -180..180. A missing, blank, non-numeric, non-finite or out-of-range value is a 400 naming the first bad parameter, in the order from_lat, from_lng, to_lat, to_lng.\n- Counts toward the global per-IP rate limit (429 when exceeded).",
+        "operationId": "driving_route",
+        "parameters": [
+          {
+            "name": "from_lat",
+            "in": "query",
+            "description": "Start latitude, WGS84 decimal degrees (-90..90). Required.",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "example": 33.3152
+          },
+          {
+            "name": "from_lng",
+            "in": "query",
+            "description": "Start longitude, WGS84 decimal degrees (-180..180). Required.",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "example": 44.3661
+          },
+          {
+            "name": "to_lat",
+            "in": "query",
+            "description": "End latitude, WGS84 decimal degrees (-90..90). Required.",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "example": 33.297
+          },
+          {
+            "name": "to_lng",
+            "in": "query",
+            "description": "End longitude, WGS84 decimal degrees (-180..180). Required.",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "example": 44.405
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The driving route: road length, driving time and the GeoJSON line",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteGeometryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad parameter (`{\"error\":\"invalid_route_query: <param>\"}` with `<param>` one of from_lat, from_lng, to_lat, to_lng) or a point outside Iraq (`{\"error\":\"outside_service_area\"}`)"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "404": {
+            "description": "The router found no road between the two points: `{\"error\":\"no_route\"}`"
+          },
+          "429": {
+            "description": "Global per-IP rate limit exceeded"
+          },
+          "503": {
+            "description": "Routing is unavailable (not configured, unreachable, timed out, or failing): `{\"error\":\"routing_unavailable\"}`"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/trips": {
       "get": {
         "tags": [
@@ -13556,6 +13644,13 @@
           }
         }
       },
+      "LineStringType": {
+        "type": "string",
+        "description": "GeoJSON geometry type of a route line.",
+        "enum": [
+          "LineString"
+        ]
+      },
       "LiveRoomCard": {
         "type": "object",
         "description": "A live room card for the Operations Kanban.",
@@ -15819,6 +15914,72 @@
             "type": "string",
             "format": "uuid",
             "description": "The room the roster belongs to."
+          }
+        }
+      },
+      "RouteGeometryResponse": {
+        "type": "object",
+        "description": "`GET /api/routes/driving` body: one driving route between two points.",
+        "required": [
+          "distance_m",
+          "duration_s",
+          "geometry"
+        ],
+        "properties": {
+          "distance_m": {
+            "type": "number",
+            "format": "double",
+            "description": "Road length in metres: while road pricing is on\n(`pricing.use_road_distance`), the same distance a fare for this pair\nis priced from (`distance_source: \"road\"` on the estimate).",
+            "example": 5786.0
+          },
+          "duration_s": {
+            "type": "number",
+            "format": "double",
+            "description": "Estimated driving time in seconds (car profile, no live traffic).",
+            "example": 427.1
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/RouteLineString",
+            "description": "The road polyline (GeoJSON LineString, longitude first)."
+          }
+        }
+      },
+      "RouteLineString": {
+        "type": "object",
+        "description": "A GeoJSON LineString: the road polyline, longitude first.",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "properties": {
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            },
+            "description": "The polyline as `[longitude, latitude]` pairs (GeoJSON order, WGS84),\nfrom the start point to the end point along the road. At least 2\npoints. The ends are the points snapped onto the nearest road, so they\ncan sit a few metres from the requested coordinates.",
+            "example": [
+              [
+                44.36608,
+                33.315026
+              ],
+              [
+                44.366015,
+                33.315031
+              ],
+              [
+                44.404938,
+                33.297047
+              ]
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/LineStringType",
+            "description": "Always `\"LineString\"`."
           }
         }
       },
@@ -18139,6 +18300,10 @@
     {
       "name": "Pricing",
       "description": "Peak-time surcharge rules (Asia/Baghdad schedule) and a pricing preview"
+    },
+    {
+      "name": "Routing",
+      "description": "Driving route lines for the rider and captain maps, from the backend's own routing engine (OSRM)"
     }
   ]
 }

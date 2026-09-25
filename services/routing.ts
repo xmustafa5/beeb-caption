@@ -29,8 +29,8 @@ interface RouteGeometryResponse {
 const ROUTE_TIMEOUT_MS = 8000
 
 /**
- * Most distinct routes kept in memory. The captain's live-trip screen asks for a new route on
- * every GPS fix, and each answer is a few hundred points, so an unbounded map would grow for the
+ * Most distinct routes kept in memory. The captain's live-trip screen asks for a new route every
+ * 150 m it drives, and each answer is a few hundred points, so an unbounded map would grow for the
  * whole shift. The oldest entry goes first (a Map iterates in insertion order).
  */
 const CACHE_MAX_ENTRIES = 64

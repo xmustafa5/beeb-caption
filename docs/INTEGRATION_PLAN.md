@@ -76,7 +76,7 @@ Backend `https://beeb.madebyhaithem.com` is **UP, all 13 phases Live, partially 
 
 ### Phase 0 — Foundation (no UI change; unblocks everything)
 - `lib/api.ts`: axios instance, `baseURL: process.env.EXPO_PUBLIC_API_URL`, `timeout 30000`. Request interceptor injects `Authorization: Bearer <token>` from `useAuthStore.getState()`. Response interceptor: on `401` with Authorization set → `useAuthStore.getState().clear()` (no refresh token). **Branch on status, not body.**
-- `.env` + `app.json` extra: `EXPO_PUBLIC_API_URL=https://beeb.madebyhaithem.com`. Externalize the OSRM base URL too.
+- `.env` + `app.json` extra: `EXPO_PUBLIC_API_URL=https://beeb.madebyhaithem.com`. ~~Externalize the OSRM base URL too.~~ **Superseded 2026-09-25** — route lines come from `GET /api/routes/driving`; the apps hold no routing URL.
 - Start using TanStack **queries** with hierarchical keys (`['riders','me']`, `['trips']`, `['trips',id]`, `['zones']`).
 - Helpers: `parseApiError` (empty-body 401/402/429), integer-IQD formatter, `distance_km` rounding.
 

@@ -15,7 +15,7 @@ Cross-team handoff for the **Customer App**, **Captain App**, and **Admin Dashbo
 - **OpenAPI / Swagger.** The full, always-current request/response schema for every REST endpoint is at `GET /swagger-ui` (interactive) and the raw spec at `GET /api-docs/openapi.json`. **Import that spec into Postman or an API codegen tool** (e.g. openapi-generator, orval, swagger-codegen) to generate typed clients — it is the source of truth and supersedes any prose in this file where they disagree. This file is the narrative/flow overview; the spec is the field-level contract.
 - **Auth.** Every protected endpoint takes `Authorization: Bearer <jwt>`. There are three token kinds (rider, captain, admin) — see [Auth model](#auth-model-phase-1--live). WebSocket upgrades can't send headers, so they take the JWT as a `?token=` query param instead.
 - **Content type.** Request bodies are JSON (`Content-Type: application/json`). The API itself has **no multipart/file-upload endpoint** — captain document images are uploaded **directly to storage** via a backend-issued presigned PUT URL, then referenced by object key (see [Captain document upload](#captain-document-upload-important-for-the-captain-app)).
-- **Error envelope.** Every error response is a single-field JSON body `{ "error": "<human-readable message>" }`. There is no `message` field, no error `code` field, no nested structure. Status codes: `400` validation, `401` unauthenticated/expired/revoked token, `403` wrong role / not your resource, `404` not found, `409` conflict (duplicate, optimistic-lock loss, illegal state transition), `402` payment required (insufficient wallet balance / gateway reject), `429` rate-limited at the edge. Detail lives in the `error` string, e.g. `{ "error": "bad request: rate limited: too many OTP requests" }`.
+- **Error envelope.** Every error response is a single-field JSON body `{ "error": "<human-readable message>" }`. There is no `message` field, no error `code` field, no nested structure. Status codes: `400` validation, `401` unauthenticated/expired/revoked token, `403` wrong role / not your resource, `404` not found, `409` conflict (duplicate, optimistic-lock loss, illegal state transition), `402` payment required (insufficient wallet balance / gateway reject), `429` rate-limited at the edge, `503` a backend dependency is unavailable (today only `routing_unavailable` on `GET /api/routes/driving`). Detail lives in the `error` string, e.g. `{ "error": "bad request: rate limited: too many OTP requests" }`.
 - **Edge limits (enforced by the gateway, apply to every request).**
   - **Rate limit:** ~200 requests/second per client IP, burst 400. Exceeding it returns HTTP `429` (no JSON body guaranteed from the limiter layer). Back off and retry. **Exempt from the limiter (since 2026-06-17):** the high-frequency endpoints the apps poll continuously — `GET/POST /api/captain/location`, `POST /api/captain/location/flush`, `PUT /api/captain/online`, `GET/POST /api/captain/activation/today`, **`GET /api/trips` and `GET /api/trips/{id}`** (active-trip polling), **`GET /api/rider/trips/{id}/captain-location`** (live-car snapshot, refetched on every map open and reconnect), **`GET /api/rider/captains/nearby`** (idle-map nearby cars, polled ~every 6s while the pickup map is open), and the **WebSocket routes `/ws/captain` and `/ws/subscribe`** (a rate-limited handshake would break the live connection). These are not rate-limited (avoids 429s when several captains/testers share one NAT IP). All other endpoints — including `POST /api/trips` and trip mutations (accept/arrive/start/complete/cancel), auth, payments, admin — remain limited.
   - **Body size:** request bodies over **2 MiB** are rejected.
@@ -196,6 +196,7 @@ The border is Natural Earth 1:10m, pushed 2 km outward and simplified to 225 poi
 | Promo codes (discounts) | feature/promo-codes **Live** | `POST /api/rider/promo/validate` (pre-check, never HTTP-errors); `GET /api/trips/estimate` now returns `discount_iqd` + `final_fare_iqd`; `POST /api/trips` now accepts optional `promo_code` (400 on invalid/exhausted/already-used); `POST /api/trips/{id}/cancel` releases any reserved promo. See [Promo codes / discounts](#promo-codes--discounts--live) |
 | Box (parcel delivery) | 15 **Live (2026-09-25)** | **Photos:** `POST /api/rider/box/photos/upload-url` (rider, no body) → `{upload_url, object_key, expires_in}` → `PUT` the bytes to `upload_url` (**exactly** `Content-Type: image/jpeg` — it is a signed header; no auth header), once per photo (0-3), each **≤ 8 MiB** (checked at booking → `invalid_box_photos`). **Price:** `GET /api/trips/estimate?trip_type=box&star=1\|2\|3&...` → same shape plus **`surcharge_iqd`** (the Box fee already inside `fare_iqd`; 0 for non-box). **Book:** `POST /api/trips/box` `CreateBoxTripDto` → `201 Trip` (`trip_type:"box"`); 400 codes `outside_service_area` / `invalid_box_description` / `invalid_recipient_phone` / `invalid_box_photos`, 409 `active_trip_id` as for `POST /api/trips`. **Parcel card:** `GET /api/trips/{id}/box` → `BoxDetails`. Live screens, cancel, rating, proxy call and history are the regular ones. See [Box delivery](#box-delivery-phase-15--live) |
 | Road-distance pricing + peak times | 16 **Live (2026-09-25)** | **No rider-app change (product decision): the app shows nothing about peak time** -- the price simply includes it. `GET /api/trips/estimate` gains `peak_percent` (0 when none), `peak_extra_iqd` (already inside `fare_iqd`), `peak_label` (rule name or null), `distance_source` (`"road"`\|`"straight_fallback"`\|`"straight"`) and an optional `scheduled_for` (RFC3339) param; `distance_km` is now the **road** distance, so fares for the same pins are about 40% higher than the old straight-line price. `Trip` gains `peak_percent` / `peak_extra_iqd` (ignore them; the receipt's `total - base - box fee` distance line absorbs any peak amount, so the breakdown still sums to `fare_iqd`). See [Road-distance pricing & peak times](#road-distance-pricing--peak-times-phase-16--live) |
+| Route line on the map | **New 2026-09-25** (in code; live after the next deploy) | `GET /api/routes/driving?from_lat=&from_lng=&to_lat=&to_lng=` (rider token) → `{distance_m, duration_s, geometry:{type:"LineString", coordinates:[[lng,lat],...]}}` -- **longitude first**. Replaces the direct calls to the public `router.project-osrm.org` demo server in `services/routing.ts`. Any non-200 or network failure → draw the straight line as today. See [Route lines on the map](#route-lines-on-the-map-2026-09-25) |
 
 ### Captain App
 | Capability | Phase | Key endpoints |
@@ -213,6 +214,7 @@ The border is Natural Earth 1:10m, pushed 2 km outward and simplified to 225 poi
 | Live trip legs | 5 **Live** | `POST /api/trips/{id}/{arrive,start,complete}` |
 | Box offers + parcel card | 15 **Live (2026-09-25)** | Box trips arrive in the **same** `GET /api/captain/trip-queue` and are accepted with the **same** `POST /api/trips/{id}/accept` (same star rules). Every `CaptainOffer` now carries **`trip_type`** (`"regular"`\|`"box"`, null for rooms), **`box_description`**, **`box_photo_url`** (presigned first photo or null) and **`box_photo_count`** (0 for non-box). The `rt:captain:{id}` offer frame gains `trip_type`. Box FCM offers keep `new_trip_in_queue` with title "New delivery nearby". **The recipient phone is never in an offer:** after accepting, `GET /api/trips/{id}/box` (assigned captain, only while `accepted`/`in_progress`) → `BoxDetails` with the recipient phone for tap-to-call. See [Box delivery](#box-delivery-phase-15--live) |
 | Earnings | 5 **Live** | `GET /api/captains/{id}/earnings?period=today\|week\|month` (gross minus daily fee); `GET /api/captains/{id}/earnings/history` |
+| Route line on the map | **New 2026-09-25** (in code; live after the next deploy) | Same endpoint as the rider app, with the captain token: `GET /api/routes/driving?from_lat=&from_lng=&to_lat=&to_lng=` → `{distance_m, duration_s, geometry:{type:"LineString", coordinates:[[lng,lat],...]}}` -- **longitude first**. Replaces the direct calls to `router.project-osrm.org` in `services/routing.ts`. Any non-200 or network failure → draw the straight line as today. See [Route lines on the map](#route-lines-on-the-map-2026-09-25) |
 
 ### Admin Dashboard
 | Capability | Phase | Key endpoints |
@@ -854,6 +856,7 @@ Two pricing changes, both server-side. **Clients never compute fares** -- show `
 **1. Road distance.** Every fare (estimate for all trip types, `POST /api/trips`, `POST /api/trips/box`, scheduled promotion, Abriyah join) is priced from the **road** distance between pickup and dropoff, from a self-hosted OSRM router (car profile, Iraq map). Baghdad road routes are about 40% longer than the straight line, so **fares for the same pins went up accordingly**. `distance_km` (estimate and `Trip`) is the km actually priced.
 - `distance_source` on the estimate: `"road"` (router answered) | `"straight_fallback"` (router down, slow > 2.5 s, or not configured: straight line x `pricing.road_fallback_factor_percent` / 100, default 140) | `"straight"` (`pricing.use_road_distance = "false"`: plain straight line). Booking never fails because routing is down.
 - The route for a pickup/dropoff pair (rounded to 5 decimals, about 1 m) is cached for 15 minutes, so the three star estimates and the booking that follows always agree.
+- The apps' map route lines now come from the same router, through the backend: see [Route lines on the map](#route-lines-on-the-map-2026-09-25).
 
 **2. Peak times.** Admin-managed rules add a percent to the **ride** part of regular and Box fares (never to the Box fee; never to Abriyah). Evaluated in **Asia/Baghdad** time; days are **0 = Sunday ... 6 = Saturday** (the Iraqi work week is Sun-Thu). The highest matching rule wins, capped at `pricing.peak_max_percent`; `pricing.peak_enabled = "false"` switches peak off everywhere. Initial schedule (all editable):
 
@@ -936,6 +939,48 @@ A body that is not JSON of this shape (missing `name`, a string day, ...) is the
 | `pricing.road_fallback_factor_percent` | `"140"` | integer 100..250 -- straight-line multiplier when routing is unavailable |
 
 All four (and the rules) apply on the next estimate/booking; no redeploy. Rule changes are audited as `pricing.peak_rule.created` / `.updated` / `.deleted` on `rt:admin:ops` (activity feed: "Peak time rule created/updated/deleted").
+
+## Route lines on the map (2026-09-25)
+
+**Status:** in code 2026-09-25; live after the next backend deploy. **Rider app and captain app** (identical `services/routing.ts` in both). Admin Dashboard: no change.
+
+**Why.** Both apps drew their route lines by calling the public OSRM demo server `https://router.project-osrm.org` directly. That server forbids commercial use and allows 1 request per second. The backend already runs its own OSRM for fares, so the apps now ask the backend: the router stays private, and **the line drawn is the same road the fare is priced on**.
+
+**Request** -- `GET /api/routes/driving?from_lat=<f64>&from_lng=<f64>&to_lat=<f64>&to_lng=<f64>` with `Authorization: Bearer <jwt>` (any rider, captain or admin token). All four are required, WGS84 decimal degrees.
+
+**200** -- `RouteGeometryResponse`:
+```json
+{ "distance_m": 5786.0, "duration_s": 427.1,
+  "geometry": { "type": "LineString",
+    "coordinates": [[44.36608, 33.315026], [44.366015, 33.315031], "... 149 points ...", [44.404992, 33.297046]] } }
+```
+- `geometry.coordinates` are **`[longitude, latitude]`** pairs (GeoJSON order, longitude FIRST): map each to `{ latitude: c[1], longitude: c[0] }`. Always at least 2 points; the two ends are snapped onto the nearest road, so they can sit a few metres from the points you sent.
+- `distance_m`: road length in metres. `duration_s`: driving time in seconds (no live traffic).
+
+**Errors** (JSON `{"error":"<code>"}` unless noted):
+
+| Status | `error` | When |
+|-|-|-|
+| 400 | `invalid_route_query: from_lat` (or `from_lng` / `to_lat` / `to_lng`) | A parameter is missing, blank, not a number, not finite, or out of range (lat -90..90, lng -180..180). Names the first bad one, in the order from_lat, from_lng, to_lat, to_lng. |
+| 400 | `outside_service_area` | Either point is outside Iraq (same check as booking). |
+| 401 | (empty body) | Missing or invalid token -- a dead token, as on every other endpoint. |
+| 404 | `no_route` | The router found no road between the points. Rare: OSRM snaps both points onto the nearest road. |
+| 429 | (rate limiter) | The global per-IP rate limit. |
+| 503 | `routing_unavailable` | The router is not configured, down, slower than 5 s, or failing. |
+
+**Client rule: on ANY failure, draw the straight line.** `getRoute(a, b)` keeps its signature: it returns `{ coords, distanceM, durationS }` on a 200 and `null` on any failure (any non-200, a network error, the 8 s client timeout, or fewer than 2 points), and every caller already draws a straight line between the two points on `null`. Do not retry in a loop and do not show an error: a missing route line is cosmetic, never a booking or trip failure.
+
+```ts
+// services/routing.ts (both apps) -- shared axios instance, which sends the bearer token
+const { data } = await api.get<RouteGeometryResponse>('/api/routes/driving', {
+  params: { from_lat: a.latitude, from_lng: a.longitude, to_lat: b.latitude, to_lng: b.longitude },
+  timeout: 8000,
+});
+const coords = data.geometry.coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+```
+Remove the hardcoded `https://router.project-osrm.org` and the unused `EXPO_PUBLIC_OSRM_URL` env line; nothing else in the app talks to OSRM.
+
+**Caching and pricing.** The server rounds the four coordinates to 5 decimals (about 1.1 m) and caches each successful route for 15 minutes (failures are never cached, nor are very long lines of more than 2,000 points, such as intercity routes); keep the app's in-memory cache of successes too. A drawn route also fills the fare cache for the same pair, so, while road pricing is on, a `GET /api/trips/estimate` for that pickup and dropoff made afterwards prices exactly this road: `distance_km` = `distance_m` / 1000 with `distance_source: "road"`. The endpoint ignores `pricing.use_road_distance` (that setting only changes how fares are priced). It counts toward the per-IP rate limit, so fetch a route when its end points change, not on every location ping.
 
 ## Captain document upload (IMPORTANT for the Captain App)
 
