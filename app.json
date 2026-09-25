@@ -83,7 +83,9 @@
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#7C3AED"
         }
-      ]
+      ],
+      "./plugins/with-ios-scene-delegate",
+      "./plugins/with-ios-pods-deployment-target"
     ],
     "experiments": {
       "typedRoutes": true,
