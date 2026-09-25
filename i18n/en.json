@@ -370,6 +370,8 @@
       "emptyBody": "New trips in your area will appear here.",
       "newTrip": "New trip",
       "newRoom": "Nafarat room",
+      "newBox": "New delivery",
+      "boxChip": "Box",
       "fromLabel": "From",
       "toLabel": "To",
       "kmAway": "{{km}} km away",
@@ -458,6 +460,7 @@
       "historyEmpty": "No completed trips yet.",
       "tripRegular": "Regular",
       "tripAbriyah": "Nafarat",
+      "tripBox": "Box",
       "loadFailed": "Couldn't load earnings. Pull to refresh."
     },
     "register": {
@@ -558,6 +561,22 @@
       "reached": "Reached",
       "markReached": "Mark reached",
       "reaching": "Saving…"
+    },
+    "box": {
+      "title": "Box details",
+      "item": "Item",
+      "photos": "Photos",
+      "photoCount": "Photos ({{count}})",
+      "noPhoto": "No photos",
+      "recipient": "Recipient",
+      "callRecipient": "Call recipient",
+      "callSender": "Call sender",
+      "pickedUp": "Picked up the box",
+      "delivered": "Delivered",
+      "completedTitle": "Box delivered",
+      "rateSender": "Rate the sender",
+      "loadFailed": "Couldn't load the box details.",
+      "closePhoto": "Close photo"
     }
   },
   "chat": {

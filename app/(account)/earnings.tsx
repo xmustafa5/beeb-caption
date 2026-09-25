@@ -20,10 +20,19 @@ import { EarningsSummary } from '@/components/captain/earnings-summary'
 import { useEarnings } from '@/hooks/use-earnings'
 import { formatIqd } from '@/lib/format-currency'
 import type { EarningsPeriod, EarningsHistoryItem } from '@/services/earnings'
+import type { TripType } from '@/services/captain-trips'
 import { formatDate } from '@/i18n/languages'
 
-// Stable for the session — forceRTL flips require a restart anyway.
+// Stable for the session — forceRTL flips require a restart anyway. Used only to
+// pick the back chevron glyph (icons don't auto-flip); text aligns with 'left'.
 const isRTL = I18nManager.isRTL
+
+/** Icon + label per trip type in the history list. A Record so a new type can't be forgotten. */
+const TRIP_TYPE_ROW: Record<TripType, { icon: React.ComponentProps<typeof Icon>['name']; labelKey: string }> = {
+  regular: { icon: 'car-outline', labelKey: 'captain.earnings.tripRegular' },
+  abriyah: { icon: 'people-outline', labelKey: 'captain.earnings.tripAbriyah' },
+  box: { icon: 'cube-outline', labelKey: 'captain.earnings.tripBox' },
+}
 
 /**
  * Earnings, moved off the profile tab onto its own screen (reached from the
@@ -97,7 +106,7 @@ export default function EarningsScreen() {
               ...Typography['caption-sm'],
               color: colors.destructive,
               fontStyle: 'normal',
-              textAlign: isRTL ? 'right' : 'left',
+              textAlign: 'left',
             }}
           >
             {t('captain.earnings.loadFailed')}
@@ -107,7 +116,7 @@ export default function EarningsScreen() {
         {/* ── Trip history for the selected period ── */}
         {!isLoading && (
           <View style={{ gap: Spacing.md }}>
-            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
               {t('captain.earnings.history')}
             </Text>
 
@@ -117,7 +126,7 @@ export default function EarningsScreen() {
                   ...Typography['caption-sm'],
                   color: colors.subtle,
                   fontStyle: 'normal',
-                  textAlign: isRTL ? 'right' : 'left',
+                  textAlign: 'left',
                 }}
               >
                 {t('captain.earnings.historyEmpty')}
@@ -163,6 +172,7 @@ function HistoryRow({ item, isFirst, lang, colors }: HistoryRowProps) {
   const date = new Date(item.completedAt)
   // A malformed timestamp must not render "Invalid Date" next to a real fare.
   const label = Number.isNaN(date.getTime()) ? '' : formatDate(date, lang)
+  const type = TRIP_TYPE_ROW[item.tripType]
 
   return (
     <View
@@ -187,16 +197,12 @@ function HistoryRow({ item, isFirst, lang, colors }: HistoryRowProps) {
           justifyContent: 'center',
         }}
       >
-        <Icon
-          name={item.tripType === 'abriyah' ? 'people-outline' : 'car-outline'}
-          size={18}
-          color={colors.text}
-        />
+        <Icon name={type.icon} size={18} color={colors.text} />
       </View>
 
       <View style={{ flex: 1 }}>
         <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }} numberOfLines={1}>
-          {t(item.tripType === 'abriyah' ? 'captain.earnings.tripAbriyah' : 'captain.earnings.tripRegular')}
+          {t(type.labelKey)}
         </Text>
         <Text
           style={{

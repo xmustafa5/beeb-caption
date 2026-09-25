@@ -8,19 +8,25 @@ import { Icon } from '@/components/ui/icon'
 
 interface TripActionBarProps {
   onCall: () => void
+  /**
+   * Label for the masked call, which always reaches the RIDER. Defaults to
+   * "Call"; a Box trip says "Call sender" so it isn't mistaken for the
+   * recipient's call button on the parcel card.
+   */
+  callLabel?: string
   onChat?: () => void // shown only when provided (chat open while trip active)
   onCancel?: () => void // shown only when provided (accepted state)
 }
 
 // Navigation lives in its own row (NavigateButtons: Google Maps / Waze).
-export function TripActionBar({ onCall, onChat, onCancel }: TripActionBarProps) {
+export function TripActionBar({ onCall, callLabel, onChat, onCancel }: TripActionBarProps) {
   const { t } = useTranslation()
   const colors = useThemeColors()
 
   // native forceRTL mirrors this row in AR — no manual flip
   return (
     <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-      <ActionButton icon="call" label={t('captain.live.call')} onPress={onCall} colors={colors} />
+      <ActionButton icon="call" label={callLabel ?? t('captain.live.call')} onPress={onCall} colors={colors} />
       {onChat && (
         <ActionButton icon="chatbubble-ellipses" label={t('captain.live.chat')} onPress={onChat} colors={colors} />
       )}

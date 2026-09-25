@@ -1,5 +1,6 @@
 // services/earnings.ts
 import { api } from '@/lib/api'
+import { toTripType, type TripType } from '@/services/captain-trips'
 
 export type EarningsPeriod = 'today' | 'week' | 'month'
 
@@ -14,7 +15,7 @@ export interface Earnings {
 export interface EarningsHistoryItem {
   tripId: string
   fareIqd: number
-  tripType: 'regular' | 'abriyah'
+  tripType: TripType
   completedAt: string
 }
 
@@ -57,7 +58,7 @@ export async function getEarningsHistory(
   return (data.items ?? []).map((i) => ({
     tripId: i.trip_id,
     fareIqd: i.fare_iqd,
-    tripType: i.trip_type === 'abriyah' ? 'abriyah' : 'regular',
+    tripType: toTripType(i.trip_type),
     completedAt: i.completed_at,
   }))
 }

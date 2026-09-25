@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, Linking, I18nManager } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -17,28 +17,33 @@ import { CancelSheet } from '@/components/captain/cancel-sheet'
 import { RatingStars } from '@/components/captain/rating-stars'
 import { MemberRoster } from '@/components/captain/member-roster'
 import { StopsPanel } from '@/components/captain/stops-panel'
+import { BoxDetailsCard } from '@/components/captain/box-details-card'
+import { BoxSummaryRow } from '@/components/captain/box-summary-row'
 import { useLiveTrip } from '@/hooks/use-live-trip'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { useTripStops } from '@/hooks/use-trip-stops'
+import { useBoxDetails } from '@/hooks/use-box-details'
 import { getProxy, rateRider, type CancelReason } from '@/services/captain-trips'
 import { getRoomMembers } from '@/services/abriyah-members'
 import { getRoute } from '@/services/routing'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
+import { openDialer } from '@/lib/phone'
 import { nearestOf } from '@/lib/nav-links'
 import { NavigateButtons } from '@/components/captain/navigate-buttons'
 import { parseApiError } from '@/lib/api'
 
-const isRTL = I18nManager.isRTL
-
 export default function LiveTripScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { location } = useCurrentLocation()
   const mapRef = useRef<TripMapHandle>(null)
+  const scrollRef = useRef<ScrollView>(null)
+  // Where the full Box card sits in the scroll content — the summary row jumps there.
+  const boxCardY = useRef(0)
 
   const { trip, isLoading, arrived, arrive, start, complete, cancel, busy } = useLiveTrip(id)
   const { ensureTracking } = useCaptainPresence()
@@ -72,6 +77,13 @@ export default function LiveTripScreen() {
   const stopsEnabled =
     trip?.tripType === 'regular' && (status === 'accepted' || status === 'in_progress')
   const { stops, reachStop, reachingId } = useTripStops(id, !!stopsEnabled)
+
+  // Box: the same live screen as a regular trip plus the parcel card. The
+  // details (incl. the recipient's phone) are served to the assigned captain only
+  // while the trip is accepted / in progress, so the query runs only then.
+  const isBox = trip?.tripType === 'box'
+  const boxEnabled = isBox && (status === 'accepted' || status === 'in_progress')
+  const box = useBoxDetails(id, boxEnabled)
 
   // Un-reached intermediate stops as coordinates — the pending waypoints of a
   // multi-stop trip. Empty for a plain point-to-point ride.
@@ -131,6 +143,15 @@ export default function LiveTripScreen() {
     }
   }
 
+  // The recipient is not in the masked-call session (that reaches the sender), so
+  // this dials their real number. Errors land in the FormError right above the
+  // step button, next to the summary row that triggered the call.
+  async function onCallRecipient() {
+    setError(null)
+    const phone = box.data?.recipientPhone
+    if (!phone || !(await openDialer(phone))) setError(t('captain.live.callUnavailable'))
+  }
+
   async function onCancelConfirm(reason: CancelReason, comment?: string) {
     setError(null)
     try {
@@ -185,22 +206,27 @@ export default function LiveTripScreen() {
         <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="checkmark-circle" size={40} color={colors.success} />
         </View>
-        <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>{t('captain.live.completedTitle')}</Text>
-        <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-          {t('captain.live.fareCollected', { fare: formatIqd(trip.fareIqd, isRTL ? 'ar' : 'en') })}
+        <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>
+          {isBox ? t('captain.box.completedTitle') : t('captain.live.completedTitle')}
         </Text>
-        <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'center', fontStyle: 'normal' }}>{t('captain.live.rateRider')}</Text>
+        <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
+          {t('captain.live.fareCollected', { fare: formatIqd(trip.fareIqd, i18n.language) })}
+        </Text>
+        <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'center', fontStyle: 'normal' }}>
+          {isBox ? t('captain.box.rateSender') : t('captain.live.rateRider')}
+        </Text>
         <RatingStars value={stars} onChange={setStars} />
         <Button label={stars > 0 ? t('captain.live.submitRating') : t('captain.live.skip')} onPress={onSubmitRating} />
       </View>
     )
   }
 
-  // Active (accepted / in_progress)
+  // Active (accepted / in_progress). A Box walks the same three steps; only the
+  // start/complete wording changes ("Picked up the box" / "Delivered").
   const primaryLabel =
     status === 'accepted' && !arrived ? t('captain.live.arrivedAtPickup')
-    : status === 'accepted' && arrived ? t('captain.live.startTrip')
-    : status === 'in_progress' ? t('captain.live.completeTrip')
+    : status === 'accepted' && arrived ? t(isBox ? 'captain.box.pickedUp' : 'captain.live.startTrip')
+    : status === 'in_progress' ? t(isBox ? 'captain.box.delivered' : 'captain.live.completeTrip')
     : t('captain.live.arrivedAtPickup') // 'requested' (transient) fallback — refetch clears it
 
   const stopCoords = stops.map((s) => ({ latitude: s.lat, longitude: s.lng }))
@@ -250,6 +276,7 @@ export default function LiveTripScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, gap: Spacing.lg }}
       >
@@ -257,10 +284,20 @@ export default function LiveTripScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>{t('captain.live.fareLabel')}</Text>
           {/* Currency value: lock LTR so the IQD amount keeps Western digit order inside the AR (forceRTL) screen. */}
-          <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(trip.fareIqd, isRTL ? 'ar' : 'en')}</Text>
+          <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>{formatIqd(trip.fareIqd, i18n.language)}</Text>
         </View>
 
         {trip.tripType === 'abriyah' && <MemberRoster data={roster.data} />}
+
+        {/* Box: one compact line here; the full parcel card goes BELOW the step
+            buttons so the primary action stays above the fold (the map takes 52%). */}
+        {isBox && (
+          <BoxSummaryRow
+            details={box.data}
+            onPress={() => scrollRef.current?.scrollTo({ y: Math.max(0, boxCardY.current - Spacing.md), animated: true })}
+            onCallRecipient={onCallRecipient}
+          />
+        )}
 
         {trip.tripType === 'regular' && (
           <StopsPanel stops={stops} reachingId={reachingId} onReach={reachStop} />
@@ -274,9 +311,23 @@ export default function LiveTripScreen() {
 
         <TripActionBar
           onCall={onCall}
+          callLabel={isBox ? t('captain.box.callSender') : undefined}
           onChat={() => router.push({ pathname: '/(chat)/[tripId]', params: { tripId: id } })}
           onCancel={status === 'accepted' ? () => setShowCancel(true) : undefined}
         />
+
+        {isBox && (
+          <View onLayout={(e) => { boxCardY.current = e.nativeEvent.layout.y }}>
+            <BoxDetailsCard
+              tripId={id}
+              details={box.data}
+              isLoading={box.isLoading}
+              isError={box.isError}
+              onRetry={() => void box.refetch()}
+              dropoffAddress={trip.dropoffAddress}
+            />
+          </View>
+        )}
       </ScrollView>
 
       <CancelSheet

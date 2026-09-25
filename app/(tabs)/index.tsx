@@ -20,6 +20,15 @@ import { parseApiError } from '@/lib/api'
 import type { CaptainOffer } from '@/services/captain-queue'
 import { isRtlLanguage } from '@/i18n/languages'
 
+/** Space kept between the top of the offer carousel and whatever must stay clear of it. */
+const CAROUSEL_CLEARANCE = Spacing.md
+/**
+ * Extra bottom inset when framing a trip, above the carousel's top edge: the
+ * framed end dots are centre-anchored, so a point exactly on the padded edge
+ * would still have half its dot under the card.
+ */
+const FRAME_CLEARANCE = 32
+
 // Home is the live map: current location + incoming offers carousel. Activation
 // and going online moved to the tab bar's center button (ActivateSheet). The map
 // always renders — when offline, an overlay pill nudges the captain to activate.
@@ -38,6 +47,13 @@ export default function HomeScreen() {
   // Road line joining the active offer's two ends. Two bare dots on a POI-dense
   // map don't read as a trip; the line is what makes it one shape.
   const [routeCoords, setRouteCoords] = useState<LatLng[]>([])
+  // Measured height of the bottom offer overlay (error line + countdown +
+  // carousel). Offer cards differ in height — a Box card carries a parcel row,
+  // and a long address wraps — so the recenter button and the trip framing are
+  // placed from this measurement, not from a number sized for one card. 0 until
+  // the first layout.
+  const [carouselHeight, setCarouselHeight] = useState(0)
+  const carouselBottom = insets.bottom + Spacing.md
 
   // Keep activeIndex in range as offers arrive/expire.
   useEffect(() => {
@@ -75,7 +91,12 @@ export default function HomeScreen() {
     mapRef.current?.fitToCoords(pts, {
       top: 96,
       right: 56,
-      bottom: Math.round(windowHeight * 0.46) + 24,
+      // The whole overlay as measured; the old fixed share of the screen is only
+      // the fallback for a tap that lands before the first layout pass.
+      bottom:
+        carouselHeight > 0
+          ? carouselBottom + carouselHeight + FRAME_CLEARANCE
+          : Math.round(windowHeight * 0.46) + 24,
       left: 56,
     })
   }
@@ -180,11 +201,17 @@ export default function HomeScreen() {
       {/* Persistent "you have a trip in progress" banner, floating over the map. */}
       <ActiveTripBanner topInset={insets.top} />
 
-      {/* Zoom-to-current-location button. Sits above the offer carousel when
-          offers are present, near the safe-area edge when idle. */}
+      {/* Zoom-to-current-location button. Sits just above the (measured) offer
+          carousel when offers are present, near the safe-area edge when idle. */}
       {location && (
         <RecenterButton
-          bottomOffset={insets.bottom + (hasOffers ? 200 : Spacing.lg)}
+          bottomOffset={
+            !hasOffers
+              ? insets.bottom + Spacing.lg
+              : carouselHeight > 0
+                ? carouselBottom + carouselHeight + CAROUSEL_CLEARANCE
+                : insets.bottom + 200
+          }
           onPress={() =>
             mapRef.current?.animateToRegion(
               { latitude: location.latitude, longitude: location.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 },
@@ -227,7 +254,10 @@ export default function HomeScreen() {
 
       {/* Offers → bottom carousel. */}
       {hasOffers && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + Spacing.md, gap: Spacing.sm }}>
+        <View
+          onLayout={(e) => setCarouselHeight(Math.ceil(e.nativeEvent.layout.height))}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: carouselBottom, gap: Spacing.sm }}
+        >
           {error && (
             <Text style={{ ...Typography['caption-sm'], color: colors.destructive, fontStyle: 'normal', textAlign: 'center', marginHorizontal: Spacing.xl }}>
               {error}
@@ -282,11 +312,13 @@ function ActiveTripBanner({ topInset }: { topInset: number }) {
       <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ffffff22', alignItems: 'center', justifyContent: 'center' }}>
         <Icon name="navigate" size={20} color={colors.onTint} />
       </View>
-      <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-        <Text style={{ ...Typography['body-md'], color: colors.onTint, textAlign: isRTL ? 'right' : 'left' }}>
+      {/* textAlign 'left' = the reading start (visual right in AR) under native forceRTL,
+          so the text hugs the icon. isRTL below is only for the chevron glyph. */}
+      <View style={{ flex: 1 }}>
+        <Text style={{ ...Typography['body-md'], color: colors.onTint, textAlign: 'left' }}>
           {t('captain.live.resumeTitle')}
         </Text>
-        <Text style={{ ...Typography['caption-sm'], color: colors.onTint, opacity: 0.85, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+        <Text style={{ ...Typography['caption-sm'], color: colors.onTint, opacity: 0.85, fontStyle: 'normal', textAlign: 'left' }}>
           {t('captain.live.resumeSubtitle')}
         </Text>
       </View>

@@ -97,7 +97,10 @@ export function OfferCarousel({ offers, activeIndex, onIndexChange, captainLocat
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         onScrollToIndexFailed={() => {}}
         renderItem={({ item }) => (
-          <View style={{ width, paddingHorizontal: Spacing.xl }}>
+          // Cells stretch to the TALLEST card (a Box card is bigger than a
+          // regular one); pin each card to the bottom so a shorter card sits on
+          // the same bottom edge instead of hanging from the top of the strip.
+          <View style={{ width, paddingHorizontal: Spacing.xl, justifyContent: 'flex-end' }}>
             <OfferCard
               offer={item}
               captainLocation={captainLocation}

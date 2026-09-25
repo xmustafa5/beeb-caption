@@ -1,4 +1,4 @@
-import { TouchableOpacity, I18nManager } from 'react-native'
+import { TouchableOpacity } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { Icon } from '@/components/ui/icon'
@@ -24,8 +24,9 @@ export function RecenterButton({ onPress, bottomOffset }: RecenterButtonProps) {
       style={{
         position: 'absolute',
         bottom: bottomOffset ?? insets.bottom + Spacing.lg,
-        // Trailing physical edge: right in LTR, left in RTL.
-        ...(I18nManager.isRTL ? { left: Spacing.lg } : { right: Spacing.lg }),
+        // Trailing edge: plain `right` — native forceRTL swaps it to visual left
+        // in AR/ckb. (An isRTL ternary here double-flipped it back to the right.)
+        right: Spacing.lg,
         width: 48,
         height: 48,
         borderRadius: 24,

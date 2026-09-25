@@ -89,7 +89,8 @@ api.interceptors.response.use(
 // (method, URL, status, and a trimmed body). Never runs in production. Sensitive
 // fields are redacted so tokens / raw card numbers don't land in logs.
 if (__DEV__) {
-  const REDACT = new Set(['token', 'card_number', 'gateway_token', 'password', 'code'])
+  // recipient_phone: a Box recipient's number (GET /api/trips/{id}/box) — third-party PII.
+  const REDACT = new Set(['token', 'card_number', 'gateway_token', 'password', 'code', 'recipient_phone'])
   const trim = (data: unknown): unknown => {
     if (!data || typeof data !== 'object') return data
     const out: Record<string, unknown> = {}

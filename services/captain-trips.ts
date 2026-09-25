@@ -1,9 +1,26 @@
 // services/captain-trips.ts
 import { api } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 export type TripStatus = 'requested' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
-export type TripType = 'regular' | 'abriyah'
+export type TripType = 'regular' | 'abriyah' | 'box'
 export type CancelReason = 'changed_mind' | 'wait_too_long' | 'wrong_pickup' | 'safety' | 'other'
+
+/**
+ * Narrow a `trip_type` off the wire. Explicit per value: a Box trip used to fall
+ * through a two-way ternary and render as a plain taxi (stops panel on, no
+ * parcel card). Anything unrecognised is treated as regular.
+ */
+export function toTripType(v: unknown): TripType {
+  switch (v) {
+    case 'abriyah':
+      return 'abriyah'
+    case 'box':
+      return 'box'
+    default:
+      return 'regular'
+  }
+}
 
 /** Who ended the trip. Drives which explanation the captain is shown. */
 export type CancelledBy = 'rider' | 'captain' | 'system' | 'admin'
@@ -32,6 +49,10 @@ export interface Trip {
   pickupLng: number
   dropoffLat: number
   dropoffLng: number
+  /** Place names the rider picked (or the backend resolved). Undefined on older trips. */
+  pickupAddress?: string
+  dropoffAddress?: string
+  /** For a Box trip this already includes the Box fee. */
   fareIqd: number
   distanceKm: number
   cancellationReason?: string | null
@@ -56,6 +77,8 @@ interface BackendTrip {
   pickup_lng: number
   dropoff_lat: number
   dropoff_lng: number
+  pickup_address?: string | null
+  dropoff_address?: string | null
   fare_iqd: number
   distance_km: number
   cancellation_reason?: string | null
@@ -66,7 +89,7 @@ interface BackendTrip {
 function toTrip(b: BackendTrip): Trip {
   return {
     id: b.id,
-    tripType: b.trip_type === 'abriyah' ? 'abriyah' : 'regular',
+    tripType: toTripType(b.trip_type),
     status: (b.status as TripStatus) ?? 'accepted',
     riderId: b.rider_id,
     captainId: b.captain_id ?? null,
@@ -75,6 +98,9 @@ function toTrip(b: BackendTrip): Trip {
     pickupLng: b.pickup_lng,
     dropoffLat: b.dropoff_lat,
     dropoffLng: b.dropoff_lng,
+    // Western digits in every language (the backend fills these from POI names).
+    pickupAddress: b.pickup_address ? toAsciiDigits(b.pickup_address) : undefined,
+    dropoffAddress: b.dropoff_address ? toAsciiDigits(b.dropoff_address) : undefined,
     fareIqd: b.fare_iqd,
     distanceKm: b.distance_km,
     cancellationReason: b.cancellation_reason ?? null,

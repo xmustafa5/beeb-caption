@@ -26,6 +26,9 @@ export const Colors = {
     accent: '#4F77C4',
     success: '#22C55E',
     info: '#7BA0DD',
+    // Full-screen photo viewer: photos read best on black in either theme.
+    mediaBackdrop: '#000000',
+    onMediaBackdrop: '#FFFFFF',
   },
   dark: {
     text: '#F4F6FA',
@@ -47,6 +50,8 @@ export const Colors = {
     accent: '#7BA0DD',
     success: '#4ADE80',
     info: '#A9C2EC',
+    mediaBackdrop: '#000000',
+    onMediaBackdrop: '#FFFFFF',
   },
 } as const
 

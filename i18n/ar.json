@@ -370,6 +370,8 @@
       "emptyBody": "ستظهر الرحلات الجديدة في منطقتك هنا.",
       "newTrip": "رحلة جديدة",
       "newRoom": "غرفة نفرات",
+      "newBox": "توصيل جديد",
+      "boxChip": "بوكس",
       "fromLabel": "من",
       "toLabel": "إلى",
       "kmAway": "على بُعد {{km}} كم",
@@ -458,6 +460,7 @@
       "historyEmpty": "لا توجد رحلات مكتملة بعد.",
       "tripRegular": "عادي",
       "tripAbriyah": "نفرات",
+      "tripBox": "بوكس",
       "loadFailed": "تعذّر تحميل الأرباح. اسحب للتحديث."
     },
     "register": {
@@ -558,6 +561,22 @@
       "reached": "تم الوصول",
       "markReached": "تحديد كمُنجَز",
       "reaching": "جارٍ الحفظ…"
+    },
+    "box": {
+      "title": "تفاصيل البوكس",
+      "item": "المحتوى",
+      "photos": "الصور",
+      "photoCount": "الصور ({{count}})",
+      "noPhoto": "لا توجد صور",
+      "recipient": "المستلم",
+      "callRecipient": "اتصل بالمستلم",
+      "callSender": "اتصل بالمرسل",
+      "pickedUp": "استلمت البوكس",
+      "delivered": "تم التوصيل",
+      "completedTitle": "تم توصيل البوكس",
+      "rateSender": "قيّم المرسل",
+      "loadFailed": "تعذّر تحميل تفاصيل البوكس.",
+      "closePhoto": "إغلاق الصورة"
     }
   },
   "chat": {

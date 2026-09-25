@@ -15,7 +15,7 @@
           "Abriyah"
         ],
         "summary": "Join or create an Abriyah shared room",
-        "description": "Match the calling rider into an Abriyah shared-ride room for their zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Computes the per-rider fare from the PICKUP zone (its Abriyah params when Abriyah-enabled, falling back to the settings regular fare otherwise).\n- Computes a per-rider fare as base + round(haversine_km * per_km), in integer IQD; coordinates are WGS84 lng/lat.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room.opened/room.joined and trip.requested realtime events.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only requests require a female rider (gender 'f') and a zone that allows women-only rooms.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One active room per rider; joining again while already in a room is rejected.\n- Returns 400 when the dropoff is not in an Abriyah-enabled zone, the pickup is outside any active service zone, women-only is not allowed in the dropoff zone, or `room_type` is invalid.",
+        "description": "Match the calling rider into an Abriyah shared-ride room for their zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Computes the per-rider fare from the PICKUP zone (its Abriyah params when Abriyah-enabled, falling back to the settings regular fare otherwise).\n- Computes a per-rider fare as base + round(haversine_km * per_km), in integer IQD; coordinates are WGS84 lng/lat.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room.opened/room.joined and trip.requested realtime events.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only requests require a female rider (gender 'f') and a zone that allows women-only rooms.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One active room per rider; joining again while already in a room is rejected.\n- Returns 400 `{\"error\":\"outside_abriyah_area\"}` when the dropoff is not in an Abriyah-enabled zone or the pickup is outside any active service zone (Nafarat is Baghdad-only for now: clients show it as \"coming soon\"); plain 400 when women-only is not allowed in the dropoff zone or `room_type` is invalid.\n- The join that brings a room to `room.min_riders_to_offer` live riders (default 2) pushes it to nearby Abriyah captains (WS `rt:captain:{id}` + FCM `new_trip_in_queue` with `room_id`) and restarts its wait window.",
         "operationId": "join_room",
         "requestBody": {
           "content": {
@@ -39,7 +39,7 @@
             }
           },
           "400": {
-            "description": "Dropoff not in an Abriyah-enabled zone, pickup not in any active service zone, women-only not allowed in the dropoff zone, or invalid room_type"
+            "description": "Pins outside the Abriyah zones (`outside_abriyah_area`), women-only not allowed in the dropoff zone, or invalid room_type"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -151,7 +151,7 @@
           "Abriyah"
         ],
         "summary": "Accept and dispatch an Abriyah room (captain)",
-        "description": "Assign the calling captain to an open Abriyah room, lock it, and immediately dispatch it to all seated riders.\n\n**Behavior:**\n- Verifies the captain is approved and not already on another active room.\n- Requires the room to be in 'open' status; locks it to the captain (publishes room.locked).\n- Dispatches the room: transitions it to 'dispatched' and advances every member trip from matched to accepted with this captain (optimistic-locked; concurrent transitions are skipped).\n- Triggers a best-effort reports rollup and enqueues a push notification to each rider.\n- Returns the resulting dispatched room.\n\n**Use Cases:**\n- A captain taking the next available Abriyah pool in their zone.\n\n**Restrictions:**\n- Captain JWT required; the captain must have status 'approved'.\n- Women-only rooms require a female captain (gender 'f').\n- Returns 400 if the room is not 'open', 403 if the captain is not approved or fails the women-only gate, 409 if the captain already has an active room.",
+        "description": "Assign the calling captain to an open Abriyah room, lock it, and immediately dispatch it to all seated riders.\n\n**Behavior:**\n- Verifies the captain is approved and not already on another active room.\n- Requires the room to be in 'open' status; locks it to the captain (publishes room.locked).\n- Dispatches the room: transitions it to 'dispatched' and advances every member trip from matched to accepted with this captain (optimistic-locked; concurrent transitions are skipped).\n- Triggers a best-effort reports rollup and enqueues a push notification to each rider.\n- Returns the resulting dispatched room.\n\n**Use Cases:**\n- A captain taking the next available Abriyah pool in their zone.\n\n**Restrictions:**\n- Captain JWT required; the captain must have status 'approved'.\n- Women-only rooms require a female captain (gender 'f').\n- Returns 400 if the room is not 'open', 403 if the captain is not approved or fails the women-only gate, 409 if the captain is still driving another room's riders or the room has not yet reached `room.min_riders_to_offer` live riders (default 2).",
         "operationId": "accept_room",
         "parameters": [
           {
@@ -189,7 +189,7 @@
             "description": "No room exists with this id"
           },
           "409": {
-            "description": "Captain already has an active room assignment"
+            "description": "Captain still has an unfinished room, or the room is still waiting for more riders"
           }
         },
         "security": [
@@ -1988,7 +1988,7 @@
           {
             "name": "type",
             "in": "query",
-            "description": "Trip type filter: regular | abriyah",
+            "description": "Trip type filter: regular | abriyah | box",
             "required": false,
             "schema": {
               "type": "string"
@@ -2817,7 +2817,7 @@
           "Admin Operations"
         ],
         "summary": "Update a setting value",
-        "description": "Update one org setting after key, read-only, and per-key range validation.\n\n**Updatable Fields:**\n- `value` only; the key is taken from the path. Always sent as a string.\n\n**Behavior:**\n1. Verifies the key exists; unknown keys 404.\n2. Rejects read-only keys (`general.timezone`, `general.currency`) with 400.\n3. Range/format-checks the value per key (e.g. `pricing.*_per_km_iqd` incl. tier1/tier2 100-10000, `pricing.tier_threshold_km` 1-100, `pricing.round_to_iqd` 1-1000, `room.default_max_riders` 2-6, `general.locale` ar-IQ|en, phone keys E.164-ish).\n4. Persists and publishes a `setting.updated` audit event with before/after.\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- Out-of-range, unparseable, or read-only values return 400.",
+        "description": "Update one org setting after key, read-only, and per-key range validation.\n\n**Updatable Fields:**\n- `value` only; the key is taken from the path. Always sent as a string.\n\n**Behavior:**\n1. Verifies the key exists; unknown keys 404.\n2. Rejects read-only keys (`general.timezone`, `general.currency`) with 400.\n3. Range/format-checks the value per key (e.g. `pricing.*_per_km_iqd` incl. tier1/tier2 100-10000, `pricing.tier_threshold_km` 1-100, `pricing.round_to_iqd` 1-1000, `pricing.box_surcharge_iqd` 0-20000 (integer IQD Box fee), `room.default_max_riders` 2-6, `room.min_riders_to_offer` 1-6, `general.locale` ar-IQ|en, phone keys E.164-ish).\n4. Persists and publishes a `setting.updated` audit event with before/after.\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- Out-of-range, unparseable, or read-only values return 400.",
         "operationId": "update_setting",
         "parameters": [
           {
@@ -4879,7 +4879,7 @@
           "Realtime"
         ],
         "summary": "List pending offers for the captain",
-        "description": "List the pending dispatch offers currently visible to this captain.\n\n**Features:**\n- Returns a single list mixing two offer types: pending regular trips and open Abriyah rooms (`offer_type` distinguishes them).\n- Each offer carries pickup/dropoff coordinates, fare in integer IQD, optional `zone_id`, optional `room_type` (`mixed` | `women_only`, null for regular trips), and `created_at`.\n- Women-only rooms are pre-filtered out for non-female captains (gender is read from the captain record before matching).\n- **Returns an EMPTY list while this captain is already on a trip** (`accepted` or `in_progress`) -- no trips and no rooms. The app polls this endpoint every few seconds for as long as the captain is online, mid-ride included, so this is where \"a captain in a trip is offered nothing\" is enforced. The response shape is unchanged; `offers` is simply `[]`.\n\n**Use Cases:**\n- The captain app polling for offers it may accept while online.\n- Showing the nearby trip/room queue on the captain dashboard.",
+        "description": "List the pending dispatch offers currently visible to this captain.\n\n**Features:**\n- Returns a single list mixing two offer types: pending trips (regular and Box) and open Abriyah rooms (`offer_type` distinguishes them; `trip_type` is `regular` | `box` on trip offers and null on rooms).\n- Each offer carries pickup/dropoff coordinates, fare in integer IQD (Box fee included for Box), optional `zone_id`, optional `room_type` (`mixed` | `women_only`, null for trips), and `created_at`.\n- Box offers also carry `box_description` (full text), `box_photo_url` (short-lived presigned GET of the FIRST photo, or null) and `box_photo_count` (0-3; 0 on non-Box offers). The recipient phone is NEVER in an offer; the assigned captain reads it from `GET /api/trips/{id}/box` after accepting.\n- Regular and Box trips follow the same star window: the captain's own grade immediately, lower-graded requests once they have gone `dispatch.star_widen_after_seconds` unclaimed.\n- Women-only rooms are pre-filtered out for non-female captains (gender is read from the captain record before matching).\n- **Returns an EMPTY list while this captain is already on a trip** (`accepted` or `in_progress`) -- no trips and no rooms. The app polls this endpoint every few seconds for as long as the captain is online, mid-ride included, so this is where \"a captain in a trip is offered nothing\" is enforced. The response shape is unchanged; `offers` is simply `[]`.\n\n**Use Cases:**\n- The captain app polling for offers it may accept while online.\n- Showing the nearby trip/room queue on the captain dashboard.",
         "operationId": "get_trip_queue",
         "responses": {
           "200": {
@@ -7653,7 +7653,7 @@
           "Reports"
         ],
         "summary": "Revenue totals by zone",
-        "description": "Fare revenue per zone and period, split into regular versus Abriyah totals.\n\n**Features:**\n- Reads pre-rolled report rows (one per zone per period bucket); no live ledger scan.\n- `period` selects bucket granularity: day, ISO-week (Monday start), or month.\n- `from`/`to` are inclusive Asia/Baghdad calendar dates; buckets roll at Baghdad midnight.\n- Optional `zone_id` narrows to a single zone.\n- All amounts are integer IQD; `total_fare_iqd` equals the sum of `regular_fare_iqd` and `abriyah_fare_iqd`.\n- `export=csv` returns a CSV file download; otherwise a JSON array.\n\n**Use Cases:**\n- Finance dashboards comparing fare revenue across zones and trip types.\n- Exporting zone revenue for accounting and reconciliation.\n\n**Restrictions:**\n- Requires an admin session; allowed roles are super_admin or finance (others get 403).\n- `period` must be day, week, or month; `from` <= `to`; range max 365 days; `export`, if set, must be csv.",
+        "description": "Fare revenue per zone and period, split into regular, Abriyah and Box totals.\n\n**Features:**\n- Reads pre-rolled report rows (one per zone per period bucket); no live ledger scan.\n- `period` selects bucket granularity: day, ISO-week (Monday start), or month.\n- `from`/`to` are inclusive Asia/Baghdad calendar dates; buckets roll at Baghdad midnight.\n- Optional `zone_id` narrows to a single zone.\n- All amounts are integer IQD; `total_fare_iqd` equals the sum of `regular_fare_iqd`, `abriyah_fare_iqd` and `box_fare_iqd` (Box revenue, Box fee included).\n- `export=csv` returns a CSV file download; otherwise a JSON array.\n\n**Use Cases:**\n- Finance dashboards comparing fare revenue across zones and trip types.\n- Exporting zone revenue for accounting and reconciliation.\n\n**Restrictions:**\n- Requires an admin session; allowed roles are super_admin or finance (others get 403).\n- `period` must be day, week, or month; `from` <= `to`; range max 365 days; `export`, if set, must be csv.",
         "operationId": "get_revenue_by_zone",
         "parameters": [
           {
@@ -8000,6 +8000,42 @@
         ]
       }
     },
+    "/api/rider/box/photos/upload-url": {
+      "post": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Mint a presigned Box photo upload URL",
+        "description": "Mint a short-lived presigned PUT URL for ONE photo of the items a rider is sending with Box, at a fresh object key. The image bytes go straight to storage, never through this API.\n\n**Features:**\n- Every call returns a NEW key `box-photos/{rider_id}/{uuid_v4}`, so each photo gets its own object (a parcel carries up to 3).\n- Same `PresignedUploadResponse` shape as the rider avatar and captain-document uploads.\n- No request body.\n\n**Behavior:**\n1. Call this once per photo to get `upload_url` + `object_key` (`expires_in` is in seconds, about 5 minutes).\n2. `PUT` the raw image bytes to `upload_url` with header `Content-Type: image/jpeg` and NO `Authorization` header, before it expires. The content type is a SIGNED header of the URL: any other `Content-Type` is refused by storage (403).\n3. Send the `object_key`s (0-3, in display order) as `photo_keys` in `POST /api/trips/box`.\n4. The photos are later served as short-lived presigned GETs by `GET /api/trips/{id}/box` and (first photo only) on the captain offer.\n\n**Restrictions:**\n- Rider role only; any other role gets 403.\n- A key only works for the rider it was minted for: booking rejects keys outside `box-photos/{your rider id}/`.\n- At booking each photo must have been uploaded, be an image, and be at most 8 MiB; otherwise booking fails with 400 `invalid_box_photos`.\n- With unmanaged (mock) storage the URLs are deterministic placeholders.",
+        "operationId": "request_box_photo_upload_url",
+        "responses": {
+          "200": {
+            "description": "Presigned upload target (upload_url, object_key, expires_in)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not a rider"
+          },
+          "500": {
+            "description": "Storage backend failed to presign the upload URL"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/rider/captains/nearby": {
       "get": {
         "tags": [
@@ -8137,7 +8173,7 @@
           "Scheduling"
         ],
         "summary": "Book a scheduled trip",
-        "description": "Creates a future scheduled trip intent for the authenticated rider. The trip is stored as 'pending' and later promoted to a live REQUESTED trip by the scheduler worker when it comes due.\n\n**Features:**\n- Sets `rider_id` from the JWT and starts the trip in 'pending' status.\n- Publishes a `beep.scheduled_trip.created` realtime event on the rider channel.\n- Promotion to a live trip happens later via the 60-second scheduler tick, not on this call.\n- `star` books a car class (1, 2, or 3; omitted = 1). It is priced from the same per-star per-km rates as an immediate `POST /api/trips` request, and is carried onto the promoted trip's `requested_star` so dispatch looks for the class that was paid for.\n\n**Behavior:**\n1. Validate `scheduled_for` is at least 30 minutes and at most 7 days from now.\n2. Validate `trip_type` is exactly 'regular' (Abriyah scheduling is not supported in v1).\n3. Validate `star` is 1, 2, or 3 when supplied.\n4. Persist the pending scheduled trip and emit the created event.\n\n**Restrictions:**\n- `scheduled_for` is RFC3339/ISO 8601 UTC; under 30 minutes ahead returns 400, over 7 days ahead returns 400.\n- `trip_type` must be 'regular'; any other value returns 400.\n- `star` must be 1, 2, or 3; any other value returns 400 (it is rejected, not clamped). The class cannot be changed afterwards -- cancel and rebook.\n- The fare is not computed or quoted here; it is struck at promotion from the rates in force at that moment. Use `GET /api/trips/estimate` with the same `star` for a pre-booking figure.\n- Coordinates are WGS84 lat/lng.",
+        "description": "Creates a future scheduled trip intent for the authenticated rider. The trip is stored as 'pending' and later promoted to a live REQUESTED trip by the scheduler worker when it comes due.\n\n**Features:**\n- Sets `rider_id` from the JWT and starts the trip in 'pending' status.\n- Publishes a `beep.scheduled_trip.created` realtime event on the rider channel.\n- Promotion to a live trip happens later via the 60-second scheduler tick, not on this call.\n- `star` books a car class (1, 2, or 3; omitted = 1). It is priced from the same per-star per-km rates as an immediate `POST /api/trips` request, and is carried onto the promoted trip's `requested_star` so dispatch looks for the class that was paid for.\n\n**Behavior:**\n1. Validate `scheduled_for` is at least 30 minutes and at most 7 days from now.\n2. Validate `trip_type` is exactly 'regular' (Abriyah scheduling is not supported in v1).\n3. Validate `star` is 1, 2, or 3 when supplied.\n4. Persist the pending scheduled trip and emit the created event.\n\n**Restrictions:**\n- `scheduled_for` is RFC3339/ISO 8601 UTC; under 30 minutes ahead returns 400, over 7 days ahead returns 400.\n- `trip_type` must be 'regular'; any other value returns 400.\n- `star` must be 1, 2, or 3; any other value returns 400 (it is rejected, not clamped). The class cannot be changed afterwards -- cancel and rebook.\n- The fare is not computed or quoted here; it is struck at promotion from the rates in force at that moment. Use `GET /api/trips/estimate` with the same `star` for a pre-booking figure.\n- Pickup and dropoff must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- Coordinates are WGS84 lat/lng.",
         "operationId": "create_scheduled_trip",
         "requestBody": {
           "content": {
@@ -8161,7 +8197,7 @@
             }
           },
           "400": {
-            "description": "Time is under 30 minutes or over 7 days out, trip_type is not 'regular', or star is outside 1-3"
+            "description": "Time is under 30 minutes or over 7 days out, trip_type is not 'regular', star is outside 1-3, or a pin is outside Iraq (`outside_service_area`)"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -8232,7 +8268,7 @@
           "Scheduling"
         ],
         "summary": "Update a pending scheduled trip",
-        "description": "Edits a still-pending scheduled trip. Only the owning rider may update, and only while the trip is 'pending' (not yet promoted, cancelled, or expired).\n\n**Updatable Fields:**\n- `scheduled_for`, `pickup_lat`, `pickup_lng`, `pickup_address`, `dropoff_lat`, `dropoff_lng`, `dropoff_address`.\n- Partial update: omitted fields are left unchanged.\n- `trip_type`, `star`, and status are not editable here; changing the booked car class means cancelling and rebooking, because the class determines the fare.\n\n**Restrictions:**\n- Caller must own the trip (else 403) and the trip must exist (else 404).\n- The trip must be 'pending'; if it has been promoted, cancelled, or expired the call returns 409.\n- If `scheduled_for` is supplied it is re-validated to the 30-minutes-to-7-days window; outside that returns 400.\n- Coordinates are WGS84 lat/lng; `scheduled_for` is RFC3339 UTC.",
+        "description": "Edits a still-pending scheduled trip. Only the owning rider may update, and only while the trip is 'pending' (not yet promoted, cancelled, or expired).\n\n**Updatable Fields:**\n- `scheduled_for`, `pickup_lat`, `pickup_lng`, `pickup_address`, `dropoff_lat`, `dropoff_lng`, `dropoff_address`.\n- Partial update: omitted fields are left unchanged.\n- `trip_type`, `star`, and status are not editable here; changing the booked car class means cancelling and rebooking, because the class determines the fare.\n\n**Restrictions:**\n- Caller must own the trip (else 403) and the trip must exist (else 404).\n- The trip must be 'pending'; if it has been promoted, cancelled, or expired the call returns 409.\n- If `scheduled_for` is supplied it is re-validated to the 30-minutes-to-7-days window; outside that returns 400.\n- The pickup and dropoff the trip ends up with must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}` (checked on the merged values).\n- Coordinates are WGS84 lat/lng; `scheduled_for` is RFC3339 UTC.",
         "operationId": "update_scheduled_trip",
         "parameters": [
           {
@@ -8268,7 +8304,7 @@
             }
           },
           "400": {
-            "description": "Supplied scheduled_for is under 30 minutes or over 7 days out"
+            "description": "Supplied scheduled_for is under 30 minutes or over 7 days out, or the resulting pickup/dropoff is outside Iraq (`outside_service_area`)"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -8556,7 +8592,7 @@
           "Scheduling"
         ],
         "summary": "Add a multi-stop waypoint",
-        "description": "Appends an intermediate stop to a live regular trip. Only the owning rider may add stops, capped at 3 per trip.\n\n**Features:**\n- Auto-assigns the next `seq` (current stop count + 1) and starts the stop as 'pending'.\n\n**Behavior:**\n1. Load the trip and verify the caller owns it.\n2. Require `trip_type` to be 'regular' (multi-stop is regular-only).\n3. Require the trip status to be 'accepted' or 'in_progress'.\n4. Reject when the trip already has 3 stops; otherwise persist the new stop.\n\n**Restrictions:**\n- Caller must own the trip (else 403) and the trip must exist (else 404).\n- Non-regular trip type or a trip not in 'accepted'/'in_progress' returns 400.\n- At most 3 stops per trip; a 4th returns 409.\n- Coordinates are WGS84 lat/lng.",
+        "description": "Appends an intermediate stop to a live regular trip. Only the owning rider may add stops, capped at 3 per trip.\n\n**Features:**\n- Auto-assigns the next `seq` (current stop count + 1) and starts the stop as 'pending'.\n\n**Behavior:**\n1. Load the trip and verify the caller owns it.\n2. Require `trip_type` to be 'regular' (multi-stop is regular-only).\n3. Require the trip status to be 'accepted' or 'in_progress'.\n4. Reject when the trip already has 3 stops; otherwise persist the new stop.\n\n**Restrictions:**\n- Caller must own the trip (else 403) and the trip must exist (else 404).\n- Non-regular trip type or a trip not in 'accepted'/'in_progress' returns 400.\n- At most 3 stops per trip; a 4th returns 409.\n- The stop must be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- Coordinates are WGS84 lat/lng.",
         "operationId": "add_stop",
         "parameters": [
           {
@@ -8592,7 +8628,7 @@
             }
           },
           "400": {
-            "description": "Trip is not a regular trip, or not in 'accepted'/'in_progress' status"
+            "description": "Trip is not a regular trip, not in 'accepted'/'in_progress' status, or the stop is outside Iraq (`outside_service_area`)"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -8861,7 +8897,7 @@
           "Trips"
         ],
         "summary": "Request a regular trip",
-        "description": "Create a regular point-to-point trip request as the authenticated rider.\n\n**Features:**\n- Fare is computed server-side from a haversine distance between pickup and dropoff (WGS84 lat/lng) using the admin-configurable tiered normal-taxi rate.\n- Tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, then rounded UP to the nearest `round_to_iqd`. Defaults: base 2000, 250 IQD/km up to 10 km, 125 IQD/km beyond, rounded up to 250 IQD. All values are editable from admin settings (`pricing.regular_*`, `pricing.tier_threshold_km`, `pricing.round_to_iqd`).\n- Fare and base fare are returned in integer IQD (no decimals).\n- On creation the trip is fire-and-forget dispatched: a background broadcast publishes `beep.trip.requested` to the nearest captains.\n\n**Behavior:**\n1. Reject if the rider already has an active (non-terminal) trip.\n2. Compute distance, per-km rate, and total fare; create the trip in status `requested`.\n3. Spawn the dispatch broadcast (failures are logged, not surfaced to the caller).\n\n**Restrictions:**\n- Requires a valid bearer token; `claims.sub` is used as the rider id.\n- One active trip per rider; a second concurrent request is rejected with 409.",
+        "description": "Create a regular point-to-point trip request as the authenticated rider.\n\n**Features:**\n- Fare is computed server-side from a haversine distance between pickup and dropoff (WGS84 lat/lng) using the admin-configurable tiered normal-taxi rate.\n- Tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, then rounded UP to the nearest `round_to_iqd`. Defaults: base 2000, 250 IQD/km up to 10 km, 125 IQD/km beyond, rounded up to 250 IQD. All values are editable from admin settings (`pricing.regular_*`, `pricing.tier_threshold_km`, `pricing.round_to_iqd`).\n- Fare and base fare are returned in integer IQD (no decimals).\n- On creation the trip is fire-and-forget dispatched: a background broadcast publishes `beep.trip.requested` to the nearest captains.\n\n**Behavior:**\n1. Reject if the rider already has an active (non-terminal) trip.\n2. Compute distance, per-km rate, and total fare; create the trip in status `requested`.\n3. Spawn the dispatch broadcast (failures are logged, not surfaced to the caller).\n\n**Restrictions:**\n- Requires a valid bearer token; `claims.sub` is used as the rider id.\n- One active trip per rider; a second concurrent request is rejected with 409.\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.",
         "operationId": "request_trip",
         "requestBody": {
           "content": {
@@ -8883,6 +8919,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Pickup or dropoff outside Iraq: `{\"error\":\"outside_service_area\"}`"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -8935,18 +8974,68 @@
         ]
       }
     },
+    "/api/trips/box": {
+      "post": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Book a Box (parcel delivery) trip",
+        "description": "Create a Box trip as the authenticated rider: a captain picks up the rider's items at the pickup pin and delivers them to a recipient at the dropoff pin.\n\n**Features:**\n- Priced server-side for the requested `star` exactly like a regular trip, plus the admin-editable Box fee (`pricing.box_surcharge_iqd`, seeded 500) added BEFORE the round-up to `pricing.round_to_iqd`. `GET /api/trips/estimate?trip_type=box&star=N` returns the same number.\n- A promo code applies to the Box gross fare (fee included) exactly as for a regular trip; the returned `fare_iqd` is net of `discount_iqd`.\n- Addresses are trimmed, blanks become null, and a missing one is filled from the nearest known place.\n- The trip row (`trip_type='box'`, `status='requested'`, `requested_star=star`) and its parcel row are inserted in ONE transaction, so a Box trip never exists without its parcel.\n- Dispatch is fire-and-forget and identical to regular: exact-star captains first, then higher stars after `dispatch.star_widen_after_seconds`. Captains see the description and first photo, never the recipient phone.\n\n**Behavior:**\n1. 400 `outside_service_area` if either pin is outside Iraq.\n2. 400 `invalid_box_description` unless the trimmed `description` is 3-500 characters with no control characters other than line breaks and tabs (missing or null is the same 400).\n3. 400 `invalid_recipient_phone` unless `recipient_phone` normalizes to `9647XXXXXXXXX` (accepts `07XXXXXXXXX`, `7XXXXXXXXX`, `9647XXXXXXXXX`, `+9647XXXXXXXXX`, `009647XXXXXXXXX`; Arabic-Indic digits and spaces tolerated).\n4. 400 `invalid_box_photos` for more than 3 `photo_keys`, a duplicate, a key that is not `box-photos/{your rider id}/{lowercase uuid}`, or a photo that is missing from storage, is not an image, or is larger than 8 MiB (each key is checked with a HEAD).\n5. 409 `{\"error\":\"rider already has an active trip\",\"active_trip_id\":\"...\"}` when the rider already has a non-terminal trip.\n6. Price, resolve the promo (existing promo 400s unchanged), insert trip + parcel, commit the promo reservation (on failure the trip and parcel are deleted and the promo error is returned).\n7. Return 201 with the `Trip` (`trip_type: \"box\"`) and start the dispatch broadcast.\n\n**Restrictions:**\n- Rider role only; any other role gets 403.\n- One active trip per rider (any type).\n- `recipient_name` has control characters removed, is trimmed, blank becomes null, capped at 120 characters.\n- The parcel (description, photos, recipient) is NOT on the `Trip`; read it with `GET /api/trips/{id}/box`.",
+        "operationId": "request_box_trip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBoxTripDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Box trip created in `requested`; dispatch broadcast started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trip"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bare code in `error`: `outside_service_area`, `invalid_box_description`, `invalid_recipient_phone` or `invalid_box_photos`; or a promo-code error (`bad request: promo code ...`, as for `POST /api/trips`)"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller is not a rider"
+          },
+          "409": {
+            "description": "Rider already has an active trip: `{\"error\":\"rider already has an active trip\",\"active_trip_id\":\"<uuid>\"}`"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/trips/estimate": {
       "get": {
         "tags": [
           "Trips"
         ],
         "summary": "Estimate a fare before requesting",
-        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals).\n- `distance_km`: the haversine distance between pickup and dropoff (WGS84 lat/lng) in km.\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- Fare uses the admin-configurable tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, rounded UP to the nearest `round_to_iqd`. `trip_type=abriyah` selects the Abriyah tiers/base; any other value (or omitted) uses the normal-taxi tiers. `zone_id` no longer changes the per-km rate (pricing is global per type).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Abriyah pricing preview by passing `trip_type=abriyah`.",
+        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals).\n- `distance_km`: the haversine distance between pickup and dropoff (WGS84 lat/lng) in km.\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- `discount_iqd` / `final_fare_iqd`: the potential promo discount and `max(0, fare_iqd - discount_iqd)`.\n- `surcharge_iqd`: the Box fee already included in `fare_iqd` (the current `pricing.box_surcharge_iqd`); 0 for regular and Abriyah.\n- Fare uses the admin-configurable tiered model: `base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`, rounded UP to the nearest `round_to_iqd`. `trip_type=abriyah` selects the Abriyah tiers/base; `trip_type=box` uses the `star` normal-taxi tiers with the Box fee added BEFORE the round-up (so Box fares stay on the same grid, and equal what `POST /api/trips/box` charges); any other value (or omitted) uses the `star` normal-taxi tiers. `zone_id` no longer changes the per-km rate (pricing is global per type).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Abriyah pricing preview by passing `trip_type=abriyah`.\n- Box price preview by passing `trip_type=box&star=1|2|3`.\n\n**Restrictions:**\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.",
         "operationId": "fare_estimate_public",
         "parameters": [
           {
             "name": "trip_type",
             "in": "query",
+            "description": "\"regular\" (default) | \"abriyah\" | \"box\". Unknown values price as regular.",
             "required": false,
             "schema": {
               "type": [
@@ -9018,7 +9107,7 @@
           {
             "name": "star",
             "in": "query",
-            "description": "Desired car star class (1..3) for a normal-trip estimate; omitted = 1.\nIgnored when `trip_type=abriyah`.",
+            "description": "Desired car star class (1..3) for a normal or Box estimate; omitted = 1.\nIgnored when `trip_type=abriyah`.",
             "required": false,
             "schema": {
               "type": [
@@ -9041,7 +9130,7 @@
             }
           },
           "400": {
-            "description": "Malformed or missing query parameters"
+            "description": "Malformed or missing query parameters, or a point outside Iraq (`{\"error\":\"outside_service_area\"}`)"
           }
         }
       }
@@ -9097,7 +9186,7 @@
           "Trips"
         ],
         "summary": "Captain accepts a trip",
-        "description": "Captain claims a trip, moving it through the state machine to `accepted`.\n\n**Behavior:**\n1. Require a captain token; the captain id is taken from the JWT `sub`.\n2. Validate the transition to `accepted` for the actor `captain` (`requested -> accepted` for regular, `matched -> accepted` for Abriyah).\n3. For a `regular` trip, reject with 409 if the captain's star grade is BELOW the trip's `requested_star`. Equal or higher is accepted: dispatch widens an unclaimed offer to higher-graded captains after `dispatch.star_widen_after_seconds`, and the rider pays the tier they booked either way, so a better car is never a fare surprise. Abriyah (`matched`) trips ignore the star grade.\n4. Reject if this captain already has an active trip.\n5. Apply the optimistic-lock accept (`accept` for `requested`, `accept_matched` for `matched`); any other current status is a conflict.\n6. On success, publish `beep.trip.accepted` and enqueue a `trip_accepted` push to the rider.\n\n**Use Cases:**\n- Captain app tapping Accept on a dispatched trip offer.\n\n**Telling the three 409s apart** (the body `error` string is the discriminator, so surface it rather than a generic message):\n- `captain star does not match the requested class` -- this captain is graded BELOW the booked class. Not retryable; the offer was never theirs to take.\n- `captain already has an active trip` -- finish or cancel the current ride first.\n- anything else -- another captain took it, or the trip was cancelled. Drop it from the queue and refresh.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403.\n- One active trip per captain; a second accept is rejected with 409.\n- Invalid source state yields 400 (illegal transition) or 409 (lost optimistic lock / stale status).",
+        "description": "Captain claims a trip, moving it through the state machine to `accepted`.\n\n**Behavior:**\n1. Require a captain token; the captain id is taken from the JWT `sub`.\n2. Validate the transition to `accepted` for the actor `captain` (`requested -> accepted` for regular, `matched -> accepted` for Abriyah).\n3. For a `regular` or `box` trip, reject with 409 if the captain's star grade is BELOW the trip's `requested_star`. Equal or higher is accepted: dispatch widens an unclaimed offer to higher-graded captains after `dispatch.star_widen_after_seconds`, and the rider pays the tier they booked either way, so a better car is never a fare surprise. Abriyah (`matched`) trips ignore the star grade.\n4. Reject if this captain already has an active trip.\n5. Apply the optimistic-lock accept (`accept` for `requested`, `accept_matched` for `matched`); any other current status is a conflict.\n6. On success, publish `beep.trip.accepted` and enqueue a `trip_accepted` push to the rider (Box trips get the body \"A captain is coming to pick up your box\").\n\n**Use Cases:**\n- Captain app tapping Accept on a dispatched trip offer.\n\n**Telling the three 409s apart** (the body `error` string is the discriminator, so surface it rather than a generic message):\n- `captain star does not match the requested class` -- this captain is graded BELOW the booked class. Not retryable; the offer was never theirs to take.\n- `captain already has an active trip` -- finish or cancel the current ride first.\n- anything else -- another captain took it, or the trip was cancelled. Drop it from the queue and refresh.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403.\n- One active trip per captain; a second accept is rejected with 409.\n- Invalid source state yields 400 (illegal transition) or 409 (lost optimistic lock / stale status).",
         "operationId": "accept_trip",
         "parameters": [
           {
@@ -9196,6 +9285,54 @@
         ]
       }
     },
+    "/api/trips/{id}/box": {
+      "get": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Get a Box trip's parcel details",
+        "description": "Return the parcel of a Box trip: description, item photos, recipient name and recipient phone. This is the ONLY endpoint that serves the recipient phone or the photos.\n\n**Returns:**\n- `trip_id`, `description`, `recipient_phone` (digits only, `9647XXXXXXXXX`), `recipient_name` (null when not given), `surcharge_iqd` (the Box fee folded into the fare at booking).\n- `photo_urls`: short-lived (about 5 minutes) presigned GET URLs in the order the rider attached them; empty when there are no photos. Re-fetch for fresh URLs instead of caching them.\n\n**Access Control:**\n- Rider: only the rider who booked the trip, in any status.\n- Captain: only the assigned captain, only while the trip is `accepted` or `in_progress`, and only while the captain account is `approved` (a blocked captain gets 403 at once).\n- Admin roles (`super_admin`, `operator`, `finance`): always.\n- Anyone else: 403 `{\"error\":\"forbidden\"}`.\n\n**Use Cases:**\n- Rider live-trip screens showing the parcel summary card.\n- Captain live-trip screen showing the parcel and a tap-to-call on the recipient.\n- Admin trip detail Box section.\n\n**Privacy:**\n- The recipient phone never appears in `GET /api/trips/{id}`, `GET /api/trips`, captain offers, WebSocket frames, push payloads or the audit log.",
+        "operationId": "get_box_details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Trip id (UUID) of a Box trip",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trip's parcel details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoxDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "403": {
+            "description": "Caller is not the owning rider, the assigned (approved) captain while accepted/in_progress, or an admin"
+          },
+          "404": {
+            "description": "No trip with this id, or the trip is not a Box trip"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/trips/{id}/cancel": {
       "post": {
         "tags": [
@@ -9263,7 +9400,7 @@
           "Trips"
         ],
         "summary": "Captain completes the trip",
-        "description": "End the ride, transitioning the trip `in_progress -> completed` and writing the per-rider fare/distance breakdown.\n\n**Behavior:**\n1. Validate the transition to `completed` for the actor `captain`.\n2. Write a single-rider breakdown (this trip's fare in integer IQD and distance in km keyed by the rider id) and complete with the trip's current version.\n3. Publish `beep.trip.completed` and enqueue a `trip_completed` push to the rider.\n4. Best-effort reports rollup (trip volume, revenue-by-zone, leaderboard) -- failures are logged, never surfaced.\n5. Best-effort wallet charge of the fare from the rider's wallet (v1 in-wallet MockGateway). An insufficient-balance debit is recorded as a `failed` ledger row and logged; it never blocks completion.\n\n**Use Cases:**\n- Captain app tapping Complete at the dropoff.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403. The completing captain id is taken from the JWT `sub`.\n- The captain must be `approved`; a pending/rejected/blocked captain is rejected with 403.\n- Trip must be in `in_progress`; an illegal transition yields 400.\n- A lost optimistic lock (concurrent update) yields 409.",
+        "description": "End the ride, transitioning the trip `in_progress -> completed` and writing the per-rider fare/distance breakdown.\n\n**Behavior:**\n1. Validate the transition to `completed` for the actor `captain`.\n2. Write a single-rider breakdown (this trip's fare in integer IQD and distance in km keyed by the rider id) and complete with the trip's current version.\n3. Publish `beep.trip.completed` and enqueue a `trip_completed` push to the rider (Box trips: title \"Box delivered\", body \"Your box has been delivered\").\n4. Best-effort reports rollup (trip volume, revenue-by-zone, leaderboard) -- failures are logged, never surfaced. Box fares land in revenue-by-zone `box_fare_iqd` (and in `total_fare_iqd`).\n5. Best-effort wallet charge of the fare from the rider's wallet (v1 in-wallet MockGateway). An insufficient-balance debit is recorded as a `failed` ledger row and logged; it never blocks completion.\n\n**Use Cases:**\n- Captain app tapping Complete at the dropoff.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403. The completing captain id is taken from the JWT `sub`.\n- The captain must be `approved`; a pending/rejected/blocked captain is rejected with 403.\n- Trip must be in `in_progress`; an illegal transition yields 400.\n- A lost optimistic lock (concurrent update) yields 409.",
         "operationId": "complete_trip",
         "parameters": [
           {
@@ -10426,6 +10563,51 @@
           }
         }
       },
+      "BoxDetails": {
+        "type": "object",
+        "description": "Parcel details of a Box trip -- the ONLY place the recipient phone and the\nphotos are served. Returned by `GET /api/trips/{id}/box` to the owning rider,\nthe assigned captain (while `accepted`/`in_progress`) and admins.",
+        "required": [
+          "trip_id",
+          "description",
+          "recipient_phone",
+          "photo_urls",
+          "surcharge_iqd"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What is being sent (3..=500 characters, as the rider typed it, trimmed)."
+          },
+          "photo_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Short-lived (about 5 minutes) presigned GET URLs of the item photos, in\nthe order the rider attached them. Empty when there are no photos.\nRe-fetch this endpoint for fresh URLs rather than caching them."
+          },
+          "recipient_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Recipient name; null when the rider did not give one."
+          },
+          "recipient_phone": {
+            "type": "string",
+            "description": "Recipient mobile, digits only, normalized `9647XXXXXXXXX` (no `+`)."
+          },
+          "surcharge_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Box fee in integer IQD that was folded into the trip fare at booking."
+          },
+          "trip_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The Box trip these details belong to."
+          }
+        }
+      },
       "BulkActionResult": {
         "type": "object",
         "description": "Aggregate outcome of a bulk action: how many rows succeeded vs. failed, with\na per-failed-row reason.",
@@ -10566,7 +10748,7 @@
               "string",
               "null"
             ],
-            "description": "Restrict to one trip type: \"regular\" | \"abriyah\". Null = both types."
+            "description": "Restrict to one trip type: \"regular\" | \"abriyah\" | \"box\". Null = all types."
           },
           "zone_id": {
             "type": [
@@ -11353,7 +11535,7 @@
       },
       "CaptainOffer": {
         "type": "object",
-        "description": "A pending offer (regular trip or Abriyah room) visible to a captain.\nReturned by `GET /api/captain/trip-queue`; women-only rooms are pre-filtered\nout for non-female captains (G-ABRIYAH-02 / G-MF-06).",
+        "description": "A pending offer (regular or Box trip, or Abriyah room) visible to a captain.\nReturned by `GET /api/captain/trip-queue`; women-only rooms are pre-filtered\nout for non-female captains (G-ABRIYAH-02 / G-MF-06). A Box offer carries\nthe parcel description and first photo, but NEVER the recipient phone (that\nis served to the assigned captain only, by `GET /api/trips/{id}/box`).",
         "required": [
           "offer_type",
           "id",
@@ -11362,9 +11544,29 @@
           "dropoff_lat",
           "dropoff_lng",
           "fare_iqd",
-          "created_at"
+          "created_at",
+          "box_photo_count"
         ],
         "properties": {
+          "box_description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Box parcel description (full text, up to 500 characters). Null for\nregular trips and rooms."
+          },
+          "box_photo_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of parcel photos (0..=3). 0 for regular trips and rooms."
+          },
+          "box_photo_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short-lived (about 5 minutes) presigned GET URL of the parcel's FIRST\nphoto. Null for a Box trip without photos, regular trips and rooms."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -11390,7 +11592,7 @@
           "fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "Fare in integer IQD (no decimals). For rooms this is the seed trip's fare."
+            "description": "Fare in integer IQD (no decimals). For rooms this is the seed trip's fare.\nFor a Box trip it already includes the Box fee."
           },
           "id": {
             "type": "string",
@@ -11399,7 +11601,7 @@
           },
           "offer_type": {
             "type": "string",
-            "description": "Kind of offer: `\"trip\"` for a pending regular trip, `\"room\"` for an open\nAbriyah room."
+            "description": "Kind of offer: `\"trip\"` for a pending regular or Box trip, `\"room\"` for\nan open Abriyah room."
           },
           "pickup_address": {
             "type": [
@@ -11425,6 +11627,13 @@
             ],
             "description": "Room privacy: `\"mixed\"` | `\"women_only\"` for rooms; null for regular\ntrips. Women-only rooms are pre-filtered out for non-female captains."
           },
+          "trip_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trip kind for trip offers: `\"regular\"` | `\"box\"`. Null for room offers."
+          },
           "zone_id": {
             "type": [
               "string",
@@ -11447,7 +11656,7 @@
             "items": {
               "$ref": "#/components/schemas/CaptainOffer"
             },
-            "description": "Pending offers (regular trips and Abriyah rooms) the captain may accept;\nempty when none are available."
+            "description": "Pending offers (regular and Box trips, and Abriyah rooms) the captain may\naccept; empty when none are available."
           }
         }
       },
@@ -11843,6 +12052,99 @@
           "role": {
             "type": "string",
             "description": "Access tier to grant: one of \"super_admin\" | \"operator\" | \"finance\"."
+          }
+        }
+      },
+      "CreateBoxTripDto": {
+        "type": "object",
+        "description": "Request body to book a Box (parcel delivery) trip: the regular trip fields\nplus the parcel. Validated in order: pins inside Iraq, `description`,\n`recipient_phone`, `photo_keys`, then the promo code.",
+        "required": [
+          "pickup_lat",
+          "pickup_lng",
+          "dropoff_lat",
+          "dropoff_lng",
+          "description",
+          "recipient_phone"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What is being sent. Trimmed; must be 3..=500 characters with no control\ncharacters other than line breaks and tabs, else 400\n`invalid_box_description` (a missing or null value gets the same 400).\nShown to captains in the offer."
+          },
+          "dropoff_address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional human-readable dropoff address (up to 255 chars). Blank is\nstored as null; a missing one is filled from the nearest known place."
+          },
+          "dropoff_lat": {
+            "type": "number",
+            "format": "double",
+            "description": "Dropoff latitude (WGS84 decimal degrees). Where the recipient receives it."
+          },
+          "dropoff_lng": {
+            "type": "number",
+            "format": "double",
+            "description": "Dropoff longitude (WGS84 decimal degrees)."
+          },
+          "photo_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "0-3 object keys returned by `POST /api/rider/box/photos/upload-url`, in\ndisplay order, each already uploaded. Omit, send null or `[]` for no\nphotos. 400 `invalid_box_photos` for more than 3, a duplicate, a key not\nof the form `box-photos/{your rider id}/{lowercase uuid}`, or an object\nthat is missing from storage, is not an image, or is larger than 8 MiB."
+          },
+          "pickup_address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional human-readable pickup address (up to 255 chars). Blank is stored\nas null; a missing one is filled from the nearest known place."
+          },
+          "pickup_lat": {
+            "type": "number",
+            "format": "double",
+            "description": "Pickup latitude (WGS84 decimal degrees). Where the captain collects the box."
+          },
+          "pickup_lng": {
+            "type": "number",
+            "format": "double",
+            "description": "Pickup longitude (WGS84 decimal degrees)."
+          },
+          "promo_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional promo code, applied to the Box gross fare (Box fee included)\nexactly as for a regular trip."
+          },
+          "recipient_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional recipient name. Control characters are removed, then trimmed;\nblank becomes null; capped at 120 chars."
+          },
+          "recipient_phone": {
+            "type": "string",
+            "description": "Recipient mobile. Accepts `07XXXXXXXXX`, `7XXXXXXXXX`, `9647XXXXXXXXX`,\n`+9647XXXXXXXXX` or `009647XXXXXXXXX`, with Arabic-Indic digits and\nspaces tolerated; stored normalized as `9647XXXXXXXXX`. Anything else\n(missing or null included) is 400 `invalid_recipient_phone`. Never shown\nin an offer."
+          },
+          "star": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Desired car star class: 1, 2, or 3. Omit or null defaults to 1; other\nvalues are clamped into 1..=3. Priced and dispatched exactly like a\nregular trip of that star."
+          },
+          "zone_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional zone id, stored on the trip only (does not change the price)."
           }
         }
       },
@@ -12512,7 +12814,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip kind: \"regular\" or \"abriyah\"."
+            "description": "Trip kind: \"regular\" | \"abriyah\" | \"box\"."
           }
         }
       },
@@ -12637,7 +12939,8 @@
           "base_fare_iqd",
           "currency",
           "discount_iqd",
-          "final_fare_iqd"
+          "final_fare_iqd",
+          "surcharge_iqd"
         ],
         "properties": {
           "base_fare_iqd": {
@@ -12668,6 +12971,11 @@
             "type": "integer",
             "format": "int64",
             "description": "Fare after the discount: max(0, fare_iqd - discount_iqd)."
+          },
+          "surcharge_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Box fee in integer IQD already included in `fare_iqd` (the current\n`pricing.box_surcharge_iqd`). 0 for regular and Abriyah estimates."
           }
         }
       },
@@ -12718,7 +13026,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip type: `regular` | `abriyah`."
+            "description": "Trip type: `regular` | `abriyah` | `box`."
           },
           "zone_name": {
             "type": [
@@ -13081,7 +13389,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip type: `regular` | `abriyah`."
+            "description": "Trip type: `regular` | `abriyah` | `box`."
           },
           "zone_name": {
             "type": [
@@ -14609,6 +14917,7 @@
           "total_fare_iqd",
           "regular_fare_iqd",
           "abriyah_fare_iqd",
+          "box_fare_iqd",
           "updated_at"
         ],
         "properties": {
@@ -14616,6 +14925,11 @@
             "type": "integer",
             "format": "int64",
             "description": "Portion of revenue from Abriyah trips, in integer IQD."
+          },
+          "box_fare_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Portion of revenue from Box (parcel delivery) trips, in integer IQD,\nBox fee included."
           },
           "id": {
             "type": "string",
@@ -14639,7 +14953,7 @@
           "total_fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "Total completed-trip revenue, in integer IQD (regular + abriyah)."
+            "description": "Total completed-trip revenue, in integer IQD (regular + abriyah + box)."
           },
           "trip_count": {
             "type": "integer",
@@ -15392,7 +15706,7 @@
       },
       "Trip": {
         "type": "object",
-        "description": "A regular or Abriyah trip and its full lifecycle state, fares, and coordinates.\n\nThe PostGIS `pickup_point`/`dropoff_point` GEOGRAPHY generated columns are\nintentionally not exposed here (not SQLx-decodable); the lat/lng fields carry\nthe coordinates. `fare_per_rider_iqd`/`distance_per_rider_km` are JSONB maps\nkeyed by rider id, populated at completion.",
+        "description": "A regular, Abriyah or Box trip and its full lifecycle state, fares, and coordinates.\n\nBox (parcel delivery) trips carry NO parcel data here: the description,\nphotos and recipient are third-party PII served only by the participant-gated\n`GET /api/trips/{id}/box` ([`BoxDetails`]), because this object is readable by\nany authenticated token.\n\nThe PostGIS `pickup_point`/`dropoff_point` GEOGRAPHY generated columns are\nintentionally not exposed here (not SQLx-decodable); the lat/lng fields carry\nthe coordinates. `fare_per_rider_iqd`/`distance_per_rider_km` are JSONB maps\nkeyed by rider id, populated at completion.",
         "required": [
           "id",
           "trip_type",
@@ -15511,7 +15825,7 @@
           "fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "Total fare in integer IQD (no decimals)."
+            "description": "Total fare in integer IQD (no decimals). For a Box trip this already\nincludes the Box fee."
           },
           "fare_per_rider_iqd": {
             "type": [
@@ -15582,7 +15896,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip kind: \"regular\" (single rider) or \"abriyah\" (women-only shared room)."
+            "description": "Trip kind: \"regular\" | \"abriyah\" | \"box\". \"regular\" is a single rider,\n\"abriyah\" a seat in a shared room, \"box\" a parcel sent with a captain\n(same lifecycle as regular; parcel details via `GET /api/trips/{id}/box`)."
           },
           "updated_at": {
             "type": "string",
@@ -15736,7 +16050,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip type: \"regular\" | \"abriyah\"."
+            "description": "Trip type: \"regular\" | \"abriyah\" | \"box\"."
           },
           "zone_id": {
             "type": [
@@ -15934,7 +16248,7 @@
           },
           "trip_type": {
             "type": "string",
-            "description": "Trip type these counts cover: \"regular\" | \"abriyah\"."
+            "description": "Trip type these counts cover: \"regular\" | \"abriyah\" | \"box\"."
           },
           "updated_at": {
             "type": "string",
@@ -17199,7 +17513,7 @@
     },
     {
       "name": "Trips",
-      "description": "Regular trip lifecycle, dispatch, fares, cancellation, and ratings"
+      "description": "Regular and Box (parcel delivery) trip lifecycle, dispatch, fares, cancellation, and ratings"
     },
     {
       "name": "Abriyah",
