@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Appearance } from 'react-native'
-import { Stack, useRouter, useSegments, type Href } from 'expo-router'
+import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -23,7 +23,7 @@ import {
 import 'react-native-reanimated'
 import i18n, { languageReady } from '@/i18n'
 import { useThemeColors } from '@/hooks/use-theme-colors'
-import { useAuthStore } from '@/store/auth-store'
+import { selectIsApproved, useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { CaptainPresenceProvider } from '@/providers/captain-presence'
 import { PushProvider } from '@/providers/push-provider'
@@ -71,6 +71,9 @@ export default function RootLayout() {
     if (fontsLoaded && langReady && themeReady && hasHydrated) SplashScreen.hideAsync()
   }, [fontsLoaded, langReady, themeReady, hasHydrated])
 
+  // Held under the native splash until the persisted session is known, so the
+  // navigator's first render already has the right guards. Nothing can navigate
+  // before the navigator exists; from here on it is never unmounted.
   if (!fontsLoaded || !langReady || !themeReady || !hasHydrated)
     return <View style={{ flex: 1, backgroundColor: colors.background }} />
 
@@ -80,27 +83,15 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
             <BottomSheetModalProvider>
-              <AuthGate>
-                {/* Presence spans the whole authenticated surface (tabs + the live
-                    trip screen) so the driving screen gets live WS trip updates.
-                    It self-gates on token + approval, so it no-ops on auth screens. */}
-                <CaptainPresenceProvider>
-                  <PushProvider>
-                    <Stack screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: colors.background },
-                    }}>
-                      <Stack.Screen name="(auth)" />
-                      <Stack.Screen name="(tabs)" />
-                      <Stack.Screen name="(trip)" />
-                      <Stack.Screen name="(chat)" />
-                      <Stack.Screen name="(wallet)" />
-                      <Stack.Screen name="(account)" />
-                    </Stack>
-                  </PushProvider>
-                </CaptainPresenceProvider>
-                <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-              </AuthGate>
+              {/* Presence spans the whole authenticated surface (tabs + the live
+                  trip screen) so the driving screen gets live WS trip updates.
+                  It self-gates on token + approval, so it no-ops on auth screens. */}
+              <CaptainPresenceProvider>
+                <PushProvider>
+                  <AuthGate />
+                </PushProvider>
+              </CaptainPresenceProvider>
+              <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             </BottomSheetModalProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
@@ -109,45 +100,46 @@ export default function RootLayout() {
   )
 }
 
-function AuthGate({ children }: { children: React.ReactNode }) {
+/**
+ * The root navigator, where the session decides which screens EXIST. A captain
+ * without an approved session has no (tabs), (trip), (chat), (wallet) or
+ * (account) route at all, and an approved one has no (auth). When the guard
+ * flips, the stack drops the routes that went away and lands on its first
+ * available screen in the same render: an approved login goes to (tabs), a
+ * logout or a 401 from anywhere goes to (auth), and a cold launch starts on the
+ * right group (the launch route, '/' = (tabs), is checked against the guards
+ * before the first render). The wrong screen never mounts, so its hooks never
+ * fire. app/(auth)/_layout.tsx does the same for login vs status inside (auth).
+ *
+ * Why guards and not redirects: expo-router 6 doesn't navigate synchronously.
+ * router.replace() queues the action and dispatches it from an effect after the
+ * next render, so the navigator it targets must still be mounted by then. The
+ * old gate computed a redirect during render and swapped the whole Stack for a
+ * blank view until it landed. The queued REPLACE then found no navigator ("not
+ * handled by any navigator") and was dropped, and where the remounted Stack
+ * ended up was luck: a pending login could land on the home map. So the Stack
+ * is never unmounted, and a session change needs no router call: login.tsx only
+ * stores the session. Navigating to a screen a guard has removed is a no-op.
+ */
+function AuthGate() {
   const colors = useThemeColors()
-  const token = useAuthStore((s) => s.token)
-  const captain = useAuthStore((s) => s.captain)
-  const pendingCaptainId = useAuthStore((s) => s.pendingCaptainId)
-  const segments = useSegments()
-  const router = useRouter()
-
-  // Decide where this session belongs SYNCHRONOUSLY from the persisted auth
-  // state — don't trust the route the router mounts first. On launch it renders
-  // (tabs) before any redirect effect runs, so a logged-out user briefly sees
-  // the tabs ("skipping auth"). We compute the target during render and block
-  // rendering children until we're on it, so the wrong screen never mounts.
-  const inAuthGroup = segments[0] === '(auth)'
-  const path = segments.join('/')
-  const inRegister = path.startsWith('(auth)/register')
-  const isApproved = !!token && captain?.status === 'approved'
-  const isPendingLike =
-    (!!token && !!captain && captain.status !== 'approved') || !!pendingCaptainId
-
-  let target: Href | null = null
-  if (isApproved) {
-    if (inAuthGroup) target = '/(tabs)'
-  } else if (isPendingLike) {
-    // Pending/rejected/blocked. Park on the status screen until approved. Don't
-    // redirect while they're still in the register wizard (uploading documents).
-    if (!inRegister && path !== '(auth)/status') target = '/(auth)/status'
-  } else if (!token) {
-    // No session at all → login. This is the case that was leaking into (tabs).
-    if (!inAuthGroup) target = '/(auth)/login'
-  }
-
-  useEffect(() => {
-    if (target) router.replace(target)
-  }, [target])
-
-  // While a redirect is pending, render the splash-colored gate instead of
-  // children so the wrong screen never mounts (and never fires its hooks).
-  if (target) return <View style={{ flex: 1, backgroundColor: colors.background }} />
-
-  return <>{children}</>
+  const isApproved = useAuthStore(selectIsApproved)
+  return (
+    <Stack screenOptions={{
+      headerShown: false,
+      contentStyle: { backgroundColor: colors.background },
+    }}>
+      {/* (tabs) comes first: it is where an approved session lands. */}
+      <Stack.Protected guard={isApproved}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(trip)" />
+        <Stack.Screen name="(chat)" />
+        <Stack.Screen name="(wallet)" />
+        <Stack.Screen name="(account)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!isApproved}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
+  )
 }

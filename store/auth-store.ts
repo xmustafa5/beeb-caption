@@ -59,3 +59,18 @@ export const useAuthStore = create<AuthStore>()(
     },
   ),
 )
+
+// Which screens a session may see. The navigation guards (AuthGate in
+// app/_layout.tsx, and app/(auth)/_layout.tsx) read these as selectors, so a
+// layout re-renders only when the answer changes.
+
+/** An approved captain with a token: the only session the operational app is for. */
+export const selectIsApproved = (s: AuthStore): boolean =>
+  !!s.token && s.captain?.status === 'approved'
+
+/**
+ * Registered but not approved: a token for a pending / rejected / blocked
+ * captain, or a registration awaiting review. Parked on the status screen.
+ */
+export const selectIsPendingLike = (s: AuthStore): boolean =>
+  (!!s.token && !!s.captain && s.captain.status !== 'approved') || !!s.pendingCaptainId

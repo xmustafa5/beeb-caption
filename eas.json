@@ -20,6 +20,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://beeb.madebyhaithem.com"
       }
     },
     "production": {
@@ -30,6 +33,9 @@
       },
       "ios": {
         "distribution": "store"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://beeb.madebyhaithem.com"
       }
     }
   },

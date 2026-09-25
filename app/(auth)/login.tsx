@@ -62,8 +62,11 @@ function CaptainLoginForm() {
     onMutate: () => setApiError(null),
     onSuccess: (res) => {
       if (res.kind === 'authed') {
+        // Storing the session is the navigation: the guards in app/_layout.tsx and
+        // app/(auth)/_layout.tsx swap this screen for (tabs) when approved, or for
+        // the status screen otherwise. Don't router.replace() as well. It runs after
+        // the guards have already landed and mounts a second copy of the destination.
         useAuthStore.getState().setSession(res.token, res.captain)
-        router.replace(res.captain.status === 'approved' ? '/(tabs)' : '/(auth)/status')
       } else if (res.kind === 'forbidden') {
         // 403 — registered but rejected or blocked (no token, no captain record).
         // Pass forbidden=1 so the status screen shows the "not approved — contact

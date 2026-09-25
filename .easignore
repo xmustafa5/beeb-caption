@@ -18,3 +18,6 @@
 dist/
 web-build/
 *.tsbuildinfo
+
+# Local env overrides (never upload: they point the app at a dev backend)
+.env*.local
