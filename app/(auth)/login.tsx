@@ -6,7 +6,8 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { useThemeColors } from '@/hooks/use-theme-colors'
+import { StatusBar } from 'expo-status-bar'
+import { SchemeOverride, useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Button } from '@/components/ui/button'
@@ -25,7 +26,18 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
+// The login background art is light, so this screen renders light even in
+// dark mode — the register wizard it links to keeps following the user's theme.
 export default function CaptainLoginScreen() {
+  return (
+    <SchemeOverride scheme="light">
+      <StatusBar style="dark" />
+      <CaptainLoginForm />
+    </SchemeOverride>
+  )
+}
+
+function CaptainLoginForm() {
   const { t } = useTranslation()
   const colors = useThemeColors()
   const router = useRouter()

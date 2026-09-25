@@ -47,6 +47,12 @@ export function AuthScaffold({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Full-bleed brand art; its busy part sits in the top third, clear of the form. */}
+      <Image
+        source={require('@/assets/images/auth-bg.jpg')}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        contentFit="cover"
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
