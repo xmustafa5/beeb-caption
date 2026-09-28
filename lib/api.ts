@@ -73,14 +73,24 @@ export function isWrongPasswordError(error: unknown): boolean {
 // credential in the request body rather than a dead token. Note the exemption is
 // keyed to what the SERVER said, not to which endpoint was called: an expired
 // token on DELETE /api/captain/me still signs the captain out, as it must.
+//
+// Only a 401 for the session the app is in now ends it. A request sent with
+// another JWT (the logout push-token clear, which carries the ended session's
+// JWT and is retried until it lands, or a request from a session that has
+// since been replaced) says nothing about the captain signed in now.
+export function endsCurrentSession(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 401 || isWrongPasswordError(error)) {
+    return false
+  }
+  const sent = error.config?.headers?.Authorization
+  const current = useAuthStore.getState().token
+  return !!current && sent === `Bearer ${current}`
+}
+
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
-    const status = error.response?.status
-    const hadAuth = !!error.config?.headers?.Authorization
-    if (status === 401 && hadAuth && !isWrongPasswordError(error)) {
-      useAuthStore.getState().clear()
-    }
+    if (endsCurrentSession(error)) useAuthStore.getState().clear()
     return Promise.reject(error)
   },
 )

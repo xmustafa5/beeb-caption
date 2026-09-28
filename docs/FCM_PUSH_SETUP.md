@@ -19,8 +19,9 @@ and can only be done by the project owner — steps below.
   language (`ar` / `ckb` / `en`); the backend writes every push in it (unknown →
   Arabic). A `400 invalid_language` falls back to registering the token alone.
 - `lib/push-registration.ts` — what the backend was last told (session + language),
-  so a report is sent once per change, one at a time, and a failed one is retried
-  when the app comes back to the foreground.
+  so a report is sent once per change, one at a time. A report or logout clear that
+  did not land (offline, backend down) is retried on a slow timer (30 s, 1 min,
+  2 min, then every 5 min) and at once when the app comes back to the foreground.
 - `providers/push-provider.tsx` — mounted in `app/_layout.tsx` inside
   `CaptainPresenceProvider`:
   - On login (and at every launch): asks notification permission (once per
@@ -29,6 +30,11 @@ and can only be done by the project owner — steps below.
   - On a language switch: registers the same token again with the new language
     (a switch to or from English restarts the app; the launch after it reports it).
   - On logout (token cleared): clears the token backend-side with the ended session's JWT.
+    A clear that did not land is kept for the rest of the app run and retried (and
+    tried again before the next captain registers), until it lands or the JWT has
+    expired. A 401 for that old JWT never signs out whoever is signed in now
+    (`lib/api.ts`). If the same captain signs back in, the old clear is dropped: it
+    would wipe their new registration.
   - Foreground Nafarat room offer: re-presented once from the app's own copy
     (the backend's copy is hidden), so it is in the language on screen.
   - Foreground policy: suppresses the banner for the chat thread you're **already

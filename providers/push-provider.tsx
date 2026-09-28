@@ -132,8 +132,9 @@ async function prepareChannels(): Promise<void> {
 }
 
 // One registrar for the app run: it remembers what the backend was told, so a
-// re-render never re-sends, and a login / logout / language switch that lands
-// mid-registration is queued rather than raced.
+// re-render never re-sends, a login / logout / language switch that lands
+// mid-registration is queued rather than raced, and a logout clear that did not
+// land is kept and retried.
 const registrar = createPushRegistrar({
   canUsePush: () => Device.isDevice, // emulators/simulators can't get FCM tokens
   ensurePermission: async (mayPrompt) => {
@@ -167,8 +168,9 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
     void registrar.sync({ session: token, language })
   }, [token, language])
 
-  // A report that failed (offline, backend down) is retried when the captain
-  // comes back to the app; one that landed is not re-sent.
+  // A report or logout clear that failed (offline, backend down) is retried on a
+  // slow timer by the registrar, and at once when the captain comes back to the
+  // app; one that landed is not re-sent.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void registrar.retry()

@@ -6834,8 +6834,8 @@
         "tags": [
           "Riders"
         ],
-        "summary": "Register or clear my FCM push token",
-        "description": "Store (or remove) the caller's FCM device token used for push notification delivery.\n\n**Features:**\n- Works for both riders and captains: the token is written to the row matching the JWT role (the `users` table for a rider, the `captains` table for a captain).\n- Sending `{\"fcm_token\": null}` (or omitting the field) clears the stored token -- call this on logout to stop notifications.\n\n**Behavior:**\n1. Resolve the account from the token subject and role.\n2. For role `rider`, set the token on the existing rider record; for role `captain`, set it on the existing captain record (a plain UPDATE -- it never inserts a new row, and returns 404 when no row matches).\n3. Return 204 No Content on success (no response body).\n\n**Restrictions:**\n- Only the `rider` and `captain` roles are supported; any other role is rejected with 403.\n- The token is always set for the authenticated caller; there is no way to set another account's token.",
+        "summary": "Register or clear my push token and push language",
+        "description": "Store (or remove) the caller's device push token, and the language every push notification to the caller is written in.\n\n**Features:**\n- Works for both riders and captains: the token is written to the row matching the JWT role (the `users` table for a rider, the `captains` table for a captain).\n- `fcm_token`: a string stores it (trimmed; an empty or whitespace-only string clears it). `{\"fcm_token\": null}` clears the stored token -- call this on logout to stop notifications.\n- One device, one account: storing a token also clears it from every OTHER account of the same role that still holds it (a rider token from other riders, a captain token from other captains). So a previous user whose logout clear never landed (offline, or sent with an expired JWT) stops getting pushes on a phone someone else now uses.\n- `language` (optional): the app's UI language, `ar` | `ckb` | `en`. From then on every push to this account (trip updates, offers, chat, account decisions) is rendered in it by the server at send time. Omitted or `null` keeps the stored language; an account with no language on record gets Arabic. App builds that never send it keep working unchanged.\n- **Send the language WITH the token:** `{\"fcm_token\": \"<token>\", \"language\": \"ckb\"}`, at every registration and again after an in-app language switch. A backend from before push localization ignores `language` and stores the token as always, so this body is safe on every backend version.\n- Language-only body: a body with a `language` key (even `null`) and NO `fcm_token` key (e.g. `{\"language\": \"ckb\"}`) changes only the language and leaves the stored token as it is; `{\"language\": null}` changes nothing. **Do not send it until this backend version is confirmed live in production:** a backend from before push localization reads any body without `fcm_token` as a clear, so the device would silently stop getting pushes. Neither app needs it: both send the token with the language.\n\n**Behavior:**\n1. Validate `language`: anything other than `ar`, `ckb`, `en` (case-sensitive) is rejected with 400 `{\"error\":\"invalid_language\"}` and nothing is written.\n2. Resolve the account from the token subject and role.\n3. In ONE update on that row: set or clear the token when the `fcm_token` key is present; set the language when `language` is a valid code. A body with neither key (`{}`) clears the token, as it always has. When a token is stored, the same statement first clears that token from any other row of the table. It is a plain UPDATE -- it never inserts a new row, and returns 404 when no row matches.\n4. Return 204 No Content on success (no response body).\n\n**Restrictions:**\n- Only the `rider` and `captain` roles are supported; any other role is rejected with 403.\n- The token and language are always set for the authenticated caller; there is no way to set another account's.\n- A body that is not JSON, or a non-string `fcm_token` / `language`, is rejected by the framework (400 / 415 / 422, plain-text body).",
         "operationId": "set_my_fcm_token",
         "requestBody": {
           "content": {
@@ -6849,7 +6849,10 @@
         },
         "responses": {
           "204": {
-            "description": "Token stored or cleared; no response body"
+            "description": "Token and/or language stored (or token cleared); no response body"
+          },
+          "400": {
+            "description": "`language` is not one of ar, ckb, en: `{\"error\":\"invalid_language\"}`"
           },
           "401": {
             "description": "Missing or invalid bearer token"
@@ -14183,7 +14186,7 @@
       },
       "NotificationType": {
         "type": "string",
-        "description": "Category of a push notification the platform sends to a rider or captain.\n\nSerialized in snake_case and persisted to `notification_log.notification_type`.\nAllowed values: `trip_accepted` | `captain_arriving` | `trip_completed` |\n`trip_cancelled` | `room_dispatched` | `room_expired` |\n`captain_approval_decision` | `new_trip_in_queue` | `chat_message`.",
+        "description": "Category of a push notification the platform sends to a rider or captain.\n\nSerialized in snake_case and persisted to `notification_log.notification_type`\nand to the FCM / APNs `data.notification_type` the apps route taps on.\nAllowed values: `trip_accepted` | `captain_arriving` | `trip_completed` |\n`trip_cancelled` | `room_dispatched` | `room_expired` |\n`captain_approval_decision` | `new_trip_in_queue` | `chat_message`. The\napproval decisions are sent with their specific values: `captain_approved`,\n`captain_rejected`, `captain_blocked`, `captain_archived`,\n`abriyah_access_approved`, `abriyah_access_revoked`.\n\nThe title and body are NOT fixed per type: each push is rendered from the\nserver-side catalog (`common::notifications::push_copy`) in the recipient's\nlanguage (`users.language` / `captains.language`; unknown = Arabic).",
         "enum": [
           "trip_accepted",
           "captain_arriving",
@@ -15089,6 +15092,15 @@
             "description": "The trip this session masks; one active session per trip."
           }
         }
+      },
+      "PushLanguage": {
+        "type": "string",
+        "description": "A language a push notification can be rendered in.\n\nStored in `users.language` / `captains.language` (migration 068) and\nreported by the apps with their device token. `NULL` / unknown renders in\nArabic (`PushLanguage::DEFAULT`).",
+        "enum": [
+          "ar",
+          "ckb",
+          "en"
+        ]
       },
       "QiCardWebhook": {
         "type": "object",
@@ -16291,14 +16303,26 @@
       },
       "SetFcmTokenRequest": {
         "type": "object",
-        "description": "POST /api/me/fcm-token body. Registers the caller's device for push.",
+        "description": "POST /api/me/fcm-token body. Registers the caller's device for push and\nthe language pushes to this account are written in.",
         "properties": {
           "fcm_token": {
             "type": [
               "string",
               "null"
             ],
-            "description": "FCM device registration token. Send `null`/omit to clear (logout)."
+            "description": "Device push token (an FCM registration token on Android, a raw APNs\ndevice token on iOS). A string stores it; `null` clears it (logout).\nOmitted: cleared as well, UNLESS the body has a `language` key (even\n`null`) -- then the stored token is left untouched (a language-only\nupdate). Send the token WITH the language anyway: a backend from before\npush localization reads any body without `fcm_token` as a clear.",
+            "example": "fMEP0vJqS0:APA91b..."
+          },
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PushLanguage",
+                "description": "The app's UI language: `ar` | `ckb` | `en`. Every push to this account\nis rendered in it (none on record = Arabic). Omitted or `null` keeps\nthe stored language; any other value is rejected with 400\n`{\"error\":\"invalid_language\"}`. A `language` key with no `fcm_token`\nkey, even `\"language\": null`, makes a language-only body (the token is\nleft untouched)."
+              }
+            ]
           }
         }
       },

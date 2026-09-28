@@ -22,20 +22,37 @@ straight to paid"), but with 0 the insert fails, the captain's Activate tap gets
 activation stays `pending`. Seen on the local backend, where the fee is 0. Fix: when the fee is
 `<= 0`, mark the activation paid and return without a transaction or a debit; add a test.
 
+### #15 Every backend push is English-only (the "Nafarat ride nearby" one included)
+
+> **Fix written, not yet committed or deployed** (2026-09-28). Close this once the backend
+> release with it is live. Until then production writes every push in English.
+
+The backend writes every push title and body in English: "New trip nearby", "New delivery
+nearby", "Captain on the way", "No captain found", the Nafarat room offer
+(`abriyah_matching_engine.rs`, `notification_type: new_trip_in_queue`) and the rest. It did not
+know the captain's language.
+
+- **App side: done** (commit `98a7b22`). The app sends its language (`ar` / `ckb` / `en`) with
+  `POST /api/me/fcm-token` at every launch and language switch, and retries a report that did
+  not land. The production backend ignores the extra field, so this is safe to ship first. While
+  the app is in the foreground it re-presents the room offer in the captain's language from the
+  push's `rider_count` / `total_fare_iqd` data ("3 riders · 7,500 IQD").
+- **Backend side: not live.** The language column (migration 068) is committed (`e2e08fc`).
+  Rendering every push from one catalog in the stored language (unknown → Arabic) and the
+  `language` field on `POST /api/me/fcm-token` are written and pass locally but are not
+  committed yet, and nothing of it is deployed.
+
 ## Closed
 
 Closed issues are deleted from this file rather than archived. #1–#11 are all closed and were
 removed in the 2026-09-13 cleanup.
 
 **#13** (the captain earnings endpoints were readable by anyone signed in) was fixed in the
-2026-09-28 backend release: `captain_earnings` and `captain_earnings_history` now admit only the
-captain themself or an admin; any other rider or captain gets `403`. The captain app only ever
-asks for its own id, so nothing here changed.
-
-**#15** (every backend push, the "Nafarat ride nearby" one included, was English-only) was fixed
-on 2026-09-28: the app sends its language (`ar` / `ckb` / `en`) with `POST /api/me/fcm-token` at
-every launch and language switch, and the backend renders every push in it from one catalog
-(unknown → Arabic).
+backend repo on 2026-09-28 (commit `d878459`), **not yet deployed**: production still runs the
+2026-09-25 release, where anyone signed in can read any captain's earnings. With the fix,
+`captain_earnings` and `captain_earnings_history` admit only the captain themself or an admin; any
+other rider or captain gets `403`. The captain app only ever asks for its own id, so nothing here
+changed.
 
 **#12** (`POST /api/trips/{id}/cancel` did not check who was calling) was fixed in the backend repo
 on 2026-09-28, **not yet deployed**: `cancel_trip` now loads the trip first and admits only its own

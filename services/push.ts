@@ -12,6 +12,9 @@ import type { AppLanguage } from '@/i18n/languages'
 //   it (unknown → Arabic); user-typed text such as a chat message stays as typed.
 //   Omitted → the stored language is kept. Anything else → 400 {"error":"invalid_language"}.
 //   A backend from before push localization ignores the field.
+// The language always goes WITH the token, never as a language-only `{ language }`
+// body: the newer backend accepts that, but one from before push localization
+// reads a body without `fcm_token` as a clear and would stop this captain's pushes.
 // Any valid rider/captain JWT authorizes it (the interceptor attaches the bearer).
 
 const PATH = '/api/me/fcm-token'
@@ -45,15 +48,29 @@ export async function registerFcmToken(token: string, language?: AppLanguage): P
 }
 
 /**
+ * True when sending the same request again can change the answer: no response
+ * (offline, timeout), a server error, or a rate limit. Any other 4xx (the ended
+ * JWT has expired: 401; the account is gone: 404) will be refused the same way.
+ */
+function isRetryable(error: unknown): boolean {
+  if (!isAxiosError(error)) return true
+  const status = error.response?.status
+  return status === undefined || status >= 500 || status === 408 || status === 429
+}
+
+/**
  * Clear the device's FCM token (on logout), so a signed-out phone stops getting
  * this captain's pushes. By the time the session is gone from the store the
  * interceptor has no bearer to attach, so the ended session's JWT is sent
- * explicitly. Best-effort.
+ * explicitly; a 401 for it does not sign out whoever is signed in by then
+ * (lib/api.ts). Never throws. True once there is nothing left to try (cleared,
+ * or refused for good); false when it did not land and is worth retrying.
  */
-export async function clearFcmToken(endedSession: string): Promise<void> {
+export async function clearFcmToken(endedSession: string): Promise<boolean> {
   try {
     await api.post(PATH, { fcm_token: null }, { headers: { Authorization: `Bearer ${endedSession}` } })
-  } catch {
-    /* best-effort */
+    return true
+  } catch (error) {
+    return !isRetryable(error)
   }
 }

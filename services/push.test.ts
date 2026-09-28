@@ -50,7 +50,7 @@ describe('registerFcmToken', () => {
 describe('clearFcmToken', () => {
   it("clears with the ended session's JWT (the store no longer has it)", async () => {
     post.mockResolvedValue({ status: 204 })
-    await clearFcmToken('jwt-a')
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(true)
     expect(post).toHaveBeenCalledWith(
       '/api/me/fcm-token',
       { fcm_token: null },
@@ -58,8 +58,21 @@ describe('clearFcmToken', () => {
     )
   })
 
-  it('never throws', async () => {
-    post.mockRejectedValue(httpError(401, ''))
-    await expect(clearFcmToken('jwt-a')).resolves.toBeUndefined()
+  it('asks to be retried when it did not land (offline, backend down, rate limited)', async () => {
+    post.mockRejectedValueOnce(new AxiosError('Network Error', 'ERR_NETWORK'))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(false)
+    post.mockRejectedValueOnce(httpError(503, ''))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(false)
+    post.mockRejectedValueOnce(httpError(429, { error: 'rate_limited' }))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(false)
+    post.mockRejectedValueOnce(new Error('unexpected'))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(false)
+  })
+
+  it('gives up without throwing on an answer a retry cannot change (the ended JWT expired)', async () => {
+    post.mockRejectedValueOnce(httpError(401, ''))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(true)
+    post.mockRejectedValueOnce(httpError(404, { error: 'not found' }))
+    await expect(clearFcmToken('jwt-a')).resolves.toBe(true)
   })
 })
