@@ -14,13 +14,23 @@ and can only be done by the project owner — steps below.
 
 - `expo-notifications` + `expo-device` installed; config plugin + `POST_NOTIFICATIONS`
   permission added to `app.json`.
-- `services/push.ts` — `registerFcmToken(token)` / `clearFcmToken()` →
-  `POST /api/me/fcm-token { fcm_token }` (verified live: 204).
+- `services/push.ts` — `registerFcmToken(token, language)` / `clearFcmToken(endedSession)` →
+  `POST /api/me/fcm-token { fcm_token, language }` (204). `language` is the app
+  language (`ar` / `ckb` / `en`); the backend writes every push in it (unknown →
+  Arabic). A `400 invalid_language` falls back to registering the token alone.
+- `lib/push-registration.ts` — what the backend was last told (session + language),
+  so a report is sent once per change, one at a time, and a failed one is retried
+  when the app comes back to the foreground.
 - `providers/push-provider.tsx` — mounted in `app/_layout.tsx` inside
   `CaptainPresenceProvider`:
-  - On login: asks notification permission, gets the **native FCM device token**
-    (`getDevicePushTokenAsync`), registers it, creates the Android `chat` channel.
-  - On logout (token cleared): clears the token backend-side.
+  - On login (and at every launch): asks notification permission (once per
+    session), gets the **native FCM device token** (`getDevicePushTokenAsync`),
+    registers it with the app language, creates the Android `chat` / `trips` channels.
+  - On a language switch: registers the same token again with the new language
+    (a switch to or from English restarts the app; the launch after it reports it).
+  - On logout (token cleared): clears the token backend-side with the ended session's JWT.
+  - Foreground Nafarat room offer: re-presented once from the app's own copy
+    (the backend's copy is hidden), so it is in the language on screen.
   - Foreground policy: suppresses the banner for the chat thread you're **already
     viewing** (WS already showed it); shows it everywhere else.
   - Tap-to-open: a `chat_message` push routes to `/(chat)/[tripId]` (also handles

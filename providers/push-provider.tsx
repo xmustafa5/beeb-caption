@@ -1,21 +1,22 @@
-import { useEffect, useRef } from 'react'
-import { Platform } from 'react-native'
+import { useEffect } from 'react'
+import { AppState } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import { useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { useAuthStore } from '@/store/auth-store'
 import { ACTIVE_TRIP_KEY } from '@/hooks/use-active-trip'
 import { TRIP_QUEUE_KEY } from '@/hooks/use-remote-trip-cancel'
 import { registerFcmToken, clearFcmToken } from '@/services/push'
-import { formatIqd } from '@/lib/format-currency'
+import { createPushRegistrar } from '@/lib/push-registration'
 import type { Trip } from '@/services/captain-trips'
 import {
   LOCAL_PUSH_FLAG,
   pushNotificationType as notificationType,
+  roomOfferContent,
   roomOfferFromPush,
-  type RoomOfferPush,
 } from '@/lib/room-offer-push'
 
 // Offline chat pushes (FCM). While the app is foregrounded on the relevant chat
@@ -52,16 +53,6 @@ function isChatNotification(data: unknown): boolean {
 // backend no longer sends the per-actor trip_cancelled_by_* variants.
 const TRIP_PUSH_TYPES = new Set(['trip_accepted', 'captain_arriving', 'trip_completed', 'trip_cancelled'])
 
-/** "3 riders · 7,500 IQD" in the captain's language. */
-function roomOfferBody({ riderCount, totalFareIqd }: RoomOfferPush): string {
-  return [
-    riderCount != null ? i18n.t('captain.queue.roomRiders', { count: riderCount }) : null,
-    totalFareIqd != null ? formatIqd(totalFareIqd, i18n.language) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
-
 /** The room screen's per-room trip caches (use-nafarat-room): ['nafarat', 'trips', roomId]. */
 const NAFARAT_TRIPS_KEY = ['nafarat', 'trips'] as const
 
@@ -88,16 +79,19 @@ const HIDDEN = { shouldShowBanner: false, shouldShowList: false, shouldPlaySound
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data
-    // The backend writes the room-offer push in English. In the foreground,
-    // swap it for the same offer in the captain's language, with the room's
-    // size and total ("3 riders · 7,500 IQD"). A backgrounded app shows the
-    // backend's copy; tapping either one opens the queue.
+    // The backend writes every push in the language this app last reported
+    // (see the registrar below), the room offer included. In the foreground the
+    // room offer is still re-presented from the app's own copy, with the room's
+    // size and total ("3 riders · 7,500 IQD"), so it is in the language on
+    // screen even when a switch has not reached the backend yet, or on a backend
+    // from before localized pushes. The backend's copy is hidden, so the offer
+    // shows once. A backgrounded app shows the backend's copy; tapping either
+    // one opens the queue.
     const roomOffer = roomOfferFromPush(data)
     if (roomOffer) {
       Notifications.scheduleNotificationAsync({
         content: {
-          title: i18n.t('captain.queue.roomOfferTitle'),
-          body: roomOfferBody(roomOffer),
+          ...roomOfferContent(roomOffer, (key, options) => i18n.t(key, options), i18n.language),
           data: { ...data, [LOCAL_PUSH_FLAG]: true },
           sound: true,
         },
@@ -120,68 +114,67 @@ Notifications.setNotificationHandler({
   },
 })
 
+/** Android channels the backend's pushes target. Idempotent. */
+async function prepareChannels(): Promise<void> {
+  if (process.env.EXPO_OS !== 'android') return
+  await Notifications.setNotificationChannelAsync('chat', {
+    name: 'Messages',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+  })
+  // Trip offers + lifecycle alerts — MAX importance so a new ride offer
+  // surfaces immediately even when the app is backgrounded.
+  await Notifications.setNotificationChannelAsync('trips', {
+    name: 'Trip alerts',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+  })
+}
+
+// One registrar for the app run: it remembers what the backend was told, so a
+// re-render never re-sends, and a login / logout / language switch that lands
+// mid-registration is queued rather than raced.
+const registrar = createPushRegistrar({
+  canUsePush: () => Device.isDevice, // emulators/simulators can't get FCM tokens
+  ensurePermission: async (mayPrompt) => {
+    const settings = await Notifications.getPermissionsAsync()
+    if (settings.granted) return true
+    if (!mayPrompt || !settings.canAskAgain) return false
+    return (await Notifications.requestPermissionsAsync()).granted
+  },
+  getDeviceToken: async () => {
+    await prepareChannels()
+    const device = await Notifications.getDevicePushTokenAsync()
+    return typeof device.data === 'string' ? device.data : String(device.data)
+  },
+  register: registerFcmToken,
+  clear: clearFcmToken,
+})
+
 export function PushProvider({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
+  // Re-renders on every language switch. Arabic <-> Kurdish switches live; a
+  // switch to or from English restarts the app, and the launch after it reports
+  // the new language (this provider mounts only once i18n has loaded it).
+  const { i18n: i18nInstance } = useTranslation()
+  const language = i18nInstance.language
   const router = useRouter()
   const queryClient = useQueryClient()
 
-  // Register the device token whenever we have a session; clear it on logout.
-  const registeredForToken = useRef<string | null>(null)
-
+  // Register the device token (with the app language) whenever we have a
+  // session, again whenever the language changes, and clear it on logout.
   useEffect(() => {
-    let cancelled = false
+    void registrar.sync({ session: token, language })
+  }, [token, language])
 
-    async function sync() {
-      if (!token) {
-        if (registeredForToken.current) {
-          await clearFcmToken()
-          registeredForToken.current = null
-        }
-        return
-      }
-      if (registeredForToken.current === token) return
-      if (!Device.isDevice) return // emulators/simulators can't get FCM tokens
-
-      try {
-        const settings = await Notifications.getPermissionsAsync()
-        let granted = settings.granted
-        if (!granted && settings.canAskAgain) {
-          const req = await Notifications.requestPermissionsAsync()
-          granted = req.granted
-        }
-        if (!granted || cancelled) return
-
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('chat', {
-            name: 'Messages',
-            importance: Notifications.AndroidImportance.HIGH,
-            vibrationPattern: [0, 250, 250, 250],
-          })
-          // Trip offers + lifecycle alerts — MAX importance so a new ride offer
-          // surfaces immediately even when the app is backgrounded.
-          await Notifications.setNotificationChannelAsync('trips', {
-            name: 'Trip alerts',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-          })
-        }
-
-        const device = await Notifications.getDevicePushTokenAsync()
-        if (cancelled) return
-        const fcm = typeof device.data === 'string' ? device.data : String(device.data)
-        const ok = await registerFcmToken(fcm)
-        if (ok && !cancelled) registeredForToken.current = token
-      } catch {
-        // No Firebase in this build, permission denied, or offline — push stays
-        // off; the live WS remains the in-app path. Never crash here.
-      }
-    }
-
-    void sync()
-    return () => {
-      cancelled = true
-    }
-  }, [token])
+  // A report that failed (offline, backend down) is retried when the captain
+  // comes back to the app; one that landed is not re-sent.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void registrar.retry()
+    })
+    return () => sub.remove()
+  }, [])
 
   // Tap-to-open: route by push kind. Chat → that trip's chat thread; a trip
   // lifecycle push → that trip screen; a new-offer / room push → the home queue.

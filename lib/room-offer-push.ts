@@ -2,6 +2,7 @@
 // Reading the backend's "Nafarat room ready" push (push-provider). Pure, so it
 // can be unit tested without expo-notifications.
 import { toFiniteNumber } from '@/lib/to-number'
+import { formatIqd } from '@/lib/format-currency'
 
 /** Set on a notification this app presented itself, so the handler shows it as is. */
 export const LOCAL_PUSH_FLAG = 'beep_local'
@@ -33,4 +34,26 @@ export function roomOfferFromPush(data: unknown): RoomOfferPush | null {
   const totalFareIqd = toFiniteNumber(d.total_fare_iqd)
   if (riderCount == null && totalFareIqd == null) return null
   return { riderCount, totalFareIqd }
+}
+
+/** i18next's `t`, narrowed to what the offer copy uses. */
+export type Translate = (key: string, options?: { count: number }) => string
+
+/**
+ * The foreground copy of a room offer in the app language `lang`: title
+ * "Nafarat ride nearby", body "3 riders · 7,500 IQD" (Western digits; د.ع in
+ * Arabic and Kurdish). A missing field is left out of the body.
+ */
+export function roomOfferContent(
+  { riderCount, totalFareIqd }: RoomOfferPush,
+  t: Translate,
+  lang: string,
+): { title: string; body: string } {
+  const body = [
+    riderCount != null ? t('captain.queue.roomRiders', { count: riderCount }) : null,
+    totalFareIqd != null ? formatIqd(totalFareIqd, lang) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return { title: t('captain.queue.roomOfferTitle'), body }
 }

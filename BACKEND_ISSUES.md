@@ -8,15 +8,12 @@ Backend: `https://beeb.madebyhaithem.com` · spec snapshot: `docs/openapi.json`.
 Found 2026-09-28 while reworking the Nafarat room screen, checked against `beeb-backend` source
 (local, not yet reported to production).
 
-### #13 Captain earnings endpoints are readable by anyone signed in
-
-`captain_earnings` and `captain_earnings_history` (same file) take no `Claims`, so any rider or
-captain can read any captain's earnings, and `/earnings/history` lists that captain's completed
-trips (trip id, fare, type, time): the same kind of leak the `GET /api/trips` privacy fix closes.
-Fix: allow only the captain themself (`role == "captain" && sub == captain_id`) or an admin; `404`
-otherwise. The captain app only ever asks for its own id.
-
 ### #14 `POST /api/captain/activation/today` returns 500 when the daily fee is 0
+
+> **Deferred** (2026-09-28): payments go live about a month after this release, so this waits
+> for that work. Until then only a fee of exactly 0 triggers it (the local backend's setting);
+> production must not set `activation.daily_fee_iqd` to 0 in the meantime, or no captain can
+> activate that day.
 
 `charge_daily_activation` (`src/domains/payment/domain/services/fee_collection_service.rs`) always
 inserts a `daily_fee` transaction, and `transactions.amount_iqd` has `CHECK (amount_iqd > 0)`. The
@@ -25,18 +22,20 @@ straight to paid"), but with 0 the insert fails, the captain's Activate tap gets
 activation stays `pending`. Seen on the local backend, where the fee is 0. Fix: when the fee is
 `<= 0`, mark the activation paid and return without a transaction or a debit; add a test.
 
-### #15 The "Nafarat ride nearby" push is English-only
-
-The room-offer push (`abriyah_matching_engine.rs`, `notification_type: new_trip_in_queue`) has a
-hard-coded English title and body. The captain app now rewrites it in the captain's language while
-the app is in the foreground, using the push's `rider_count` / `total_fare_iqd` data ("3 riders ·
-7,500 IQD"), but a backgrounded app shows the backend's English text. Fix: localize the push on
-the backend (the captain's language is not stored today), or keep the text neutral.
-
 ## Closed
 
 Closed issues are deleted from this file rather than archived. #1–#11 are all closed and were
 removed in the 2026-09-13 cleanup.
+
+**#13** (the captain earnings endpoints were readable by anyone signed in) was fixed in the
+2026-09-28 backend release: `captain_earnings` and `captain_earnings_history` now admit only the
+captain themself or an admin; any other rider or captain gets `403`. The captain app only ever
+asks for its own id, so nothing here changed.
+
+**#15** (every backend push, the "Nafarat ride nearby" one included, was English-only) was fixed
+on 2026-09-28: the app sends its language (`ar` / `ckb` / `en`) with `POST /api/me/fcm-token` at
+every launch and language switch, and the backend renders every push in it from one catalog
+(unknown → Arabic).
 
 **#12** (`POST /api/trips/{id}/cancel` did not check who was calling) was fixed in the backend repo
 on 2026-09-28, **not yet deployed**: `cancel_trip` now loads the trip first and admits only its own

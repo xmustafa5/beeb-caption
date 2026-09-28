@@ -1,4 +1,9 @@
-import { LOCAL_PUSH_FLAG, pushNotificationType, roomOfferFromPush } from './room-offer-push'
+import 'intl-pluralrules'
+import { createInstance } from 'i18next'
+import en from '@/i18n/en.json'
+import ar from '@/i18n/ar.json'
+import ckb from '@/i18n/ckb.json'
+import { LOCAL_PUSH_FLAG, pushNotificationType, roomOfferContent, roomOfferFromPush } from './room-offer-push'
 
 const roomPush = { notification_type: 'new_trip_in_queue', room_id: 'room-1', trip_id: 'trip-1' }
 
@@ -52,5 +57,45 @@ describe('pushNotificationType', () => {
     expect(pushNotificationType({ type: 'room_expired' })).toBe('room_expired')
     expect(pushNotificationType({ notification_type: 3 })).toBeNull()
     expect(pushNotificationType(undefined)).toBeNull()
+  })
+})
+
+describe('roomOfferContent (the foreground copy)', () => {
+  const i18n = createInstance()
+  beforeAll(async () => {
+    await i18n.init({
+      resources: { en: { translation: en }, ar: { translation: ar }, ckb: { translation: ckb } },
+      lng: 'ar',
+      fallbackLng: { ckb: ['ar', 'en'], default: ['en'] },
+      interpolation: { escapeValue: false },
+      showSupportNotice: false,
+    })
+  })
+  const contentIn = (lang: string, offer: Parameters<typeof roomOfferContent>[0]) =>
+    roomOfferContent(offer, i18n.getFixedT(lang), lang)
+
+  it('is written in the language on screen, with Western digits', () => {
+    expect(contentIn('en', { riderCount: 3, totalFareIqd: 10500 })).toEqual({
+      title: en.captain.queue.roomOfferTitle,
+      body: '3 riders · 10,500 IQD',
+    })
+    expect(contentIn('ar', { riderCount: 3, totalFareIqd: 10500 })).toEqual({
+      title: ar.captain.queue.roomOfferTitle,
+      body: '3 ركاب · 10,500 د.ع',
+    })
+    expect(contentIn('ckb', { riderCount: 3, totalFareIqd: 10500 })).toEqual({
+      title: ckb.captain.queue.roomOfferTitle,
+      body: '3 سەرنشین · 10,500 د.ع',
+    })
+  })
+
+  it('leaves out a missing field', () => {
+    expect(contentIn('en', { riderCount: 2 }).body).toBe('2 riders')
+    expect(contentIn('ar', { totalFareIqd: 7500 }).body).toBe('7,500 د.ع')
+  })
+
+  it('never carries Arabic-only letters in Kurdish', () => {
+    const { title, body } = contentIn('ckb', { riderCount: 4, totalFareIqd: 12000 })
+    expect(`${title} ${body}`).not.toMatch(/[يكةى]/)
   })
 })
