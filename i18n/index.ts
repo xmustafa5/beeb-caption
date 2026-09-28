@@ -1,3 +1,6 @@
+// Hermes has no Intl.PluralRules; without it i18next only knows one/other and
+// Arabic plurals (_two / _few / _many, e.g. "راكبان") would never be picked.
+import 'intl-pluralrules'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { I18nManager } from 'react-native'

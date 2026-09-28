@@ -27,6 +27,7 @@ import { selectIsApproved, useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { CaptainPresenceProvider } from '@/providers/captain-presence'
 import { PushProvider } from '@/providers/push-provider'
+import { useClearCacheOnSessionEnd } from '@/hooks/use-clear-cache-on-session-end'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -124,6 +125,7 @@ export default function RootLayout() {
 function AuthGate() {
   const colors = useThemeColors()
   const isApproved = useAuthStore(selectIsApproved)
+  useClearCacheOnSessionEnd(isApproved)
   return (
     <Stack screenOptions={{
       headerShown: false,

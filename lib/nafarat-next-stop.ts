@@ -3,6 +3,7 @@ import { nearestOf } from '@/lib/nav-links'
 
 /** What the next-stop rule needs from a room seat (see `RiderSeat`). */
 export interface SeatForRoute {
+  riderId: string
   name: string
   pickup: LatLng
   dropoff: LatLng
@@ -10,6 +11,8 @@ export interface SeatForRoute {
 }
 
 export interface NextStop extends LatLng {
+  /** Whose stop this is, so the screen can put that rider's card first. */
+  riderId: string
   name: string
   kind: 'pickup' | 'dropoff'
 }
@@ -26,7 +29,7 @@ export function nextNafaratStop(seats: SeatForRoute[], from: LatLng | null): Nex
   const waiting = live.filter((s) => s.tripStatus !== 'in_progress')
   const stops: NextStop[] =
     waiting.length > 0
-      ? waiting.map((s) => ({ ...s.pickup, name: s.name, kind: 'pickup' }))
-      : live.map((s) => ({ ...s.dropoff, name: s.name, kind: 'dropoff' }))
+      ? waiting.map((s) => ({ ...s.pickup, riderId: s.riderId, name: s.name, kind: 'pickup' }))
+      : live.map((s) => ({ ...s.dropoff, riderId: s.riderId, name: s.name, kind: 'dropoff' }))
   return (from && nearestOf(from, stops)) || stops[0] || null
 }

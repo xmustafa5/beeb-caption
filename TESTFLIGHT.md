@@ -1,6 +1,6 @@
 # TestFlight — Beep Captain
 
-Mirrors the newTan setup (`/home/alinameer/Pictures/TAN/newTan/TESTFLIGHT.md`): same
+Mirrors the newTan setup (`/Users/aple/Pictures/TAN/newTan/TESTFLIGHT.md`): same
 Apple team, same ASC API key, same EAS account (`alinamer`).
 
 > **Naming:** the App Store listing is **"Beep Captain"** ("Beeb" was taken; the rider app
@@ -42,7 +42,7 @@ With the env vars below, EAS authenticates with the **API key** and never asks t
 (it only asks for the Apple Team Type — answer **Individual**):
 
 ```bash
-export EXPO_ASC_API_KEY_PATH=/home/alinameer/.apple-keys/AuthKey_Y5KYYJU34G.p8
+export EXPO_ASC_API_KEY_PATH=/Users/aple/.apple-keys/AuthKey_Y5KYYJU34G.p8
 export EXPO_ASC_KEY_ID=Y5KYYJU34G
 export EXPO_ASC_ISSUER_ID=0a0a3a4e-cd08-4232-8a3e-fd774070806f
 export EXPO_APPLE_TEAM_ID=F2B493H3RF

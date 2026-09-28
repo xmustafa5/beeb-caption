@@ -1,5 +1,5 @@
 // app/(trip)/room/[id].tsx
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -8,10 +8,12 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
-import { Button } from '@/components/ui/button'
+import { FormError } from '@/components/forms/form-error'
 import { TripMap } from '@/components/trip/trip-map'
 import { NafaratMarkers } from '@/components/captain/nafarat-markers'
 import { RiderSeatCard } from '@/components/captain/rider-seat-card'
+import { CancelSheet } from '@/components/captain/cancel-sheet'
+import { NafaratEndState } from '@/components/captain/nafarat-end-state'
 import { useNafaratRoom } from '@/hooks/use-nafarat-room'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { useCurrentLocation } from '@/hooks/use-current-location'
@@ -19,6 +21,8 @@ import { formatIqd } from '@/lib/format-currency'
 import { nextNafaratStop } from '@/lib/nafarat-next-stop'
 import { NavigateButtons } from '@/components/captain/navigate-buttons'
 import { contentLanguage } from '@/i18n/languages'
+import { parseApiError } from '@/lib/api'
+import type { CancelReason } from '@/services/captain-trips'
 
 export default function NafaratRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -29,23 +33,57 @@ export default function NafaratRoomScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { location } = useCurrentLocation()
-  const { room, dropoffZone, pickupBreakdown, seats, isLoading, isError, pickup, dropoff, busyTripId } = useNafaratRoom(id)
+  const {
+    room, dropoffZone, pickupBreakdown, seats, state, riding, done, collectedIqd,
+    arrive, pickup, dropoff, cancel, busyTripIds,
+  } = useNafaratRoom(id)
   const { ensureTracking } = useCaptainPresence()
+  const [error, setError] = useState<string | null>(null)
+  // The rider whose trip the cancel sheet is open for.
+  const [cancelTripId, setCancelTripId] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
-  // A dispatched room IS a live trip as far as location goes — the pooled riders
-  // are watching this car on their maps exactly like a regular fare. Without this
-  // the shared-ride leg is the one case that still freezes the moment the captain
-  // opens a navigation app, because `ensureTracking` is otherwise only called from
-  // the regular live-trip screen. `dispatched` maps to `in_progress`; any other
-  // room state (expired, or the room going away) releases the OS task.
-  const roomStatus = room?.status
+  // A room being driven IS a live trip as far as location goes — the pooled
+  // riders watch this car on their maps exactly like a regular fare, including
+  // while the captain is in a navigation app. The room itself stays `dispatched`
+  // forever, so the ride's own progress decides: tracking runs while any rider is
+  // still to be picked up or dropped off, and the OS task is handed back once the
+  // last one is done (or everyone cancelled). Nothing happens while loading.
   useEffect(() => {
-    if (!roomStatus) return
-    void ensureTracking(roomStatus === 'dispatched' ? 'in_progress' : undefined)
-  }, [roomStatus, ensureTracking])
+    if (state === 'live') void ensureTracking('in_progress')
+    else if (state === 'done' || state === 'ended') void ensureTracking('completed')
+  }, [state, ensureTracking])
 
-  // Loading (first load)
-  if (isLoading && seats.length === 0 && !room) {
+  // Back to the Home that is already under this screen: a replace would stack a
+  // second (tabs) on top of it (another map, another queue poll) per ride.
+  const goHome = () => router.dismissTo('/(tabs)')
+
+  function legFailed(err: unknown) {
+    setError(t(parseApiError(err).isNetwork ? 'common.networkError' : 'captain.live.legFailed'))
+  }
+
+  function runLeg(fn: (tripId: string) => Promise<void>, tripId: string | null) {
+    if (!tripId) return
+    setError(null)
+    fn(tripId).catch(legFailed)
+  }
+
+  async function confirmCancel(reason: CancelReason, comment?: string) {
+    if (!cancelTripId) return
+    setError(null)
+    setCancelling(true)
+    try {
+      await cancel(cancelTripId, reason, comment)
+      setCancelTripId(null)
+    } catch (err) {
+      setCancelTripId(null)
+      setError(t(parseApiError(err).isNetwork ? 'common.networkError' : 'captain.live.cancelFailed'))
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  if (state === 'loading') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.tint} />
@@ -53,49 +91,48 @@ export default function NafaratRoomScreen() {
     )
   }
 
-  // Couldn't load (403 / gone)
-  if (isError) {
+  // Couldn't read the room (not this captain's room, or it is gone).
+  if (state === 'error') {
+    return <NafaratEndState icon="alert-circle" tone={colors.destructive} title={t('captain.nafarat.loadError')} onDone={goHome} />
+  }
+
+  // The room expired, or every rider cancelled: nobody left to drive.
+  if (state === 'ended') {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.lg }}>
-        <Icon name="alert-circle" size={44} color={colors.destructive} />
-        <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>{t('captain.nafarat.loadError')}</Text>
-        <Button label={t('captain.live.done')} onPress={() => router.replace('/(tabs)')} />
-      </View>
+      <NafaratEndState
+        icon="close-circle"
+        tone={colors.destructive}
+        title={t('captain.live.cancelledTitle')}
+        body={t('captain.live.cancelledBody')}
+        onDone={goHome}
+      />
     )
   }
 
-  // A rider who cancelled after the captain accepted is out of the ride: not
-  // counted, not driven to, and no longer holding the room open.
-  const riding = seats.filter((s) => s.tripStatus !== 'cancelled')
-  const total = riding.length
-  const done = riding.filter((s) => s.tripStatus === 'completed').length
-  const allDone = seats.length > 0 && done === total
-  const collected = seats.reduce((sum, s) => (s.tripStatus === 'completed' ? sum + s.fareIqd : sum), 0)
-
-  // All riders dropped → summary
-  if (allDone) {
+  // Every rider still in the car was dropped off.
+  if (state === 'done') {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, padding: Spacing.xl, paddingTop: insets.top + Spacing.xl * 2, gap: Spacing.lg, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '22', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="checkmark-done-circle" size={40} color={colors.success} />
-        </View>
-        <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'center' }}>{t('captain.nafarat.allDoneTitle')}</Text>
-        <Text style={{ ...Typography.body, color: colors.subtle, textAlign: 'center', fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
-          {t('captain.live.fareCollected', { fare: formatIqd(collected, i18n.language) })}
-        </Text>
-        <Button label={t('captain.live.done')} onPress={() => router.replace('/(tabs)')} />
-      </View>
+      <NafaratEndState
+        icon="checkmark-done-circle"
+        tone={colors.success}
+        title={t('captain.nafarat.allDoneTitle')}
+        body={t('captain.live.fareCollected', { fare: formatIqd(collectedIqd, i18n.language) })}
+        onDone={goHome}
+      />
     )
   }
 
-  const pickups = seats.map((s) => s.pickup)
-  const dropoffs = seats.map((s) => s.dropoff)
+  // Map pins carry each rider's seat number, like the cards below. A rider who
+  // cancelled is no longer a stop, so their pins go (the others keep their numbers).
+  const stops = seats.filter((s) => s.tripStatus !== 'cancelled')
+  const pickups = stops.map((s) => s.pickup)
+  const dropoffs = stops.map((s) => s.dropoff)
   const zoneName = (names === 'ar' ? dropoffZone?.nameAr : dropoffZone?.name) ?? t('captain.live.unknownZone')
+  const womenOnly = room?.roomType === 'women_only'
 
   // Pickups first (closest waiting rider each time), then drop-offs (closest
-  // first). The old rule took the nearest of each rider's current target, so a
-  // rider just picked up could be dropped off before the others were collected.
-  const nextStop = nextNafaratStop(riding, location)
+  // first). Riders who cancelled or were dropped off are skipped.
+  const nextStop = nextNafaratStop(seats, location)
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -103,23 +140,38 @@ export default function NafaratRoomScreen() {
         <TripMap
           showsUserLocation
           fitToCoords={[...pickups, ...dropoffs]}
+          // The map runs up under the status bar: keep the top pins below it.
+          fitPadding={{ top: insets.top + 48, right: 48, bottom: 40, left: 48 }}
           initialRegion={pickups[0] ? { latitude: pickups[0].latitude, longitude: pickups[0].longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 } : undefined}
         >
-          <NafaratMarkers pickups={pickups} dropoffs={dropoffs} />
+          <NafaratMarkers pickups={pickups} dropoffs={dropoffs} numbers={stops.map((s) => s.seatNumber)} />
         </TripMap>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, gap: Spacing.lg }}>
-        {/* header: title + destination + progress */}
+        {/* header: title + ride type + destination + progress */}
         <View style={{ gap: Spacing.xs }}>
-          <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'left' }}>{t('captain.nafarat.title')}</Text>
+          {/* native forceRTL mirrors this row in AR — no manual flip */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' }}>
+            <Text style={{ ...Typography['heading-md'], color: colors.text, textAlign: 'left' }}>{t('captain.nafarat.title')}</Text>
+            {womenOnly && (
+              <View style={{ backgroundColor: colors.tint + '22', borderRadius: 8, borderCurve: 'continuous', paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ ...Typography['caption-sm'], color: colors.tint, fontStyle: 'normal' }}>{t('captain.queue.roomWomenOnly')}</Text>
+              </View>
+            )}
+          </View>
+          {womenOnly && (
+            <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
+              {t('captain.queue.roomAllWomen')}
+            </Text>
+          )}
           {/* native forceRTL mirrors this row in AR — no manual flip */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
             <Icon name="flag" size={15} color={colors.tint} />
-            <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{zoneName}</Text>
+            <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', flexShrink: 1, textAlign: 'left' }}>{zoneName}</Text>
           </View>
           <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], textAlign: 'left' }}>
-            {t('captain.nafarat.progress', { done, total })}
+            {t('captain.nafarat.progress', { done, total: riding })}
           </Text>
         </View>
 
@@ -147,19 +199,31 @@ export default function NafaratRoomScreen() {
           </View>
         )}
 
-        {/* rider seats with drive */}
+        <FormError message={error} />
+
+        {/* one card per rider, in join order (= the numbered pins) */}
         <View style={{ gap: Spacing.md }}>
           {seats.map((s) => (
             <RiderSeatCard
               key={s.riderId}
               seat={s}
-              busy={busyTripId === s.tripId}
-              onPickup={() => { if (s.tripId) pickup(s.tripId).catch(() => {}) }}
-              onDropoff={() => { if (s.tripId) dropoff(s.tripId).catch(() => {}) }}
+              isNext={nextStop?.riderId === s.riderId}
+              busy={s.tripId != null && busyTripIds.has(s.tripId)}
+              onArrive={() => runLeg(arrive, s.tripId)}
+              onPickup={() => runLeg(pickup, s.tripId)}
+              onDropoff={() => runLeg(dropoff, s.tripId)}
+              onCancel={() => { if (s.tripId) setCancelTripId(s.tripId) }}
             />
           ))}
         </View>
       </ScrollView>
+
+      <CancelSheet
+        visible={cancelTripId != null}
+        submitting={cancelling}
+        onClose={() => setCancelTripId(null)}
+        onConfirm={(reason, comment) => { void confirmCancel(reason, comment) }}
+      />
     </View>
   )
 }

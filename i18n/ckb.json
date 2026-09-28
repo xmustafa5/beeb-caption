@@ -147,8 +147,6 @@
     "joinRoom": "بەشداربوون لە ژوورەکە",
     "roomTypeTitle": "دەتەوێت لەگەڵ کێ گەشت بکەیت؟",
     "roomTypeMixed": "تێکەڵ",
-    "roomTypeWomenOnly": "تەنها ئافرەتان",
-    "womenOnlyGated": "«تەنها ئافرەتان» تایبەتە بە سەرنشینە ئافرەتەکان. بۆ چالاککردنی، ڕەگەزەکەت لە پرۆفایلدا نوێ بکەرەوە.",
     "waitingTitle": "بەدوای سەرنشیندا دەگەڕێین…",
     "waitingCount": "{{count}} لە {{max}} سەرنشین",
     "waitingTimeLeft": "{{seconds}} چرکە ماوە",
@@ -377,11 +375,18 @@
       "kmAway": "{{km}} کم دوورە",
       "tripDistance": "گەشتی {{km}} کم",
       "roomMixed": "تێکەڵ",
-      "roomWomenOnly": "تەنها ئافرەتان",
+      "roomWomenOnly": "گەشتی تەنها ئافرەتان",
       "accept": "وەرگرتن",
       "acceptRoom": "وەرگرتنی ژوور",
       "taken": "ئەو گەشتە ئێستا لەلایەن کەسێکی ترەوە وەرگیرا.",
-      "acceptFailed": "نەتوانرا وەربگیرێت. تکایە دووبارە هەوڵ بدەرەوە."
+      "acceptFailed": "نەتوانرا وەربگیرێت. تکایە دووبارە هەوڵ بدەرەوە.",
+      "roomAllWomen": "هەموو سەرنشینەکان ئافرەتن",
+      "roomRiders_one": "{{count}} سەرنشین",
+      "roomRiders_other": "{{count}} سەرنشین",
+      "roomTotal": "کۆی گشتی",
+      "roomTimeLeft": "{{time}} ماوە",
+      "roomExpired": "بەسەرچوو",
+      "roomOfferTitle": "گەشتێکی نەفەرات لە نزیکتە"
     },
     "trip": {
       "acceptedTitle": "گەشتەکە وەرگیرا",
@@ -444,7 +449,12 @@
       "loadError": "نەتوانرا ئەم گەشتە بار بکرێت.",
       "nextPickup": "دواتر: سوارکردنی {{name}}",
       "nextDropoff": "دواتر: دابەزاندنی {{name}}",
-      "cancelled": "هەڵوەشایەوە"
+      "cancelled": "هەڵوەشایەوە",
+      "arrived": "گەیشتم",
+      "cancelRider": "هەڵوەشاندنەوەی ئەم سەرنشینە",
+      "riderN": "سەرنشینی {{n}}",
+      "riderCancelledTitle": "گەشتی سەرنشینێک هەڵوەشایەوە",
+      "riderCancelledBody": "لەگەڵ سەرنشینەکانی تر بەردەوام بە."
     },
     "earnings": {
       "tabLabel": "داهات",

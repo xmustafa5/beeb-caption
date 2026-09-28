@@ -2,11 +2,12 @@
 import { useEffect, useRef } from 'react'
 import { Alert } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { ACTIVE_TRIP_KEY } from '@/hooks/use-active-trip'
-import type { CancelledBy } from '@/services/captain-trips'
+import type { CancelledBy, Trip } from '@/services/captain-trips'
+import { cancelIsPartOfRide } from '@/lib/nafarat-room-state'
 
 /** Mirrors the (private) queue key in use-trip-queue.ts — a cancel frees the captain up. */
 export const TRIP_QUEUE_KEY = ['captain', 'trip-queue'] as const
@@ -36,6 +37,15 @@ export function claimCancelAnnouncement(tripId: string): boolean {
 }
 
 /**
+ * Give a claim back — for a claim taken ahead of the captain's own cancel
+ * request when that request fails, so the trip is still live and a later cancel
+ * by someone else is announced as usual.
+ */
+export function releaseCancelAnnouncement(tripId: string): void {
+  announced.delete(tripId)
+}
+
+/**
  * Which explanation to show. `system` is the dispatch/stale sweep and `admin` is
  * support or a captain block — neither is the rider giving up, and telling a
  * captain "the rider cancelled" when support pulled the trip is a lie they may
@@ -48,15 +58,31 @@ function cancelBodyKey(by?: CancelledBy): string {
   return 'captain.live.cancelledBody'
 }
 
-/** Haptic + alert, at most once per trip. False when someone already announced it. */
-export function announceRemoteCancel(tripId: string, cancelledBy?: CancelledBy): boolean {
+/**
+ * True when `tripId` is one rider of a Nafarat room the captain is driving and
+ * other riders of that room are still on board or waiting — then losing this
+ * one rider does not end the ride. Reads the room screen's trip caches
+ * (use-nafarat-room) and, once those are gone (a relaunch, or more than the
+ * cache lifetime on Home), the captain's active-trip cache.
+ */
+function otherRidersStillOn(queryClient: QueryClient, tripId: string): boolean {
+  const roomTrips = queryClient.getQueriesData<Trip[]>({ queryKey: ['nafarat', 'trips'] }).map(([, trips]) => trips)
+  return cancelIsPartOfRide(tripId, roomTrips, queryClient.getQueryData<Trip | null>(ACTIVE_TRIP_KEY))
+}
+
+/**
+ * Haptic + alert, at most once per trip. False when someone already announced it.
+ * `partOfRide`: the trip is one rider of a shared ride that carries on, so the
+ * copy says so instead of "this trip is no longer active".
+ */
+export function announceRemoteCancel(tripId: string, cancelledBy?: CancelledBy, partOfRide = false): boolean {
   if (!claimCancelAnnouncement(tripId)) return false
   if (process.env.EXPO_OS === 'ios') {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
   }
-  Alert.alert(i18n.t('captain.live.cancelledTitle'), i18n.t(cancelBodyKey(cancelledBy)), [
-    { text: i18n.t('common.done') },
-  ])
+  const title = partOfRide ? 'captain.nafarat.riderCancelledTitle' : 'captain.live.cancelledTitle'
+  const body = partOfRide ? 'captain.nafarat.riderCancelledBody' : cancelBodyKey(cancelledBy)
+  Alert.alert(i18n.t(title), i18n.t(body), [{ text: i18n.t('common.done') }])
   return true
 }
 
@@ -81,7 +107,7 @@ export function useRemoteTripCancel() {
     if (handled.current === id) return
     handled.current = id
 
-    announceRemoteCancel(id, lastTripUpdate.cancelledBy)
+    announceRemoteCancel(id, lastTripUpdate.cancelledBy, otherRidersStillOn(queryClient, id))
     // Invalidate whether or not we were the one to alert: the banner, the trip
     // screen and the queue all have to drop a trip that no longer exists.
     queryClient.invalidateQueries({ queryKey: ACTIVE_TRIP_KEY })

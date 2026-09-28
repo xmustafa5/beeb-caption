@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTripQueue, acceptTrip, acceptRoom, type CaptainOffer } from '@/services/captain-queue'
-import { useCaptainPresence } from '@/providers/captain-presence'
+import { useCaptainPresence, type Offer } from '@/providers/captain-presence'
 import { useTabStore } from '@/store/tab-store'
 import { parseApiError } from '@/lib/api'
+import { applyRoomFrame, carryRoomDeadlines, createFrameGate } from '@/lib/room-countdown'
 
 const KEY = ['captain', 'trip-queue'] as const
 const HOME_TAB_INDEX = 0 // Home tab hosts the live map + offers carousel
@@ -45,16 +46,30 @@ export function useTripQueue() {
   // the pager). Area 5 should gate polling on "no active trip" or pause it on accept.
   const query = useQuery({
     queryKey: KEY,
-    queryFn: getTripQueue,
+    // A room card keeps counting toward the deadline it already has while the
+    // room's `expiresAt` is unchanged: each poll re-derives it from its own
+    // arrival time, and the latency would nudge the countdown back and forth.
+    queryFn: async () => carryRoomDeadlines(queryClient.getQueryData<CaptainOffer[]>(KEY), await getTripQueue()),
     enabled: active,
     refetchInterval: active ? 8000 : false,
     staleTime: 0,
   })
 
-  // Live push → instant refetch.
+  // Live push → instant refetch. A room frame also carries the room's current
+  // rider count, total fare and deadline: put them on the card now (a new
+  // deadline restarts its countdown), the refetch confirms.
+  // Each frame is written onto the card at most once, and only while the queue
+  // is live: coming back to Home re-runs this effect with the last, possibly
+  // minutes-old frame, and then only the refetch may speak (see createFrameGate).
+  const [frameGate] = useState(() => createFrameGate<Offer>())
   useEffect(() => {
-    if (active && lastOffer) queryClient.invalidateQueries({ queryKey: KEY })
-  }, [lastOffer, active, queryClient])
+    const action = frameGate(lastOffer, active)
+    if (action === 'none' || !lastOffer) return
+    if (action === 'merge') {
+      queryClient.setQueryData<CaptainOffer[]>(KEY, (prev) => applyRoomFrame(prev, lastOffer))
+    }
+    queryClient.invalidateQueries({ queryKey: KEY })
+  }, [lastOffer, active, queryClient, frameGate])
 
   const acceptMutation = useMutation({
     mutationFn: (offer: CaptainOffer) =>

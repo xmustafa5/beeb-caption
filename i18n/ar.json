@@ -147,8 +147,6 @@
     "joinRoom": "انضم للغرفة",
     "roomTypeTitle": "مع من تحب تشارك الرحلة؟",
     "roomTypeMixed": "مختلطة",
-    "roomTypeWomenOnly": "للنساء فقط",
-    "womenOnlyGated": "خاصية «للنساء فقط» للراكبات. حدّثي جنسك في الملف الشخصي لتفعيلها.",
     "waitingTitle": "نبحث عن ركاب…",
     "waitingCount": "{{count}} من {{max}} ركاب",
     "waitingTimeLeft": "{{seconds}} ثانية متبقية",
@@ -377,11 +375,22 @@
       "kmAway": "على بُعد {{km}} كم",
       "tripDistance": "رحلة {{km}} كم",
       "roomMixed": "مختلط",
-      "roomWomenOnly": "نساء فقط",
+      "roomWomenOnly": "رحلة نساء فقط",
       "accept": "قبول",
       "acceptRoom": "قبول الغرفة",
       "taken": "تم أخذ هذه الرحلة للتو.",
-      "acceptFailed": "تعذّر القبول. حاول مرة أخرى."
+      "acceptFailed": "تعذّر القبول. حاول مرة أخرى.",
+      "roomAllWomen": "كل الركاب نساء",
+      "roomRiders_zero": "لا ركاب",
+      "roomRiders_one": "راكب واحد",
+      "roomRiders_two": "راكبان",
+      "roomRiders_few": "{{count}} ركاب",
+      "roomRiders_many": "{{count}} راكبًا",
+      "roomRiders_other": "{{count}} راكب",
+      "roomTotal": "المجموع",
+      "roomTimeLeft": "متبقي {{time}}",
+      "roomExpired": "انتهى الوقت",
+      "roomOfferTitle": "رحلة نفرات قريبة منك"
     },
     "trip": {
       "acceptedTitle": "تم قبول الرحلة",
@@ -444,7 +453,12 @@
       "loadError": "تعذّر تحميل الرحلة.",
       "nextPickup": "التالي: اصطحاب {{name}}",
       "nextDropoff": "التالي: إنزال {{name}}",
-      "cancelled": "ملغاة"
+      "cancelled": "ملغاة",
+      "arrived": "وصلت",
+      "cancelRider": "إلغاء هذا الراكب",
+      "riderN": "الراكب {{n}}",
+      "riderCancelledTitle": "أُلغيت رحلة أحد الركاب",
+      "riderCancelledBody": "أكمل الرحلة مع بقية الركاب."
     },
     "earnings": {
       "tabLabel": "الأرباح",

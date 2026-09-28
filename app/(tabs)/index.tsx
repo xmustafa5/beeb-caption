@@ -17,6 +17,7 @@ import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { getRoute } from '@/services/routing'
 import { useActiveTrip } from '@/hooks/use-active-trip'
 import { parseApiError } from '@/lib/api'
+import { offerScreenHref, tripScreenHref } from '@/lib/trip-route'
 import type { CaptainOffer } from '@/services/captain-queue'
 import { isRtlLanguage } from '@/i18n/languages'
 
@@ -141,7 +142,7 @@ export default function HomeScreen() {
     setError(null)
     try {
       await accept(offer)
-      router.push(offer.offerType === 'room' ? `/(trip)/room/${offer.id}` : `/(trip)/${offer.id}`)
+      router.push(offerScreenHref(offer))
     } catch (err) {
       const info = parseApiError(err)
       if (info.status === 409) setError(t('captain.queue.taken'))
@@ -293,7 +294,7 @@ function ActiveTripBanner({ topInset }: { topInset: number }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      onPress={() => router.push(trip.tripType === 'abriyah' && trip.roomId ? `/(trip)/room/${trip.roomId}` : `/(trip)/${trip.id}`)}
+      onPress={() => router.push(tripScreenHref(trip))}
       style={{
         position: 'absolute',
         top: topInset + Spacing.md,

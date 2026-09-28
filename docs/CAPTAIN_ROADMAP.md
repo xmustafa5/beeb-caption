@@ -51,7 +51,7 @@ All under `https://beeb.madebyhaithem.com`. Captain token from `POST /api/auth/c
 | **Approval status** | `GET /api/captains/{id}` → Captain `{status: pending\|approved\|rejected\|blocked, rejection_reason?, blocked_reason?, ...}`. |
 | **Activate Today** | `GET /api/captain/activation/today` → `{activated, activation}`; `POST /api/captain/activation/today {}` → 201 `CaptainDailyActivation`. **P10: POST charges the captain wallet** — paid → `status:"paid"`+`collected_at`; **insufficient funds → 402** + row `status:"failed"`/`charge_error` (CTA persists; top up then retry). Idempotent same day. |
 | **Online + location** | `PUT /api/captain/online {online}` (**403 if not activated today**); `POST /api/captain/location {longitude,latitude}` (sets online, fans out); `POST /api/captain/location/flush {pings:[...]}` (last-wins on reconnect); `GET /api/captain/location`. Live stream: `GET /ws/captain?token=<jwt>` (own location echo + active-trip frames). |
-| **Queue + accept** | `GET /api/captain/trip-queue` → `{offers: CaptainOffer[]}` (pending regular trips + open rooms, oldest-first; **women-only rooms hidden unless captain.gender = f**). `POST /api/trips/{id}/accept`. `POST /api/abriyah/rooms/{id}/accept` (room → dispatched). `GET /api/abriyah/rooms/{id}/members` (assigned captain only). |
+| **Queue + accept** | `GET /api/captain/trip-queue` → `{offers: CaptainOffer[]}` (pending regular trips + open rooms, oldest-first; **women-only rooms are shown to every Nafarat captain** — women-only limits the riders, never the captain (2026-09-28); room offers carry `rider_count` + `total_fare_iqd`). `POST /api/trips/{id}/accept`. `POST /api/abriyah/rooms/{id}/accept` (room → dispatched). `GET /api/abriyah/rooms/{id}` → `{room, members}` and `GET /api/abriyah/rooms/{id}/members` (assigned captain only). |
 | **Live trip legs** | `POST /api/trips/{id}/arrive` (cue, no status change), `.../start` (accepted→in_progress), `.../complete` (in_progress→completed, charges rider). `POST /api/trips/{id}/cancel {reason,comment?}` (captain: from `requested`/`accepted` only). Multi-stop: `POST /api/captain/trips/{trip_id}/stops/{stop_id}/reach`. Masked call: `GET /api/captain/trips/{id}/proxy`. |
 | **Earnings** | `GET /api/captains/{id}/earnings?period=today\|week\|month` → `{gross_iqd,activation_fee_iqd,net_iqd,trip_count,period}`. `GET /api/captains/{id}/earnings/history?period=…` → `{items:[{trip_id,fare_iqd,trip_type,completed_at}]}`. |
 
@@ -164,8 +164,8 @@ and holds a live WebSocket for offers + active-trip frames. **REST polling is th
 
 ### Area 4 — Trip queue & accept
 
-**Goal:** Online captain sees the offer feed (regular trips + open rooms, women-only hidden for
-male captains) and can accept.
+**Goal:** Online captain sees the offer feed (regular trips + open rooms, women-only rooms
+included for every captain and labelled "Women-only ride") and can accept.
 
 - `services/captain-queue.ts`: `getTripQueue()` → `CaptainOffer[]`; `acceptTrip(id)`;
   `acceptRoom(id)`; `getRoomMembers(id)`.
@@ -175,8 +175,9 @@ male captains) and can accept.
   fare) and room (zone, room_type, fare). Accept → on success route to Live Trip. **No
   locked/confirm/"wait for full"** (backend goes straight to dispatched — see §3). Handle 409
   (someone else took it / captain already on a trip) by refetching.
-- **Verify:** STG-1001 (male) never sees women_only offers; STG-1002 (female) does; accept a
-  seeded `requested` trip → 200 → Live Trip. `tsc`+lint. **Commit.**
+- **Verify:** STG-1001 (male) and STG-1002 (female) both see and can accept women_only offers
+  (superseded 2026-09-28: captain gender never matters); accept a seeded `requested` trip → 200
+  → Live Trip. `tsc`+lint. **Commit.**
 
 **Deps:** Areas 1–3. **Blocks:** Area 5.
 
@@ -287,8 +288,9 @@ device/simulator, **not Expo Go**.
 3. **402 top-up reachability for captains.** Activate-Today charges the *captain* wallet; confirm
    captains can `GET/POST /api/me/wallet[/topup]` (owner_type derived from the captain JWT role) so
    the top-up-then-retry loop works in-app.
-4. **Women-only filtering is server-side** (queue pre-filters) — trust it, but also gate any
-   room-accept UI on `captain.gender === 'female'` defensively.
+4. **Women-only is a rider rule only** (2026-09-28): every rider in a `women_only` room is a
+   woman; any Nafarat captain is offered it and may accept it. The app never gates on
+   `captain.gender`; it only labels the offer "Women-only ride" so the captain knows who rides.
 5. **WS in Expo Go** works (no native push); **FCM does not** — hence FCM is deferred to a dev build.
 6. **Seed limits:** STG-1001/1002 are already approved+activated+online, so the *register→approve*
    transition and the *not-activated→activate* CTA can't both be exercised on the same rig without

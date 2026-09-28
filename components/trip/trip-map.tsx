@@ -73,6 +73,11 @@ interface TripMapProps {
    * Takes precedence over initialRegion when it has ≥2 points.
    */
   fitToCoords?: LatLng[]
+  /**
+   * Inset (px) around the `fitToCoords` frame. Raise `top` when the map runs up
+   * under the status bar, so the top pin is not hidden behind it.
+   */
+  fitPadding?: FitPadding
   /** Fires after a pan settles, with the new center as a LatLng. */
   onRegionChangeComplete?: (center: LatLng) => void
   /**
@@ -117,6 +122,7 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
     zonePolygon,
     routeCoords,
     fitToCoords,
+    fitPadding,
     onRegionChangeComplete,
     onPress,
     scrollEnabled = true,
@@ -154,7 +160,8 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
     },
   }), [])
 
-  // Frame all of fitToCoords with padding so the whole route is visible.
+  // Frame all of fitToCoords with padding so the whole route is visible. Only new
+  // coordinates re-fit; the padding is a fixed frame, not a trigger.
   const fitKey = fitToCoords?.map((c) => `${c.latitude.toFixed(4)},${c.longitude.toFixed(4)}`).join('|')
   const fitToRoute = useCallback((durationMs: number) => {
     const pts = fitToCoords
@@ -162,7 +169,7 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
     const bounds = boundsFor(pts)
     if (!bounds) return
     cameraRef.current?.fitBounds(bounds, {
-      padding: DEFAULT_FIT_PADDING,
+      padding: fitPadding ?? DEFAULT_FIT_PADDING,
       duration: durationMs,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

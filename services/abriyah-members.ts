@@ -1,11 +1,13 @@
 // services/abriyah-members.ts
 import { api } from '@/lib/api'
 import { parsePointWkt } from '@/lib/wkt'
+import { toAsciiDigits } from '@/lib/digits'
 import type { LatLng } from '@/hooks/use-current-location'
 
 export interface RoomMember {
   riderId: string
-  name: string
+  /** Null when the rider never set a name — the UI shows a numbered fallback. */
+  name: string | null
   phone: string
   pickup: LatLng
   dropoff: LatLng
@@ -41,7 +43,7 @@ export interface RoomMembersData {
 
 interface BackendMember {
   rider_id: string
-  name: string
+  name?: string | null
   phone: string
   pickup_wkt: string
   dropoff_wkt: string
@@ -85,7 +87,8 @@ export async function getRoomMembers(roomId: string): Promise<RoomMembersData> {
     })),
     members: (data.members ?? []).map((m) => ({
       riderId: m.rider_id,
-      name: m.name,
+      // Western digits in every language; a blank name counts as no name.
+      name: m.name?.trim() ? toAsciiDigits(m.name.trim()) : null,
       phone: m.phone,
       pickup: parsePointWkt(m.pickup_wkt) ?? { latitude: 0, longitude: 0 },
       dropoff: parsePointWkt(m.dropoff_wkt) ?? { latitude: 0, longitude: 0 },

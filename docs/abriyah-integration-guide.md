@@ -59,6 +59,8 @@ Abriyah trips **skip `requested`** — they are born `matched`. (Regular trips s
 
 So a full room with no captain just **sits `open` until a captain accepts or it expires.** Do not build the rider UI to expect "auto-go once 4 join." It goes when a **captain accepts**.
 
+While it waits, the next rider to the same drop-off opens a **new** room. **A full room leaves the join pool (2026-09-28, `rooms.filled_at`):** if a rider then leaves it (4/4 -> 3/4) while a newer room of that drop-off and type is taking riders, the freed seat stays with its waiting riders and new riders keep going to the newer room. If no other room is taking riders, the freed room takes riders again at once, so its remaining riders are not left waiting alone until it expires (a 2-seat room down to 1 rider is below the captain offer threshold). (Before the first fix, that leave or cancel failed with `500`; before the second, the freed room never took riders again.)
+
 ---
 
 ## 3. The HTTP contract
@@ -71,7 +73,7 @@ Base URL (prod): `https://beeb.madebyhaithem.com`. All bodies are JSON. Coordina
 | `/api/abriyah/validate-pins` | POST | **Public** (no token) |
 | `/api/abriyah/join` | POST | **Rider** JWT |
 | `/api/abriyah/leave` | DELETE | **Rider** JWT |
-| `/api/abriyah/rooms/{id}` | GET | **Rider** JWT (any rider may read any room id) |
+| `/api/abriyah/rooms/{id}` | GET | The room's **member riders**, the **captain assigned** to it, or an admin (2026-09-28; was any rider) |
 | `/api/abriyah/rooms/{id}/accept` | POST | **Captain** JWT (approved) |
 | `/api/abriyah/rooms/{id}/members` | GET | **Captain** JWT (assigned captain only) |
 | `/api/admin/rooms`, `/api/admin/rooms/{id}` | GET | **Admin** JWT |
@@ -153,8 +155,11 @@ Use `room.id` to poll/subscribe, and `trip_id` to track the rider's trip. `fare_
 | 400 | `bad request: pickup is not inside any active service zone` | pickup outside all active zones |
 | 400 | (dropoff not in abriyah zone) | dropoff not in an Abriyah-enabled zone |
 | 400 | `invalid room type 'carpool' (expected 'mixed' or 'women_only')` | bad `room_type` |
-| 403 | `forbidden` | women_only requested by a non-female rider (see §5), OR a non-rider token |
-| 409 | `conflict: rider is already in an active room` | rider already in an `open`/`locked` room |
+| 403 | `{"error":"women_only_riders"}` | women_only requested by a rider whose gender is not `f` (see §5) -- `forbidden` before 2026-09-28 |
+| 403 | `{"error":"women_only_disabled"}` | women_only while `room.allow_women_only_globally = "false"` (2026-09-28) |
+| 403 | `forbidden` | a non-rider token |
+| 409 | `{"error":"rider already has an active trip","active_trip_id":"..."}` | the rider has ANY live trip -- a taxi, a Box, or a Nafarat seat in any live state including a dispatched room (same body as `POST /api/trips`, 2026-09-28) |
+| 409 | `conflict: rider is already in an active room` | backstop: a member row without a live trip |
 
 ---
 
@@ -162,13 +167,17 @@ Use `room.id` to poll/subscribe, and `trip_id` to track the rider's trip. `fare_
 
 Removes the rider from their current room and cancels their trip. Returns `200 {"message":"left room"}`.
 
+> **2026-09-28:** `409` when the seat's trip moved on at the same instant (a captain took the room and it was dispatched) and is still live: nothing changed, the rider is still in the ride. Refresh the room/trip and move to the trip screen.
+
+> **2026-09-28:** `POST /api/trips/{id}/cancel` on a seat whose room is still `open`/`locked` does the same leave (member removed, `rider_count` down, `left` room frame with the room's `status`) in the same transaction as the cancel. After dispatch it is an ordinary trip cancel: the seat stays on the captain's roster (`/members`) and shows as cancelled through the trip. The `left` frame from a trip cancel is the same, key for key, as the one from `DELETE /api/abriyah/leave` (`room_type` and `captain_id` included). Only the seat's own rider, the room's assigned captain, or an admin may cancel it; any other rider or captain gets `404` (a co-rider can see your `trip_id` on the room read).
+
 > ⚠️ **`leave` only works while the room is `open` or `locked`.** Once the room is **`dispatched`**, `leave` returns `400 {"error":"rider is not in any active room"}` (verified). After dispatch, cancellation is a trip-level action, not a room action — the rider is committed to the captain. Build the rider UI so "Leave/Cancel" disappears (or switches to a trip-cancel flow) once `status == "dispatched"`.
 
 ---
 
-### 3.4 `GET /api/abriyah/rooms/{id}` — room + members (RIDER)
+### 3.4 `GET /api/abriyah/rooms/{id}` — room + members (the room's riders, its assigned captain, admins)
 
-Polling target for the rider's "finding/seating" screen. Returns the room and its member seats (fare, distance, trip id per seat — no geometry). Any authenticated rider may read any room id (no ownership check). `404` if the id doesn't exist.
+Polling target for the rider's "finding/seating" screen and the captain's room screen. Returns `{room, members}`: the room and its member seats (fare, distance, trip id per seat — no geometry). **Since 2026-09-28:** readable by a rider who holds (or held) a seat in the room, by the captain assigned to the room, and by admins; anyone else gets `403 forbidden` (it used to be any rider, and never a captain). `404` if the id doesn't exist.
 
 ---
 
@@ -185,7 +194,7 @@ Locks the open room to the captain and **immediately dispatches** it (advances e
 | Status | Body | Cause |
 |---|---|---|
 | 400 | (room not open) | room is not in `open` status (already taken/expired/dispatched) |
-| 403 | `forbidden` | captain not `approved`, OR a non-female captain accepting a `women_only` room |
+| 403 | `forbidden` | captain not `approved`, or without Nafarat access. (The captain's gender is never checked: a male captain may take a `women_only` room since 2026-09-28.) |
 | 404 | `not found` | no room with that id |
 | 409 | `conflict: captain already has an active room assignment` | **captain is still bound to another room** (see below) |
 
@@ -225,25 +234,27 @@ Only the **assigned** captain may call this (else `403 forbidden`). Returns the 
 
 ## 4. Fares (how `fare_iqd` is computed)
 
-Per-rider, independent. Priced from the **pickup zone**:
-- If the pickup zone is **Abriyah-enabled** → Abriyah tier rates.
-- Else (regular pickup zone) → regular tier rates.
+**Since 2026-09-28 (migration 065)** a Nafarat seat costs a share of the regular 1-star taxi fare for the rider's **own** route. Per rider and independent: riders do not split one fare, and the pickup zone's type no longer matters.
 
-Tiered formula (settings-driven, current prod values shown):
 ```
-d            = haversine(pickup, dropoff) in km
-tiered       = min(d, tier_threshold_km) * tier1_per_km
-             + max(d - tier_threshold_km, 0) * tier2_per_km
-fare_iqd     = round_up_to(round_to_iqd, base_fare_iqd + tiered)
+d            = ROAD distance(pickup, dropoff) in km   (the same resolver, and the
+               same 15-minute route cache, as a taxi fare)
+ride_star1   = pricing.regular_base_fare_iqd
+             + round(min(d, tier_threshold_km) * star1_tier1_per_km
+                   + max(d - tier_threshold_km, 0) * star1_tier2_per_km)
+               -- the UNROUNDED off-peak 1-star taxi ride
+fare_iqd     = round_up_to(round_to_iqd, ceil(ride_star1 * share_percent / 100))
 ```
-Prod settings (verified): `tier_threshold_km=10`, `round_to_iqd=250`,
-Abriyah `base=0, tier1=250, tier2=125`; Regular `base=2000, tier1=250, tier2=125`.
+- `share_percent` is `pricing.abriyah_share_percent`: an integer **10..=100**, default **50** ("half the taxi price"; super-admin editable, anything else `400 value out of range`).
+- **Off-peak:** no peak-time surcharge, no Box fee.
+- **Shown = charged:** `GET /api/trips/estimate?trip_type=abriyah` and `POST /api/abriyah/join` call the same function. The Nafarat estimate adds **`regular_fare_iqd`** (the 1-star taxi fare for that route, rounded like a taxi fare) and **`share_percent`**; both are `null` on regular and Box estimates. The join's `201` carries the same two fields.
+- **Retired keys:** `pricing.abriyah_base_fare_iqd` / `pricing.abriyah_tier1_per_km_iqd` / `pricing.abriyah_tier2_per_km_iqd` stay in the settings table (rollback safety) but no longer price anything, and the old fallback to the `pricing.regular_*` keys for a room joined from a regular pickup zone is gone.
 
-Verified examples:
-- 3.88 km Abriyah → `0 + 3.88*250 = 970 → round up to 250 ⇒ **1000 IQD**`. ✅
-- 18.72 km Abriyah → `10*250 + 8.72*125 = 2500+1090 = 3590 → **3750 IQD**`. ✅
+Examples at the defaults (base 2000, 1-star 500 IQD/km on both tiers, `round_to_iqd=250`, share 50):
+- 4.0 km road route → ride `2000 + 2000 = 4000` (taxi 4000) → `ceil(4000 * 50 / 100) = 2000` ⇒ **2000 IQD**.
+- 5.3 km road route → ride `2000 + 2650 = 4650` (taxi 4750) → `2325` → round up to 250 ⇒ **2500 IQD**.
 
-**Fare preview before joining:** use the public `GET /api/trips/estimate` (same math). The `fare_iqd` returned by `join` is **locked at join time** and won't change if zone/settings pricing changes afterward.
+The `fare_iqd` returned by `join` is **locked at join time** and won't change if the settings change afterward.
 
 ---
 
@@ -252,10 +263,11 @@ Verified examples:
 | Actor | Rule |
 |---|---|
 | Rider joining `women_only` | Must have **`gender = 'f'`** on their profile. AND the dropoff zone must have `allow_women_only = true`. |
-| Captain accepting `women_only` | Must have **`gender = 'f'`**. A male captain → `403 forbidden`. |
+| Captain accepting `women_only` | **No gender rule (2026-09-28).** Women-only means every RIDER is a woman; any Nafarat-approved captain is offered the room and may accept it. (Before: female captains only.) |
+| Platform switch | `room.allow_women_only_globally = "false"` refuses every women-only join with `403 {"error":"women_only_disabled"}` (it was never read before 2026-09-28). |
 | `mixed` | No gender constraint on either side. |
 
-> ⚠️ **Registration defaults a rider's gender to `unset`, not a real value.** A brand-new rider who never set their gender will get **`403 forbidden`** on a `women_only` join — verified live (the engine checks `gender == 'f'`, and `unset != 'f'`). This looks like a bug to the FE but is correct gating. **The rider must set `gender='f'` on their profile first** (`PUT /api/users/me` profile update with `gender`). Surface the women-only toggle only when `user.gender == 'f'` AND the resolved dropoff zone allows it (read `allow_women_only` from the zone, or just attempt and handle the 403).
+> ⚠️ **Registration defaults a rider's gender to `unset`, not a real value.** A brand-new rider who never set their gender will get **`403 {"error":"women_only_riders"}`** (bare `forbidden` before 2026-09-28) on a `women_only` join — verified live (the engine checks `gender == 'f'`, and `unset != 'f'`). This looks like a bug to the FE but is correct gating. **The rider must set `gender='f'` on their profile first** (`PUT /api/users/me` profile update with `gender`). Surface the women-only toggle only when `user.gender == 'f'` AND the resolved dropoff zone allows it (read `allow_women_only` from the zone, or just attempt and handle the 403).
 
 ---
 
@@ -298,10 +310,10 @@ Riders should subscribe to **both** `rt:room:{room_id}` (fill/lock/dispatch) and
 
 ### Captain app
 1. Captain must be **`approved`** and **online** (Abriyah accept itself only checks `approved`, but the operational app flow expects an online, activated captain — see the captain online/activation gate in the separate realtime docs).
-2. Show available open rooms for the captain's area (admin/ops feed or a captain-facing room list). Women-only rooms appear only for female captains.
-3. Tap Accept → `POST /api/abriyah/rooms/{id}/accept`. On `200`, the room is dispatched and you own it.
+2. Show available open rooms for the captain's area (admin/ops feed or a captain-facing room list). Women-only rooms appear for every Nafarat captain (2026-09-28; female captains only before). Room offers carry `rider_count` and `total_fare_iqd`, and the room's deadline: `expires_at` (RFC3339 UTC) plus `expires_in_seconds` (whole seconds left when the offer was built, never negative) -- the captain app counts down from the offer's arrival (2026-09-28).
+3. Tap Accept → `POST /api/abriyah/rooms/{id}/accept`. On `200`, the room is dispatched and you own it. (A room's trips are never taken one by one: `POST /api/trips/{id}/accept` on a Nafarat seat returns `409 {"error":"room_trip"}` since 2026-09-28.)
    - Handle `409` (captain already has an active room — finish the current pool first).
-   - Handle `403` (not approved / wrong gender for women_only).
+   - Handle `403` (not approved / no Nafarat access).
 4. `GET /api/abriyah/rooms/{id}/members` → render pickup sequence + rider contacts (parse `pickup_wkt`/`dropoff_wkt`).
 5. Drive the pooled trips through their lifecycle (accept→in_progress→completed) via the trips API per rider.
 
@@ -324,7 +336,7 @@ Abriyah depends on **admin-configured data**. If these are missing, every join 4
 These are real findings from the live audit — share with backend/ops:
 
 1. **Coverage is placeholder.** Only one big rectangular `abriyah_enabled` zone exists, overlapping the `regular_only` zone. Real launch needs proper district zones; until then "is this an Abriyah area?" answers are coarse.
-2. **`unset` gender silently blocks women-only.** New riders default to `gender='unset'`, so women-only 403s until they set gender. There is no API hint that "you must set your gender first" — the FE has to know this. Consider a clearer error than bare `forbidden`.
+2. **`unset` gender silently blocks women-only.** New riders default to `gender='unset'`, so women-only 403s until they set gender. There is no API hint that "you must set your gender first" — the FE has to know this. Consider a clearer error than bare `forbidden`. **Done 2026-09-28:** the body is now `{"error":"women_only_riders"}`.
 3. **Full room without a captain never dispatches** — only a captain accept dispatches. If captain supply is thin, riders fill rooms that then expire. The rider UX must message this honestly ("waiting for a captain", not "waiting for riders").
 4. **Captain is single-roomed across `dispatched`.** A captain can't take a new Abriyah pool until the current dispatched one clears. Fine by design, but the captain app must reflect it (no second "accept") or it 409s.
 5. **`leave` is room-state-sensitive** — it 400s after dispatch. Not a bug, but undocumented until now; the rider UI must switch from "leave room" to "cancel trip" at dispatch.
@@ -344,5 +356,5 @@ Using the test-OTP bypass (`TEST_OTP_PHONES`, code `16001600`) on prod:
 - captain `accept` → room `dispatched`, member trip `accepted` ✅
 - captain `members` → full roster with `pickup_breakdown` ✅
 - women_only by `unset` rider → `403`; by `gender='f'` rider → `201` ✅
-- tiered fare 18.72 km → `3750 IQD` ✅
+- tiered fare 18.72 km → `3750 IQD` ✅ (the rate card retired on 2026-09-28; see §4 for today's formula)
 - room-expiry sweep runs every 30 s; 14 rooms observed in `expired` state ✅

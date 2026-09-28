@@ -217,9 +217,18 @@ export default function LiveTripScreen() {
     }
   }
 
+  // Back to wherever the captain came from. A cancelled Nafarat seat opened
+  // from its push sits on top of the room screen in the same (trip) stack, and
+  // popping the whole group would drop the captain on Home mid-ride. With no
+  // history (nothing under this screen), fall back to Home.
+  function leave() {
+    if (router.canGoBack()) router.back()
+    else router.dismissTo('/(tabs)')
+  }
+
   async function onSubmitRating() {
     try { if (stars > 0) await rateRider(id, stars) } catch { /* 409 already-rated → ignore */ }
-    router.replace('/(tabs)')
+    router.dismissTo('/(tabs)')
   }
 
   if (isLoading && !trip) {
@@ -239,7 +248,7 @@ export default function LiveTripScreen() {
         title={t('common.error')}
         body={t('common.networkError')}
         button={t('captain.live.done')}
-        onPress={() => router.replace('/(tabs)')}
+        onPress={leave}
         colors={colors}
         insets={insets}
       />
@@ -250,7 +259,7 @@ export default function LiveTripScreen() {
   if (status === 'cancelled') {
     return (
       <CenteredState icon="close-circle" tone={colors.destructive} title={t('captain.live.cancelledTitle')} body={t('captain.live.cancelledBody')}
-        button={t('captain.live.done')} onPress={() => router.replace('/(tabs)')} colors={colors} insets={insets} />
+        button={t('captain.live.done')} onPress={leave} colors={colors} insets={insets} />
     )
   }
 
@@ -310,6 +319,8 @@ export default function LiveTripScreen() {
               : undefined
           }
           fitToCoords={fitCoords}
+          // The map runs up under the status bar: keep the top pin below it.
+          fitPadding={{ top: insets.top + 48, right: 48, bottom: 56, left: 48 }}
           driver={location ?? undefined}
           pickup={pickup}
           dropoff={dropoff}

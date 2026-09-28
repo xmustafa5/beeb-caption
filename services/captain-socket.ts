@@ -1,25 +1,10 @@
 // services/captain-socket.ts
 import { WS_BASE_URL } from '@/lib/api'
+import { parseCaptainFrame, type LocationEcho, type OfferFrame, type TripFrame } from '@/lib/captain-frame'
+
+export type { LocationEcho, OfferFrame, TripFrame } from '@/lib/captain-frame'
 
 export type CaptainSocketState = 'connecting' | 'open' | 'closed'
-
-export interface LocationEcho {
-  longitude: number
-  latitude: number
-  lastPingAt?: string
-  online?: boolean
-}
-
-export interface TripFrame {
-  id: string
-  status: string
-  [k: string]: unknown
-}
-
-export interface OfferFrame {
-  tripId: string
-  [k: string]: unknown
-}
 
 export interface CaptainSocketHandlers {
   onLocationEcho?: (loc: LocationEcho) => void
@@ -103,43 +88,10 @@ export class CaptainSocket {
   }
 
   private handleMessage(raw: unknown): void {
-    if (typeof raw !== 'string') return
-    let frame: Record<string, unknown>
-    try {
-      frame = JSON.parse(raw)
-    } catch {
-      return // ignore non-JSON
-    }
-    const event = frame.event as string | undefined
-
-    // Prefer the additive `event`; else field-sniff.
-    if (event === 'captain_location' || (frame.longitude !== undefined && frame.latitude !== undefined && frame.status === undefined)) {
-      this.handlers.onLocationEcho?.({
-        longitude: Number(frame.longitude),
-        latitude: Number(frame.latitude),
-        lastPingAt: frame.last_ping_at as string | undefined,
-        online: frame.online as boolean | undefined,
-      })
-      return
-    }
-    if (frame.trip_id !== undefined && frame.pickup_lat !== undefined) {
-      this.handlers.onOffer?.({ tripId: String(frame.trip_id), ...frame })
-      return
-    }
-    if (event === 'trip_update' || (frame.id !== undefined && frame.status !== undefined)) {
-      this.handlers.onTripUpdate?.({ id: String(frame.id), status: String(frame.status), ...frame })
-      return
-    }
-    // Legacy cancel frame. The cancellation cascade publishes
-    // `{id, cancelled_by, reason, cancelled_at}` — no `event`, no `status` — so
-    // every branch above drops it and the captain never learns the rider quit.
-    // Synthesise the status the app switches on. Deliberately LAST: a backend
-    // that already sends the unified `trip_update` frame is handled above, and an
-    // offer or a location echo can never reach here.
-    if (typeof frame.cancelled_by === 'string' && typeof frame.id === 'string') {
-      this.handlers.onTripUpdate?.({ ...frame, id: frame.id, status: 'cancelled' })
-      return
-    }
-    // Unknown frame — ignore.
+    // Routing (and the frame shapes) live in lib/captain-frame.
+    const frame = parseCaptainFrame(raw)
+    if (frame?.kind === 'location') this.handlers.onLocationEcho?.(frame.location)
+    else if (frame?.kind === 'offer') this.handlers.onOffer?.(frame.offer)
+    else if (frame?.kind === 'trip') this.handlers.onTripUpdate?.(frame.trip)
   }
 }

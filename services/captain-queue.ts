@@ -1,8 +1,11 @@
 // services/captain-queue.ts
 import { api } from '@/lib/api'
 import { toAsciiDigits } from '@/lib/digits'
+import { roomDeadlineMs } from '@/lib/room-countdown'
+import { toFiniteNumber } from '@/lib/to-number'
 
 export type OfferType = 'trip' | 'room'
+/** `women_only` = every rider in the room is a woman. Any captain may take it. */
 export type RoomType = 'mixed' | 'women_only'
 /** What a trip offer carries. Rooms have no trip type (`null`). */
 export type OfferTripType = 'regular' | 'box'
@@ -23,8 +26,29 @@ export interface CaptainOffer {
    */
   pickupAddress?: string
   dropoffAddress?: string
-  /** Already includes the Box fee for a Box offer — the app never adds it. */
+  /**
+   * Already includes the Box fee for a Box offer — the app never adds it. For a
+   * room this is ONE rider's fare (the oldest member's); see `totalFareIqd`.
+   */
   fareIqd: number
+  /** Room offers: riders in the room right now. Undefined for trips (and older backends). */
+  riderCount?: number
+  /** Room offers: every rider's fare added up — what the captain earns for the room. */
+  totalFareIqd?: number
+  /**
+   * Room offers: the room's deadline (RFC3339). After it the room expires and
+   * its riders' trips are cancelled. Undefined for trips (and older backends).
+   */
+  expiresAt?: string
+  /** Room offers: whole seconds left when the backend built this offer. */
+  expiresInSeconds?: number
+  /**
+   * Room offers: the local-clock instant (ms) the room expires — the moment the
+   * offer arrived plus `expiresInSeconds` (`expiresAt` only as the fallback), so
+   * a wrong phone clock can't skew it. The card counts down to this. Undefined
+   * when the backend sent no deadline: the card then shows no countdown.
+   */
+  deadlineMs?: number
   createdAt: string
   /** `'regular'` or `'box'` for a trip offer, `null` for a room offer. */
   tripType: OfferTripType | null
@@ -52,6 +76,10 @@ interface BackendOffer {
   pickup_address?: string | null
   dropoff_address?: string | null
   fare_iqd: number
+  rider_count?: number | null
+  total_fare_iqd?: number | null
+  expires_at?: string | null
+  expires_in_seconds?: number | null
   created_at: string
   trip_type?: string | null
   box_description?: string | null
@@ -68,9 +96,12 @@ function toOfferTripType(b: BackendOffer): OfferTripType | null {
   return b.trip_type === 'box' ? 'box' : 'regular'
 }
 
-function toOffer(b: BackendOffer): CaptainOffer {
+function toOffer(b: BackendOffer, receivedAtMs: number): CaptainOffer {
   const tripType = toOfferTripType(b)
   const isBox = tripType === 'box'
+  const isRoom = tripType === null
+  const expiresAt = isRoom && b.expires_at ? b.expires_at : undefined
+  const expiresInSeconds = isRoom ? toFiniteNumber(b.expires_in_seconds) : undefined
   const photoUrl = isBox && b.box_photo_url ? b.box_photo_url : undefined
   const photoCount = isBox && typeof b.box_photo_count === 'number' ? Math.max(0, b.box_photo_count) : 0
   return {
@@ -86,6 +117,11 @@ function toOffer(b: BackendOffer): CaptainOffer {
     pickupAddress: b.pickup_address ? toAsciiDigits(b.pickup_address) : undefined,
     dropoffAddress: b.dropoff_address ? toAsciiDigits(b.dropoff_address) : undefined,
     fareIqd: b.fare_iqd,
+    riderCount: tripType === null && typeof b.rider_count === 'number' ? b.rider_count : undefined,
+    totalFareIqd: tripType === null && typeof b.total_fare_iqd === 'number' ? b.total_fare_iqd : undefined,
+    expiresAt,
+    expiresInSeconds,
+    deadlineMs: isRoom ? roomDeadlineMs({ expiresInSeconds, expiresAt }, receivedAtMs) : undefined,
     createdAt: b.created_at,
     tripType,
     boxDescription: isBox && b.box_description ? toAsciiDigits(b.box_description) : undefined,
@@ -95,10 +131,12 @@ function toOffer(b: BackendOffer): CaptainOffer {
   }
 }
 
-/** Pending regular + Box trips and open rooms (women-only pre-filtered server-side for non-female). */
+/** Pending regular + Box trips and open rooms that are ready for a captain (women-only rooms included). */
 export async function getTripQueue(): Promise<CaptainOffer[]> {
   const { data } = await api.get<{ offers: BackendOffer[] }>('/api/captain/trip-queue')
-  return (data.offers ?? []).map(toOffer)
+  // A room's countdown runs from the moment this response arrived.
+  const receivedAtMs = Date.now()
+  return (data.offers ?? []).map((b) => toOffer(b, receivedAtMs))
 }
 
 /** Accept a regular or Box trip. 409 if already taken or the captain has an active trip. */
@@ -106,7 +144,10 @@ export async function acceptTrip(tripId: string): Promise<void> {
   await api.post(`/api/trips/${tripId}/accept`)
 }
 
-/** Accept (dispatch) an Abriyah room. 400 not-open / 403 women-only mismatch / 409 already in a room. */
+/**
+ * Accept (dispatch) an Abriyah room: every rider's trip becomes this captain's.
+ * 400 not open any more / 403 no Nafarat access / 409 already on a trip or the room is not ready.
+ */
 export async function acceptRoom(roomId: string): Promise<void> {
   await api.post(`/api/abriyah/rooms/${roomId}/accept`)
 }

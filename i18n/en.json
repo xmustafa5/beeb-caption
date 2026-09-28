@@ -147,8 +147,6 @@
     "joinRoom": "Join room",
     "roomTypeTitle": "Who do you want to ride with?",
     "roomTypeMixed": "Mixed",
-    "roomTypeWomenOnly": "Women only",
-    "womenOnlyGated": "Women-only is for female riders. Update your profile gender to enable.",
     "waitingTitle": "Looking for riders…",
     "waitingCount": "{{count}} of {{max}} riders",
     "waitingTimeLeft": "{{seconds}}s left",
@@ -377,11 +375,18 @@
       "kmAway": "{{km}} km away",
       "tripDistance": "{{km}} km trip",
       "roomMixed": "Mixed",
-      "roomWomenOnly": "Women only",
+      "roomWomenOnly": "Women-only ride",
       "accept": "Accept",
       "acceptRoom": "Accept room",
       "taken": "That trip was just taken.",
-      "acceptFailed": "Couldn't accept. Please try again."
+      "acceptFailed": "Couldn't accept. Please try again.",
+      "roomAllWomen": "All riders are women",
+      "roomRiders_one": "{{count}} rider",
+      "roomRiders_other": "{{count}} riders",
+      "roomTotal": "Total",
+      "roomTimeLeft": "{{time}} left",
+      "roomExpired": "Expired",
+      "roomOfferTitle": "Nafarat ride nearby"
     },
     "trip": {
       "acceptedTitle": "Trip accepted",
@@ -444,7 +449,12 @@
       "loadError": "Couldn't load this ride.",
       "nextPickup": "Next: pick up {{name}}",
       "nextDropoff": "Next: drop off {{name}}",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "arrived": "Arrived",
+      "cancelRider": "Cancel this rider",
+      "riderN": "Rider {{n}}",
+      "riderCancelledTitle": "One rider's trip was cancelled",
+      "riderCancelledBody": "Carry on with the other riders."
     },
     "earnings": {
       "tabLabel": "Earnings",

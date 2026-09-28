@@ -15,7 +15,7 @@
           "Abriyah"
         ],
         "summary": "Join or create an Abriyah shared room",
-        "description": "Match the calling rider into an Abriyah shared-ride room for their zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Computes the per-rider fare from the PICKUP zone (its Abriyah params when Abriyah-enabled, falling back to the settings regular fare otherwise).\n- Computes a per-rider fare with the tiered model (base + tiered per-km charge, rounded up to `pricing.round_to_iqd`), in integer IQD, over the ROAD distance from the routing engine (OSRM); when routing is unavailable the straight-line distance x `pricing.road_fallback_factor_percent` / 100 is used (plain straight line when `pricing.use_road_distance = 'false'`). No peak-time surcharge applies to Abriyah. Coordinates are WGS84 lng/lat.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room.opened/room.joined and trip.requested realtime events.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only requests require a female rider (gender 'f') and a zone that allows women-only rooms.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One active room per rider; joining again while already in a room is rejected.\n- Returns 400 `{\"error\":\"outside_abriyah_area\"}` when the dropoff is not in an Abriyah-enabled zone or the pickup is outside any active service zone (Nafarat is Baghdad-only for now: clients show it as \"coming soon\"); plain 400 when women-only is not allowed in the dropoff zone or `room_type` is invalid.\n- The join that brings a room to `room.min_riders_to_offer` live riders (default 2) pushes it to nearby Abriyah captains (WS `rt:captain:{id}` + FCM `new_trip_in_queue` with `room_id`) and restarts its wait window.",
+        "description": "Match the calling rider into an Abriyah (Nafarat) shared-ride room for their dropoff zone, opening a new room if none is available.\n\n**Features:**\n- Detects the Abriyah-enabled zone from the dropoff point (PostGIS containment); the pickup may be in any active service zone, so cross-zone trips into the dropoff zone are supported.\n- Prices the seat exactly like `GET /api/trips/estimate?trip_type=abriyah` (same function, same cached road distance): `fare_iqd = round_up_to(pricing.round_to_iqd, ceil(ride_star1 * pricing.abriyah_share_percent / 100))`, where `ride_star1` is the UNROUNDED off-peak 1-star taxi ride for this rider's own route (`pricing.regular_base_fare_iqd` + `pricing.star1_tier1/2_per_km_iqd` over the ROAD distance from OSRM; straight line x `pricing.road_fallback_factor_percent` / 100 when routing is unavailable). No peak surcharge; the pickup zone's type does not change the price. At the default 50 %, two riders pay one taxi fare and four pay two (each at most one rounding step more). The response echoes `regular_fare_iqd` (that taxi fare) and `share_percent`.\n- Finds an open room of the requested type in the zone, or creates one with the zone's max-riders and max-wait-seconds expiry. A room that filled stops taking riders (the next rider opens a new room); when one of its riders leaves or cancels and no other room of that zone and type is joinable, it takes riders again. A room whose deadline has passed is retired first (its riders are told), never joined.\n- Creates a matched Abriyah trip for the rider and links it to the new room member.\n- Publishes room frames on `rt:room:{id}` (`opened`, `joined`; every room frame carries the room's current `status`, `rider_count`, `max_riders`, `expires_at` and an `event` name) and `beep.trip.requested`.\n\n**Behavior:**\n- Validates `room_type` is 'mixed' or 'women_only'.\n- Women-only is about the RIDERS: the platform switch `room.allow_women_only_globally` must be on (else 403 `{\"error\":\"women_only_disabled\"}`), the rider's gender must be 'f' (else 403 `{\"error\":\"women_only_riders\"}`), and the dropoff zone must allow women-only rooms (else 400). The captain's gender is never checked.\n- On the 201 the room may already be 'dispatched' if it filled while a captain was assigned; a full but captain-less room stays open.\n\n**Restrictions:**\n- Rider JWT required; the rider's gender is read from their user record.\n- One live ride per rider: a rider with ANY active trip (a taxi, a Box, or a Nafarat seat in any live state, a dispatched room included) gets the same 409 as `POST /api/trips`: `{\"error\":\"rider already has an active trip\",\"active_trip_id\":\"...\"}`.\n- Returns 400 `{\"error\":\"outside_abriyah_area\"}` when the dropoff is not in an Abriyah-enabled zone or the pickup is outside any active service zone (Nafarat is Baghdad-only for now: clients show it as \"coming soon\"); plain 400 when women-only is not allowed in the dropoff zone or `room_type` is invalid.\n- The join that brings a room to `room.min_riders_to_offer` live riders (default 2) pushes it to nearby Abriyah captains of any gender (WS `beep.room.offered` on `rt:captain:{id}` and FCM `new_trip_in_queue`, both with `room_id`, `rider_count` and `total_fare_iqd`; the WS frame also carries the room's deadline, `expires_at` and `expires_in_seconds`) and restarts its wait window (that deadline is already the restarted one).",
         "operationId": "join_room",
         "requestBody": {
           "content": {
@@ -29,7 +29,7 @@
         },
         "responses": {
           "201": {
-            "description": "Rider matched into a room; returns the room, the new member, and the matched trip",
+            "description": "Rider matched into a room; returns the room, the new member, the matched trip, the fare and its taxi reference",
             "content": {
               "application/json": {
                 "schema": {
@@ -45,13 +45,13 @@
             "description": "Missing or invalid bearer token"
           },
           "403": {
-            "description": "JWT role is not 'rider' (role-gated route), or a women-only room is requested by a non-female rider"
+            "description": "JWT role is not 'rider' (role-gated route); `women_only_riders` (women-only room asked by a rider whose gender is not 'f'); `women_only_disabled` (women-only switched off platform-wide)"
           },
           "404": {
             "description": "Rider user record not found"
           },
           "409": {
-            "description": "Rider is already in an active room"
+            "description": "Rider already has an active trip (`active_trip_id` in the body, same shape as `POST /api/trips`), or is already in an active room; rarely, the drop-off zone's room changed under the join twice in a row (`{\"error\":\"the rooms for this drop-off changed while joining; try again\"}`): nothing was booked, retry"
           }
         },
         "security": [
@@ -67,7 +67,7 @@
           "Abriyah"
         ],
         "summary": "Leave the rider's active Abriyah room",
-        "description": "Remove the calling rider from their current Abriyah room and cancel their matched trip.\n\n**Behavior:**\n- Looks up the rider's active room and member; cancels the linked trip (system actor for matched, admin actor for accepted) with reason 'changed_mind'.\n- Removes the member from the room and decrements the room's rider count.\n- Publishes a trip.cancelled realtime event.\n- Leaving after a captain has locked the room is allowed but logged as a warning.\n\n**Restrictions:**\n- Rider JWT required.\n- Returns 400 when the rider is not in any active room.",
+        "description": "Remove the calling rider from their current Abriyah room and cancel their matched trip.\n\n**Behavior:**\n- Looks up the rider's active room and member; cancels the linked trip (system actor for matched, admin actor for accepted) with reason 'changed_mind'.\n- Removes the member from the room and decrements the room's rider count in the same transaction as the trip cancel.\n- Publishes a `beep.trip.cancelled` frame and a `beep.room.left` room frame (`status`, new `rider_count`) so the other riders' counts update at once.\n- `POST /api/trips/{id}/cancel` on the same seat does the same leave.\n- Leaving after a captain has locked the room is allowed but logged as a warning.\n- If the seat's trip cannot be cancelled because it moved on at the same instant (a captain took the room and it was dispatched) and the trip is still live, nothing changes: the rider keeps the seat and gets 409. Refresh the room and trip.\n\n**Restrictions:**\n- Rider JWT required.\n- Returns 400 when the rider is not in any active room.",
         "operationId": "leave_room",
         "responses": {
           "200": {
@@ -88,6 +88,9 @@
           },
           "403": {
             "description": "JWT role is not 'rider' (role-gated route)"
+          },
+          "409": {
+            "description": "The seat's trip moved on (e.g. the room was just dispatched) and is still live; the rider is still in the ride"
           }
         },
         "security": [
@@ -103,7 +106,7 @@
           "Abriyah"
         ],
         "summary": "Get an Abriyah room with its members",
-        "description": "Retrieve a single Abriyah room and the list of riders currently seated in it.\n\n**Returns:**\n- The room (zone, type 'mixed'|'women_only', status 'open'|'locked'|'dispatched'|'expired', max/current rider count, assigned captain, expiry and timestamps).\n- The room members, each with their per-rider fare (integer IQD), distance, and linked trip id. Member pickup/dropoff geometry is not included here.\n\n**Use Cases:**\n- The Customer App polling a room the rider has joined for fill progress and dispatch state.\n\n**Restrictions:**\n- Rider JWT required; no ownership check is performed (any authenticated rider may read any room by id).",
+        "description": "Retrieve a single Abriyah room and the list of riders currently seated in it.\n\n**Returns:**\n- `{room, members}`: the room (zone, type 'mixed'|'women_only', status 'open'|'locked'|'dispatched'|'expired', max/current rider count, assigned captain, expiry and timestamps) and its member seats, each with the rider id, per-rider fare (integer IQD), distance and linked trip id. Member pickup/dropoff geometry is not included here (the captain reads it from `/members`).\n\n**Use Cases:**\n- The Customer App polling a room the rider has joined for fill progress and dispatch state.\n- The Captain App driving a dispatched room (status and each seat's trip id).\n\n**Access Control:**\n- Rider: only a rider who holds (or held) a seat in this room (a member row or a trip linked to the room).\n- Captain: only the captain assigned to this room (`room.captain_id`).\n- Admin roles (`super_admin`, `operator`, `finance`): always.\n- Anyone else: 403 `{\"error\":\"forbidden\"}`; an unknown id is 404.",
         "operationId": "get_room",
         "parameters": [
           {
@@ -129,10 +132,10 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
           },
           "403": {
-            "description": "JWT role is not 'rider' (role-gated route)"
+            "description": "Caller is not a rider of this room, its assigned captain, or an admin"
           },
           "404": {
             "description": "No room exists with this id"
@@ -151,7 +154,7 @@
           "Abriyah"
         ],
         "summary": "Accept and dispatch an Abriyah room (captain)",
-        "description": "Assign the calling captain to an open Abriyah room, lock it, and immediately dispatch it to all seated riders.\n\n**Behavior:**\n- Verifies the captain is approved and not already on another active room.\n- Requires the room to be in 'open' status; locks it to the captain (publishes room.locked).\n- Dispatches the room: transitions it to 'dispatched' and advances every member trip from matched to accepted with this captain (optimistic-locked; concurrent transitions are skipped).\n- Triggers a best-effort reports rollup and enqueues a push notification to each rider.\n- Returns the resulting dispatched room.\n\n**Use Cases:**\n- A captain taking the next available Abriyah pool in their zone.\n\n**Restrictions:**\n- Captain JWT required; the captain must have status 'approved'.\n- Women-only rooms require a female captain (gender 'f').\n- Returns 400 if the room is not 'open', 403 if the captain is not approved or fails the women-only gate, 409 if the captain is still driving another room's riders or the room has not yet reached `room.min_riders_to_offer` live riders (default 2).",
+        "description": "Assign the calling captain to an open Abriyah room, lock it, and immediately dispatch it to all seated riders.\n\n**Behavior:**\n- Verifies the captain is approved, has Nafarat access, and is not already driving another room or a regular trip.\n- Requires the room to be in 'open' status; locks it to the captain (publishes room.locked).\n- Dispatches the room: transitions it to 'dispatched' and advances every member trip from matched to accepted with this captain (optimistic-locked; concurrent transitions are skipped).\n- Triggers a best-effort reports rollup and enqueues a push notification to each rider.\n- Returns the resulting dispatched room.\n\n**Use Cases:**\n- A captain taking the next available Abriyah pool in their zone.\n\n**Restrictions:**\n- Captain JWT required; the captain must have status 'approved' and Nafarat access (`abriyah_status = 'approved'`).\n- The captain's gender is never checked: a women-only room is women RIDERS, and any Nafarat captain may accept it.\n- Returns 400 if the room is not 'open', 403 if the captain is not approved or has no Nafarat access, 409 if the captain is still driving another room's riders or a regular trip, or the room has not yet reached `room.min_riders_to_offer` live riders (default 2).\n- Room seats cannot be taken one by one: `POST /api/trips/{id}/accept` on a room trip answers 409 `{\"error\":\"room_trip\"}`.",
         "operationId": "accept_room",
         "parameters": [
           {
@@ -183,7 +186,7 @@
             "description": "Missing or invalid bearer token"
           },
           "403": {
-            "description": "Captain not approved, or a non-female captain accepting a women-only room"
+            "description": "Captain not approved, or without Nafarat access"
           },
           "404": {
             "description": "No room exists with this id"
@@ -1912,7 +1915,7 @@
           "Admin Operations"
         ],
         "summary": "Force-expire an open or locked room",
-        "description": "Force-expire an Abriyah room that is still open or locked.\n\n**Behavior:**\n1. Loads the room; a missing room returns 404.\n2. Requires status `open` or `locked`; any other status returns 400.\n3. Calls the room state machine's expire; a concurrent race surfaces as 400.\n4. On success the room moves to `expired` and a `beep.room.expired` event (forced, with reason) is published.\n5. Returns `{ ok: true }`.\n\n**Use Cases:**\n- Tear down a room that will never match (e.g. no captains in zone).\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- The `reason` is recorded on the audit event.",
+        "description": "Force-expire an Abriyah room that is still open or locked.\n\n**Behavior:**\n1. Loads the room; a missing room returns 404.\n2. Requires status `open` or `locked`; any other status returns 400.\n3. Runs the room-expiry sweep's own per-room step; a concurrent race (the room was dispatched or expired meanwhile) surfaces as 400.\n4. On success the room moves to `expired`, EVERY member's live trip is cancelled with reason `system_timeout` (a `beep.trip.cancelled` frame per trip), each rider gets the `room_expired` push, and the `beep.room.expired` room frame (`status: expired`, `forced: true`, `reason`) is published on `rt:room:{id}` -- exactly what a timed-out room does. (Before 2026-09-28 only the room status changed and the riders' trips stayed `matched`.)\n5. Returns `{ ok: true }`.\n\n**Use Cases:**\n- Tear down a room that will never match (e.g. no captains in zone).\n\n**Restrictions:**\n- Super-admin only (403 otherwise).\n- The `reason` is recorded on the audit event.",
         "operationId": "force_expire_room",
         "parameters": [
           {
@@ -3906,7 +3909,7 @@
           "Zones"
         ],
         "summary": "Create a zone",
-        "description": "Create a service zone from a WKT polygon and pricing settings.\n\n**Features:**\n- Omitted room and Abriyah pricing fields default from the settings singleton, then to hard defaults (room max riders 4, max wait 300s)\n- regular_only zones have any per-km rate stripped to null\n- On success, writes an audit row and publishes a beep.zone.created event\n\n**Behavior:**\n1. Validates zone_type is regular_only or abriyah_enabled (400 otherwise)\n2. Verifies the referenced city exists (404 otherwise)\n3. Runs a PostGIS validity check on the polygon (400 if invalid)\n4. Resolves defaults, then enforces Abriyah completeness\n5. Inserts the zone and returns the persisted record\n\n**Restrictions:**\n- Admin role required\n- Polygon must be a closed shape, >= 4 points, no self-intersections; WKT is longitude-first (lng lat), SRID 4326\n- abriyah_enabled zones require abriyah_per_km_iqd > 0 after defaults are applied (400 otherwise)\n- Money fields are integer IQD",
+        "description": "Create a service zone from a WKT polygon and pricing settings.\n\n**Features:**\n- Omitted room and Abriyah pricing fields default from the settings singleton, then to hard defaults (room max riders 4, max wait 300s)\n- regular_only zones have any per-km rate stripped to null\n- On success, writes an audit row and publishes a beep.zone.created event\n\n**Behavior:**\n1. Validates zone_type is regular_only or abriyah_enabled (400 otherwise)\n2. Verifies the referenced city exists (404 otherwise)\n3. Runs a PostGIS validity check on the polygon (400 if invalid)\n4. Resolves defaults, then enforces Abriyah completeness\n5. Inserts the zone and returns the persisted record\n\n**Restrictions:**\n- Admin role required\n- Polygon must be a closed shape, >= 4 points, no self-intersections; WKT is longitude-first (lng lat), SRID 4326\n- abriyah_enabled zones require abriyah_per_km_iqd > 0 after defaults are applied (400 otherwise)\n- The polygon must not area-overlap another ACTIVE zone (409 `Polygon overlaps active zone <name>`). Sharing a border is fine, and so is a negligible sliver: a partial overlap smaller than 500 m2 is ignored. Nesting inside (or around) an active zone is always refused, whatever its size.\n- Money fields are integer IQD",
         "operationId": "create_zone",
         "requestBody": {
           "content": {
@@ -3940,6 +3943,9 @@
           },
           "404": {
             "description": "Referenced city not found"
+          },
+          "409": {
+            "description": "The polygon overlaps an active zone by 500 m2 or more, or nests inside or around one"
           },
           "422": {
             "description": "JSON body is missing a required field (e.g. polygon_wkt) or has a wrong-typed field"
@@ -4152,7 +4158,7 @@
           "Zones"
         ],
         "summary": "Update a zone",
-        "description": "Partially update a zone's attributes and/or boundary polygon.\n\n**Updatable Fields:**\n- name, name_ar, polygon_wkt, zone_type, abriyah_per_km_iqd, abriyah_base_fare_iqd, allow_women_only, room_max_riders, room_max_wait_seconds, active\n- Every field is optional; omitted fields keep their current value (partial update)\n- On success, writes an audit row and publishes a beep.zone.updated event\n\n**Restrictions:**\n- Admin role required\n- If zone_type is supplied it must be regular_only or abriyah_enabled (400 otherwise)\n- If polygon_wkt is supplied it must pass the PostGIS validity check (400 otherwise); WKT is longitude-first, SRID 4326\n- When the resulting zone_type is abriyah_enabled, the effective abriyah_per_km_iqd (new value or existing) must be > 0 (400 otherwise)\n- Money fields are integer IQD",
+        "description": "Partially update a zone's attributes and/or boundary polygon.\n\n**Updatable Fields:**\n- name, name_ar, polygon_wkt, zone_type, abriyah_per_km_iqd, abriyah_base_fare_iqd, allow_women_only, room_max_riders, room_max_wait_seconds, active\n- Every field is optional; omitted fields keep their current value (partial update)\n- On success, writes an audit row and publishes a beep.zone.updated event\n\n**Restrictions:**\n- Admin role required\n- If zone_type is supplied it must be regular_only or abriyah_enabled (400 otherwise)\n- If polygon_wkt is supplied it must pass the PostGIS validity check (400 otherwise); WKT is longitude-first, SRID 4326\n- When the resulting zone_type is abriyah_enabled, the effective abriyah_per_km_iqd (new value or existing) must be > 0 (400 otherwise)\n- A new polygon_wkt must not ADD overlap with another ACTIVE zone (409 `Polygon overlaps active zone <name>`): for each neighbour, a new intersection under 500 m2 is ignored (a sliver); one of 500 m2 or more is compared with this zone's CURRENT intersection with that neighbour and refused when it is more than 25 m2 larger (25 m2 absorbs re-serialising the same outline, not moving a shared edge). So a zone that already overlaps a neighbour (including by far more than 500 m2) can be saved with its polygon unchanged, with the overlap shrunk, or with its other edges moved, while an edit that pushes further into a neighbour is refused, however it is split across saves. Sharing a border is fine; nesting inside (or around) an active zone is always refused.\n- Money fields are integer IQD",
         "operationId": "update_zone",
         "parameters": [
           {
@@ -4198,6 +4204,9 @@
           },
           "404": {
             "description": "No zone with this ID"
+          },
+          "409": {
+            "description": "The new polygon overlaps another active zone by 500 m2 or more and grows that overlap by more than 25 m2 over the zone's current one, or nests inside or around an active zone, or the zone was modified concurrently (version conflict)"
           },
           "422": {
             "description": "JSON body has a wrong-typed field"
@@ -5138,7 +5147,7 @@
           "Realtime"
         ],
         "summary": "List pending offers for the captain",
-        "description": "List the pending dispatch offers currently visible to this captain.\n\n**Features:**\n- Returns a single list mixing two offer types: pending trips (regular and Box) and open Abriyah rooms (`offer_type` distinguishes them; `trip_type` is `regular` | `box` on trip offers and null on rooms).\n- Each offer carries pickup/dropoff coordinates, fare in integer IQD (Box fee included for Box), optional `zone_id`, optional `room_type` (`mixed` | `women_only`, null for trips), and `created_at`.\n- Box offers also carry `box_description` (full text), `box_photo_url` (short-lived presigned GET of the FIRST photo, or null) and `box_photo_count` (0-3; 0 on non-Box offers). The recipient phone is NEVER in an offer; the assigned captain reads it from `GET /api/trips/{id}/box` after accepting.\n- Regular and Box trips follow the same star window: the captain's own grade immediately, lower-graded requests once they have gone `dispatch.star_widen_after_seconds` unclaimed.\n- Women-only rooms are pre-filtered out for non-female captains (gender is read from the captain record before matching).\n- **Returns an EMPTY list while this captain is already on a trip** (`accepted` or `in_progress`) -- no trips and no rooms. The app polls this endpoint every few seconds for as long as the captain is online, mid-ride included, so this is where \"a captain in a trip is offered nothing\" is enforced. The response shape is unchanged; `offers` is simply `[]`.\n\n**Use Cases:**\n- The captain app polling for offers it may accept while online.\n- Showing the nearby trip/room queue on the captain dashboard.",
+        "description": "List the pending dispatch offers currently visible to this captain.\n\n**Features:**\n- Returns a single list mixing two offer types: pending trips (regular and Box) and open Abriyah rooms (`offer_type` distinguishes them; `trip_type` is `regular` | `box` on trip offers and null on rooms).\n- Each offer carries pickup/dropoff coordinates, fare in integer IQD (Box fee included for Box), optional `zone_id`, optional `room_type` (`mixed` | `women_only`, null for trips), and `created_at`.\n- Room offers also carry `rider_count` (riders waiting now) and `total_fare_iqd` (all their fares added up: what the captain collects for the room); `fare_iqd` stays ONE rider's fare (the earliest member's) for older apps. Both are null on trip offers.\n- Room offers also carry their deadline: `expires_at` (RFC3339 UTC; after it the room expires and its riders' trips are cancelled) and `expires_in_seconds` (whole seconds left when this response was built, rounded down, never negative; 0 = past the deadline, about to be expired). Count down from when the response arrived, not against the phone clock. The join that brings a room to its offer threshold restarts the deadline, so a later poll (or the `beep.room.offered` frame) can carry a larger value. Both are null on trip offers.\n- Box offers also carry `box_description` (full text), `box_photo_url` (short-lived presigned GET of the FIRST photo, or null) and `box_photo_count` (0-3; 0 on non-Box offers). The recipient phone is NEVER in an offer; the assigned captain reads it from `GET /api/trips/{id}/box` after accepting.\n- Regular and Box trips follow the same star window: the captain's own grade immediately, lower-graded requests once they have gone `dispatch.star_widen_after_seconds` unclaimed.\n- Women-only rooms (every rider a woman) are offered to Nafarat captains of any gender; the captain's gender is never checked.\n- **Returns an EMPTY list while this captain is already on a trip** (`accepted` or `in_progress`) -- no trips and no rooms. The app polls this endpoint every few seconds for as long as the captain is online, mid-ride included, so this is where \"a captain in a trip is offered nothing\" is enforced. The response shape is unchanged; `offers` is simply `[]`.\n\n**Use Cases:**\n- The captain app polling for offers it may accept while online.\n- Showing the nearby trip/room queue on the captain dashboard.",
         "operationId": "get_trip_queue",
         "responses": {
           "200": {
@@ -6191,7 +6200,7 @@
           "Trips"
         ],
         "summary": "Captain earnings summary",
-        "description": "Summarise a captain's earnings over a rolling period, net of the daily activation fee.\n\n**Returns:**\n- `gross_iqd`: sum of completed-trip fares since the period start (integer IQD).\n- `activation_fee_iqd`: a single flat activation fee (2000 IQD) subtracted when gross is positive, else 0.\n- `net_iqd`: gross minus the activation fee.\n- `trip_count` and the echoed `period`.\n- Period windows are rolling from now: `today`/`day` = last 24h, `week` = last 7d, `month` = last 30d. The activation fee is exact only for `today`; over week/month it is illustrative (a single fee, not per-day) in v1.\n\n**Use Cases:**\n- Captain app earnings dashboard for today, this week, or this month.",
+        "description": "Summarise a captain's earnings over a rolling period, net of the daily activation fee.\n\n**Returns:**\n- `gross_iqd`: sum of completed-trip fares since the period start (integer IQD).\n- `activation_fee_iqd`: a single flat activation fee (2000 IQD) subtracted when gross is positive, else 0.\n- `net_iqd`: gross minus the activation fee.\n- `trip_count` and the echoed `period`.\n- Period windows are rolling from now: `today`/`day` = last 24h, `week` = last 7d, `month` = last 30d. The activation fee is exact only for `today`; over week/month it is illustrative (a single fee, not per-day) in v1.\n\n**Access Control:** the captain themselves (a captain token whose subject is `{id}`) or an admin role. Any other captain, and every rider, gets 403.\n\n**Use Cases:**\n- Captain app earnings dashboard for today, this week, or this month.\n- Admin dashboard reviewing a captain's earnings.",
         "operationId": "captain_earnings",
         "parameters": [
           {
@@ -6229,7 +6238,10 @@
             "description": "Period is not one of today, week, month"
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "403": {
+            "description": "The caller is neither this captain nor an admin"
           }
         },
         "security": [
@@ -6245,7 +6257,7 @@
           "Trips"
         ],
         "summary": "Captain per-trip earnings history",
-        "description": "List a captain's completed trips within a rolling period, for an itemised earnings breakdown.\n\n**Returns:**\n- `items`: each completed trip the captain finished in the window, with its fare and supporting detail (integer IQD).\n- The echoed `captain_id` and `period`.\n- Period windows are rolling from now: `today`/`day` = last 24h, `week` = last 7d, `month` = last 30d.\n\n**Use Cases:**\n- Captain app drilling from the earnings summary into the underlying trips.",
+        "description": "List a captain's completed trips within a rolling period, for an itemised earnings breakdown.\n\n**Returns:**\n- `items`: each completed trip the captain finished in the window, with its fare and supporting detail (integer IQD).\n- The echoed `captain_id` and `period`.\n- Period windows are rolling from now: `today`/`day` = last 24h, `week` = last 7d, `month` = last 30d.\n\n**Access Control:** the captain themselves (a captain token whose subject is `{id}`) or an admin role. Any other captain, and every rider, gets 403.\n\n**Use Cases:**\n- Captain app drilling from the earnings summary into the underlying trips.",
         "operationId": "captain_earnings_history",
         "parameters": [
           {
@@ -6283,7 +6295,10 @@
             "description": "Period is not one of today, week, month"
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "403": {
+            "description": "The caller is neither this captain nor an admin"
           }
         },
         "security": [
@@ -9165,13 +9180,13 @@
           "Trips"
         ],
         "summary": "List trips with filters",
-        "description": "List trips, optionally filtered by rider, captain, or status, with page-based pagination.\n\n**Features:**\n- Filters (all optional, combinable): `rider_id`, `captain_id`, `status`.\n- Pagination: `page` defaults to 1 (min 1); `per_page` defaults to 20 and is clamped to 1..=100.\n- Response carries `items`, plus the total matching count and the echoed `page` / `per_page`.\n\n**Use Cases:**\n- A rider listing their own trip history (`rider_id` = their id).\n- A captain listing assigned trips (`captain_id` = their id).\n- Admin browsing all trips in a given status.",
+        "description": "List trips, optionally filtered by rider, captain, or status, with page-based pagination. Always scoped to the caller.\n\n**Features:**\n- Filters (all optional, combinable): `rider_id`, `captain_id`, `status`.\n- Pagination: `page` defaults to 1 (min 1); `per_page` defaults to 20 and is clamped to 1..=100.\n- Response carries `items`, plus the total matching count and the echoed `page` / `per_page`.\n\n**Access Control (who sees what):**\n- Rider token: ONLY the caller's own trips -- `rider_id` is forced to the caller (a `rider_id` for someone else is ignored); `captain_id` / `status` still narrow the list.\n- Captain token: ONLY trips assigned to the caller -- `captain_id` is forced to the caller; `rider_id` / `status` still narrow the list.\n- Admin roles (`super_admin`, `operator`, `finance`): every trip, with every filter as given.\n- Any other role: 403.\n\n**Use Cases:**\n- A rider listing their own trip history.\n- A captain listing assigned trips (e.g. `status=accepted` to resume an active trip, or a room's seats).\n- Admin browsing all trips in a given status.",
         "operationId": "list_trips",
         "parameters": [
           {
             "name": "rider_id",
             "in": "query",
-            "description": "Filter to trips for this rider id",
+            "description": "Filter to trips for this rider id (admins); a rider token always lists only its own trips",
             "required": false,
             "schema": {
               "type": "string",
@@ -9181,7 +9196,7 @@
           {
             "name": "captain_id",
             "in": "query",
-            "description": "Filter to trips assigned to this captain id",
+            "description": "Filter to trips assigned to this captain id (admins); a captain token always lists only its own trips",
             "required": false,
             "schema": {
               "type": "string",
@@ -9220,7 +9235,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated trips with total count",
+            "description": "Paginated trips with total count (the caller's own for riders and captains)",
             "content": {
               "application/json": {
                 "schema": {
@@ -9230,7 +9245,10 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "403": {
+            "description": "The token's role may not list trips"
           }
         },
         "security": [
@@ -9376,7 +9394,7 @@
           "Trips"
         ],
         "summary": "Estimate a fare before requesting",
-        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals), Box fee and peak surcharge included.\n- `distance_km`: the pricing distance in km -- the ROAD distance from the routing engine (OSRM) when `distance_source` is `road`.\n- `distance_source`: `road` | `straight_fallback` (routing unavailable: error, 2.5 s timeout or not configured; straight line x `pricing.road_fallback_factor_percent` / 100, default 140) | `straight` (`pricing.use_road_distance = 'false'`: plain straight line).\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- `discount_iqd` / `final_fare_iqd`: the potential promo discount (applied to `fare_iqd`) and `max(0, fare_iqd - discount_iqd)`.\n- `surcharge_iqd`: the Box fee already included in `fare_iqd` (the current `pricing.box_surcharge_iqd`); 0 for regular and Abriyah.\n- `peak_percent` / `peak_extra_iqd` / `peak_label`: the peak-time surcharge in force (0 / 0 / null when none), the IQD it adds after rounding (already inside `fare_iqd`), and the rule's name. Always 0 / 0 / null for Abriyah.\n- Fare model: `ride = base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`; `fare = round_up_to(round_to_iqd, ride + round(ride * peak_percent / 100) + box_fee)`; `peak_extra_iqd = fare - round_up_to(round_to_iqd, ride + box_fee)`. `trip_type=abriyah` selects the Abriyah tiers/base (no peak); `trip_type=box` uses the `star` normal-taxi tiers plus the Box fee (equal to what `POST /api/trips/box` charges); any other value (or omitted) uses the `star` normal-taxi tiers (equal to what `POST /api/trips` charges). `zone_id` no longer changes the per-km rate (pricing is global per type). The three star estimates and the booking share one cached route (900 s), so they always agree.\n- Peak time is evaluated in Asia/Baghdad time NOW, or at `scheduled_for` when given (a scheduled trip is charged at its scheduled pickup time).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Abriyah pricing preview by passing `trip_type=abriyah`.\n- Box price preview by passing `trip_type=box&star=1|2|3`.\n\n**Restrictions:**\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- `scheduled_for`, when given, must be RFC3339, else 400 `{\"error\":\"invalid_scheduled_for\"}`.",
+        "description": "Compute a pre-request fare estimate for a pickup/dropoff pair. Public: no authentication required.\n\n**Returns:**\n- `fare_iqd`: the total estimated fare in integer IQD (no decimals), Box fee and peak surcharge included.\n- `distance_km`: the pricing distance in km -- the ROAD distance from the routing engine (OSRM) when `distance_source` is `road`.\n- `distance_source`: `road` | `straight_fallback` (routing unavailable: error, 2.5 s timeout or not configured; straight line x `pricing.road_fallback_factor_percent` / 100, default 140) | `straight` (`pricing.use_road_distance = 'false'`: plain straight line).\n- `base_fare_iqd`: the base fare component in integer IQD.\n- `currency`: always `IQD`.\n- `discount_iqd` / `final_fare_iqd`: the potential promo discount (applied to `fare_iqd`) and `max(0, fare_iqd - discount_iqd)`.\n- `surcharge_iqd`: the Box fee already included in `fare_iqd` (the current `pricing.box_surcharge_iqd`); 0 for regular and Abriyah.\n- `peak_percent` / `peak_extra_iqd` / `peak_label`: the peak-time surcharge in force (0 / 0 / null when none), the IQD it adds after rounding (already inside `fare_iqd`), and the rule's name. Always 0 / 0 / null for Abriyah.\n- `regular_fare_iqd` / `share_percent` (Nafarat only, null otherwise): the off-peak 1-star taxi fare for the same route (rounded like a taxi fare) and the percent of it each rider pays (`pricing.abriyah_share_percent`, 10..=100, default 50).\n- Fare model: `ride = base + (min(km, threshold) * tier1_per_km) + (max(km - threshold, 0) * tier2_per_km)`; `fare = round_up_to(round_to_iqd, ride + round(ride * peak_percent / 100) + box_fee)`; `peak_extra_iqd = fare - round_up_to(round_to_iqd, ride + box_fee)`. `trip_type=box` uses the `star` normal-taxi tiers plus the Box fee (equal to what `POST /api/trips/box` charges); any other value (or omitted) uses the `star` normal-taxi tiers (equal to what `POST /api/trips` charges). `zone_id` no longer changes the per-km rate (pricing is global per type). The three star estimates and the booking share one cached route (900 s), so they always agree.\n- `trip_type=abriyah` (Nafarat, per rider): `fare = round_up_to(round_to_iqd, ceil(ride_star1 * share_percent / 100))`, where `ride_star1` is the UNROUNDED off-peak 1-star ride above for this rider's own route (`star` and `scheduled_for` are ignored; no peak, no Box fee). `POST /api/abriyah/join` charges exactly this figure (same function, same route cache). `base_fare_iqd` is the same share of the taxi base. At 50 %: two riders pay one taxi fare (at most one rounding step more), four riders two.\n- Peak time is evaluated in Asia/Baghdad time NOW, or at `scheduled_for` when given (a scheduled trip is charged at its scheduled pickup time).\n\n**Use Cases:**\n- Rider app showing an estimated price before the rider commits to a request.\n- Nafarat seat price preview by passing `trip_type=abriyah` (the join charges the same).\n- Box price preview by passing `trip_type=box&star=1|2|3`.\n\n**Restrictions:**\n- Pickup and dropoff must both be inside Iraq, else 400 `{\"error\":\"outside_service_area\"}`.\n- `scheduled_for`, when given, must be RFC3339, else 400 `{\"error\":\"invalid_scheduled_for\"}`.",
         "operationId": "fare_estimate_public",
         "parameters": [
           {
@@ -9500,7 +9518,7 @@
           "Trips"
         ],
         "summary": "Get a trip by id",
-        "description": "Retrieve a single trip's full lifecycle record by id.\n\n**Returns:**\n- The complete `Trip` row: type, status, fare and base fare (integer IQD), distance, pickup/dropoff coordinates, captain id (null until accepted), per-rider fare/distance breakdown, and lifecycle timestamps.\n- No participant filtering is applied: any authenticated rider, captain, or admin may read any trip by id.\n\n**Use Cases:**\n- Rider or captain polling the current state of their trip.\n- Admin or support inspecting a specific trip.",
+        "description": "Retrieve a single trip's full lifecycle record by id.\n\n**Returns:**\n- The complete `Trip` row: type, status, fare and base fare (integer IQD), distance, pickup/dropoff coordinates, captain id (null until accepted), per-rider fare/distance breakdown, and lifecycle timestamps.\n\n**Access Control:**\n- Rider: only the trip's own rider.\n- Captain: the trip's assigned captain, or a captain who currently has it as a pending offer in their dispatch queue (a `requested` regular or Box trip inside their star window while they are free -- the same test `GET /api/captain/trip-queue` lists with).\n- Admin roles (`super_admin`, `operator`, `finance`): any trip.\n- Anyone else gets 404 `{\"error\":\"not found\"}` -- the same answer as an unknown id, so trip ids cannot be probed.\n\n**Use Cases:**\n- Rider or captain polling the current state of their trip.\n- Admin or support inspecting a specific trip.",
         "operationId": "get_trip",
         "parameters": [
           {
@@ -9526,10 +9544,10 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
           },
           "404": {
-            "description": "No trip with this id"
+            "description": "No trip with this id, or the caller may not read it"
           }
         },
         "security": [
@@ -9545,7 +9563,7 @@
           "Trips"
         ],
         "summary": "Captain accepts a trip",
-        "description": "Captain claims a trip, moving it through the state machine to `accepted`.\n\n**Behavior:**\n1. Require a captain token; the captain id is taken from the JWT `sub`.\n2. Validate the transition to `accepted` for the actor `captain` (`requested -> accepted` for regular, `matched -> accepted` for Abriyah).\n3. For a `regular` or `box` trip, reject with 409 if the captain's star grade is BELOW the trip's `requested_star`. Equal or higher is accepted: dispatch widens an unclaimed offer to higher-graded captains after `dispatch.star_widen_after_seconds`, and the rider pays the tier they booked either way, so a better car is never a fare surprise. Abriyah (`matched`) trips ignore the star grade.\n4. Reject if this captain already has an active trip.\n5. Apply the optimistic-lock accept (`accept` for `requested`, `accept_matched` for `matched`); any other current status is a conflict.\n6. On success, publish `beep.trip.accepted` and enqueue a `trip_accepted` push to the rider (Box trips get the body \"A captain is coming to pick up your box\").\n\n**Use Cases:**\n- Captain app tapping Accept on a dispatched trip offer.\n\n**Telling the three 409s apart** (the body `error` string is the discriminator, so surface it rather than a generic message):\n- `captain star does not match the requested class` -- this captain is graded BELOW the booked class. Not retryable; the offer was never theirs to take.\n- `captain already has an active trip` -- finish or cancel the current ride first.\n- anything else -- another captain took it, or the trip was cancelled. Drop it from the queue and refresh.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403.\n- One active trip per captain; a second accept is rejected with 409.\n- Invalid source state yields 400 (illegal transition) or 409 (lost optimistic lock / stale status).",
+        "description": "Captain claims a trip, moving it through the state machine to `accepted`.\n\n**Behavior:**\n1. Require a captain token; the captain id is taken from the JWT `sub`.\n2. Refuse a trip that belongs to a Nafarat (Abriyah) room with 409 `{\"error\":\"room_trip\"}`: room seats are taken only with the whole room through `POST /api/abriyah/rooms/{id}/accept` (Nafarat access, readiness and one-room checks).\n3. Validate the transition to `accepted` for the actor `captain` (`requested -> accepted`), and reject with 409 if the captain's star grade is BELOW the trip's `requested_star`. Equal or higher is accepted: dispatch widens an unclaimed offer to higher-graded captains after `dispatch.star_widen_after_seconds`, and the rider pays the tier they booked either way, so a better car is never a fare surprise.\n4. Reject if this captain already has an active trip.\n5. Apply the optimistic-lock accept (`requested` only); any other current status is a conflict.\n6. On success, publish `beep.trip.accepted` and enqueue a `trip_accepted` push to the rider (Box trips get the body \"A captain is coming to pick up your box\").\n\n**Use Cases:**\n- Captain app tapping Accept on a dispatched trip offer.\n\n**Telling the 409s apart** (the body `error` string is the discriminator, so surface it rather than a generic message):\n- `room_trip` -- a Nafarat seat; accept its room instead.\n- `captain star does not match the requested class` -- this captain is graded BELOW the booked class. Not retryable; the offer was never theirs to take.\n- `captain already has an active trip` -- finish or cancel the current ride first.\n- anything else -- another captain took it, or the trip was cancelled. Drop it from the queue and refresh.\n\n**Restrictions:**\n- Captain role only; a non-captain token is rejected with 403.\n- One active trip per captain; a second accept is rejected with 409.\n- Invalid source state yields 400 (illegal transition) or 409 (lost optimistic lock / stale status).",
         "operationId": "accept_trip",
         "parameters": [
           {
@@ -9583,7 +9601,7 @@
             "description": "No trip with this id"
           },
           "409": {
-            "description": "Captain graded below the trip's requested star, captain already has an active trip, or the trip is no longer acceptable"
+            "description": "`room_trip` (a Nafarat seat: accept its room), captain graded below the trip's requested star, captain already has an active trip, or the trip is no longer acceptable"
           }
         },
         "security": [
@@ -9698,7 +9716,7 @@
           "Trips"
         ],
         "summary": "Cancel a trip",
-        "description": "Cancel a trip on behalf of the caller. The cancelling actor is derived from the JWT role: `rider`, `captain`, or `admin` (any admin role).\n\n**Behavior:**\n1. Validate the cancellation `reason` against the allowed enum (changed_mind, wait_too_long, wrong_pickup, captain_late, safety, system_timeout, captain_blocked, other); an unknown reason yields 400.\n2. Pre-validate the transition to `cancelled` for the derived actor, then apply the optimistic-lock cancel.\n3. Fan out side effects: exactly one `trip_cancelled` push to the opposite party (rider-cancel pushes the assigned captain if any; captain/system/admin-cancel pushes the rider, and admin/system also push the assigned captain), carrying `data: {trip_id, cancelled_by, reason}`. A captain cancel is TERMINAL: the trip is NOT re-dispatched, and the rider is told to request a new ride.\n4. Best-effort cancellation penalty: a rider who cancels after the captain had already committed (`accepted` or `in_progress`) is charged the admin-tunable `trip.cancellation_penalty_iqd`; free while still `requested`/`matched`. A charge failure is logged, never surfaced.\n5. Best-effort reports rollup of the cancelled trip and reason.\n6. Publish `beep.trip.cancelled`.\n\n**Use Cases:**\n- Rider abandoning a request, captain dropping an accepted trip, or admin/support force-cancelling.\n\n**Restrictions:**\n- Requires a valid bearer token.\n- The reason must be one of the allowed values; an invalid reason or illegal transition yields 400.\n- Cancellation not allowed in the current state (or a lost optimistic lock) yields 409.",
+        "description": "Cancel a trip on behalf of the caller. The cancelling actor is derived from the JWT role: `rider`, `captain`, or `admin` (any admin role).\n\n**Behavior:**\n1. Validate the cancellation `reason` against the allowed enum (changed_mind, wait_too_long, wrong_pickup, captain_late, safety, system_timeout, captain_blocked, other); an unknown reason yields 400.\n2. Pre-validate the transition to `cancelled` for the derived actor, then apply the optimistic-lock cancel.\n3. Fan out side effects: exactly one `trip_cancelled` push to the opposite party (rider-cancel pushes the assigned captain if any; captain/system/admin-cancel pushes the rider, and admin/system also push the assigned captain), carrying `data: {trip_id, cancelled_by, reason}`. A captain cancel is TERMINAL: the trip is NOT re-dispatched, and the rider is told to request a new ride.\n4. Best-effort cancellation penalty: a rider who cancels after the captain had already committed (`accepted` or `in_progress`) is charged the admin-tunable `trip.cancellation_penalty_iqd`; free while still `requested`/`matched`. A charge failure is logged, never surfaced.\n5. Best-effort reports rollup of the cancelled trip and reason.\n6. Publish `beep.trip.cancelled`.\n7. Nafarat seat in a room still waiting for its captain (`open`/`locked`): the cancel IS the room leave, in the same transaction -- the rider's member row is removed, the room's `rider_count` decremented, and a `beep.room.left` frame (room `status`, new `rider_count`) published on `rt:room:{id}`, exactly like `DELETE /api/abriyah/leave`. After dispatch the seat stays on the captain's roster, shown as cancelled.\n\n**Use Cases:**\n- Rider abandoning a request, captain dropping an accepted trip, or admin/support force-cancelling.\n\n**Restrictions:**\n- Requires a valid bearer token.\n- Only the trip's own rider, its assigned captain, or an admin may cancel it; any other rider or captain gets `404` (as if the trip did not exist).\n- The reason must be one of the allowed values; an invalid reason or illegal transition yields 400.\n- Cancellation not allowed in the current state (or a lost optimistic lock) yields 409.",
         "operationId": "cancel_trip",
         "parameters": [
           {
@@ -9737,10 +9755,13 @@
             "description": "Invalid cancellation reason or illegal state transition"
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "403": {
+            "description": "The token's role may not cancel trips"
           },
           "404": {
-            "description": "No trip with this id"
+            "description": "No trip with this id, or the caller is not its rider, its assigned captain or an admin"
           },
           "409": {
             "description": "Cancellation not allowed in the current state, or lost optimistic lock"
@@ -9813,7 +9834,7 @@
           "Trips"
         ],
         "summary": "List all ratings for a trip",
-        "description": "Retrieve every rating attached to a trip (rider->captain and/or captain->rider).\n\n**Returns:**\n- `items`: the ratings recorded for this trip, each with stars (1-5), optional comment, the rater seat, and timestamps. An empty list is returned when the trip has no ratings (this is a 200, not a 404).\n\n**Use Cases:**\n- Showing both parties' ratings on a completed trip.\n- Admin reviewing feedback for a specific trip.",
+        "description": "Retrieve every rating attached to a trip (rider->captain and/or captain->rider).\n\n**Returns:**\n- `items`: the ratings recorded for this trip, each with stars (1-5), optional comment, the rater seat, and timestamps. An empty list is returned when the trip has no ratings (this is a 200, not a 404).\n\n**Access Control:** the same readers as `GET /api/trips/{id}`: the trip's own rider, its assigned captain (or a captain it is currently offered to), or an admin role. Anyone else gets 404 `{\"error\":\"not found\"}`, the same answer as an unknown trip id.\n\n**Use Cases:**\n- Showing both parties' ratings on a completed trip.\n- Admin reviewing feedback for a specific trip.",
         "operationId": "get_ratings",
         "parameters": [
           {
@@ -9839,7 +9860,10 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token"
+            "description": "Missing or invalid bearer token (or a revoked admin token)"
+          },
+          "404": {
+            "description": "No trip with this id, or the caller may not read it"
           }
         },
         "security": [
@@ -11894,7 +11918,7 @@
       },
       "CaptainOffer": {
         "type": "object",
-        "description": "A pending offer (regular or Box trip, or Abriyah room) visible to a captain.\nReturned by `GET /api/captain/trip-queue`; women-only rooms are pre-filtered\nout for non-female captains (G-ABRIYAH-02 / G-MF-06). A Box offer carries\nthe parcel description and first photo, but NEVER the recipient phone (that\nis served to the assigned captain only, by `GET /api/trips/{id}/box`).",
+        "description": "A pending offer (regular or Box trip, or Abriyah room) visible to a captain.\nReturned by `GET /api/captain/trip-queue`. Women-only rooms are offered to\nevery Nafarat captain (women-only is about the riders, never the captain's\ngender). A room offer carries its live `rider_count` and `total_fare_iqd`,\nand its deadline (`expires_at`, `expires_in_seconds`). A Box offer carries\nthe parcel description and first photo, but NEVER the recipient phone (that\nis served to the assigned captain only, by `GET /api/trips/{id}/box`).",
         "required": [
           "offer_type",
           "id",
@@ -11948,10 +11972,28 @@
             "format": "double",
             "description": "WGS-84 dropoff longitude, in degrees. For rooms this is the representative\nseed trip's dropoff."
           },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Room offers: RFC3339 UTC instant the room stops waiting for a captain\n(the room's `expires_at`); after it the room expires and its riders'\ntrips are cancelled. The join that brings the room to its offer\nthreshold restarts it at `room_max_wait_seconds` from that join. Null\nfor trip offers.",
+            "example": "2026-09-28T10:05:00Z"
+          },
+          "expires_in_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Room offers: whole seconds left until `expires_at` at the moment this\nresponse was built (rounded down, never negative; 0 = past the\ndeadline, the sweep is about to expire it). Count down from when the\nresponse arrived rather than comparing `expires_at` with the phone's\nclock. Null for trip offers.",
+            "example": 192
+          },
           "fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "Fare in integer IQD (no decimals). For rooms this is the seed trip's fare.\nFor a Box trip it already includes the Box fee."
+            "description": "Fare in integer IQD (no decimals). For rooms this is ONE rider's fare\n(the seed trip's; kept for older apps) -- see `total_fare_iqd`. For a\nBox trip it already includes the Box fee."
           },
           "id": {
             "type": "string",
@@ -11979,12 +12021,30 @@
             "format": "double",
             "description": "WGS-84 pickup longitude, in degrees. For rooms this is the representative\nseed trip's pickup."
           },
+          "rider_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Room offers: the riders waiting in the room right now (member trips\nstill `matched`). Null for trip offers.",
+            "example": 3
+          },
           "room_type": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Room privacy: `\"mixed\"` | `\"women_only\"` for rooms; null for regular\ntrips. Women-only rooms are pre-filtered out for non-female captains."
+            "description": "Room privacy: `\"mixed\"` | `\"women_only\"` (every rider is a woman) for\nrooms; null for regular trips. Offered to captains of any gender."
+          },
+          "total_fare_iqd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Room offers: every waiting rider's fare added up, in integer IQD --\nwhat the captain collects for the room if everyone rides. Null for trip\noffers.",
+            "example": 7500
           },
           "trip_type": {
             "type": [
@@ -13367,6 +13427,24 @@
             "description": "Peak-time surcharge percent in force for this trip (0 when none; always\n0 for Abriyah).",
             "example": 20
           },
+          "regular_fare_iqd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Nafarat (`trip_type=abriyah`) only: the off-peak 1-star taxi fare for\nthe same route, rounded like a taxi fare (integer IQD). `fare_iqd` is\n`share_percent` % of it (taken of the unrounded ride, rounded up to\n`pricing.round_to_iqd`). A display reference; null for regular and Box.",
+            "example": 3500
+          },
+          "share_percent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Nafarat (`trip_type=abriyah`) only: the share of the 1-star taxi fare\neach rider pays (`pricing.abriyah_share_percent`, 10..=100; 50 = half).\nNull for regular and Box.",
+            "example": 50
+          },
           "surcharge_iqd": {
             "type": "integer",
             "format": "int64",
@@ -13548,7 +13626,9 @@
           "member",
           "trip_id",
           "fare_iqd",
-          "distance_km"
+          "distance_km",
+          "regular_fare_iqd",
+          "share_percent"
         ],
         "properties": {
           "distance_km": {
@@ -13559,15 +13639,27 @@
           "fare_iqd": {
             "type": "integer",
             "format": "int64",
-            "description": "This rider's individual fare in integer IQD (no decimals)."
+            "description": "This rider's individual fare in integer IQD (no decimals): exactly what\n`GET /api/trips/estimate?trip_type=abriyah` quoted for the same route."
           },
           "member": {
             "$ref": "#/components/schemas/RoomMember",
             "description": "The rider's newly created membership (seat) in the room."
           },
+          "regular_fare_iqd": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The off-peak 1-star taxi fare for this rider's route (integer IQD),\nrounded like a taxi fare -- the reference `fare_iqd` is a share of.",
+            "example": 3500
+          },
           "room": {
             "$ref": "#/components/schemas/Room",
             "description": "The room the rider joined, re-fetched after any auto-dispatch so its status is current."
+          },
+          "share_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The share of that taxi fare this rider pays (`pricing.abriyah_share_percent`).",
+            "example": 50
           },
           "trip_id": {
             "type": "string",
@@ -15721,7 +15813,7 @@
           },
           "room_type": {
             "type": "string",
-            "description": "Pool gender policy: \"mixed\" (any rider) or \"women_only\" (women riders, women captain only)."
+            "description": "Pool gender policy: \"mixed\" (any rider) or \"women_only\" (every RIDER is a woman). The captain's gender is never checked: any Nafarat-approved captain may be offered and accept either type."
           },
           "status": {
             "type": "string",

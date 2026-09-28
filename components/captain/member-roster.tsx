@@ -1,5 +1,5 @@
 // components/captain/member-roster.tsx
-import { View, Text, I18nManager } from 'react-native'
+import { View, Text } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -8,8 +8,6 @@ import { Icon } from '@/components/ui/icon'
 import { formatIqd } from '@/lib/format-currency'
 import type { RoomMembersData } from '@/services/abriyah-members'
 import { contentLanguage } from '@/i18n/languages'
-
-const isRTL = I18nManager.isRTL
 
 interface MemberRosterProps {
   data?: RoomMembersData
@@ -44,10 +42,10 @@ export function MemberRoster({ data }: MemberRosterProps) {
       >
         <Icon name="flag" size={16} color={colors.tint} />
         <View style={{ flex: 1 }}>
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
             {t('captain.live.destinationLabel')}
           </Text>
-          <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal', textAlign: 'left' }}>
             {zoneLabel(dropoffZone.name, dropoffZone.nameAr)}
           </Text>
         </View>
@@ -56,7 +54,7 @@ export function MemberRoster({ data }: MemberRosterProps) {
       {/* Where the pool's riders board (cross-zone pickups). */}
       {pickupBreakdown.length > 0 && (
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
             {t('captain.live.pickupsLabel')}
           </Text>
           {pickupBreakdown.map((p, i) => (
@@ -71,7 +69,7 @@ export function MemberRoster({ data }: MemberRosterProps) {
               }}
             >
               <Icon name="location-outline" size={14} color={colors.subtle} />
-              <Text style={{ ...Typography['caption-sm'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'], textAlign: isRTL ? 'right' : 'left' }}>
+              <Text style={{ ...Typography['caption-sm'], color: colors.text, fontStyle: 'normal', fontVariant: ['tabular-nums'], textAlign: 'left' }}>
                 {t('captain.live.pickupFromZone', {
                   count: p.riderCount,
                   zone: zoneLabel(p.name, p.nameAr),
@@ -84,10 +82,10 @@ export function MemberRoster({ data }: MemberRosterProps) {
 
       {/* Per-rider roster. */}
       <View style={{ gap: Spacing.sm }}>
-        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: isRTL ? 'right' : 'left' }}>
+        <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
           {t('captain.live.riders')}
         </Text>
-        {members.map((m) => (
+        {members.map((m, i) => (
           <View
             key={m.riderId}
             style={{
@@ -102,7 +100,9 @@ export function MemberRoster({ data }: MemberRosterProps) {
               paddingHorizontal: Spacing.md,
             }}
           >
-            <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>{m.name}</Text>
+            <Text style={{ ...Typography['body-md'], color: colors.text, fontStyle: 'normal' }}>
+              {m.name ?? t('captain.nafarat.riderN', { n: i + 1 })}
+            </Text>
             <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'] }}>
               {formatIqd(m.fareIqd, i18n.language)} · {t('captain.live.distanceLabel', { km: m.distanceKm.toFixed(1) })}
             </Text>

@@ -3,10 +3,20 @@ import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import { useRouter } from 'expo-router'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import i18n from '@/i18n'
 import { useAuthStore } from '@/store/auth-store'
 import { ACTIVE_TRIP_KEY } from '@/hooks/use-active-trip'
+import { TRIP_QUEUE_KEY } from '@/hooks/use-remote-trip-cancel'
 import { registerFcmToken, clearFcmToken } from '@/services/push'
+import { formatIqd } from '@/lib/format-currency'
+import type { Trip } from '@/services/captain-trips'
+import {
+  LOCAL_PUSH_FLAG,
+  pushNotificationType as notificationType,
+  roomOfferFromPush,
+  type RoomOfferPush,
+} from '@/lib/room-offer-push'
 
 // Offline chat pushes (FCM). While the app is foregrounded on the relevant chat
 // screen, messages already arrive over the WS — so we suppress the banner there
@@ -32,14 +42,6 @@ function tripIdFromData(data: unknown): string | null {
   return typeof candidate === 'string' ? candidate : null
 }
 
-/** The push kind from the FCM `data` block (`notification_type`, with a `type` fallback). */
-function notificationType(data: unknown): string | null {
-  if (!data || typeof data !== 'object') return null
-  const d = data as Record<string, unknown>
-  const t = d.notification_type ?? d.type
-  return typeof t === 'string' ? t : null
-}
-
 function isChatNotification(data: unknown): boolean {
   return notificationType(data) === 'chat_message'
 }
@@ -50,11 +52,61 @@ function isChatNotification(data: unknown): boolean {
 // backend no longer sends the per-actor trip_cancelled_by_* variants.
 const TRIP_PUSH_TYPES = new Set(['trip_accepted', 'captain_arriving', 'trip_completed', 'trip_cancelled'])
 
+/** "3 riders · 7,500 IQD" in the captain's language. */
+function roomOfferBody({ riderCount, totalFareIqd }: RoomOfferPush): string {
+  return [
+    riderCount != null ? i18n.t('captain.queue.roomRiders', { count: riderCount }) : null,
+    totalFareIqd != null ? formatIqd(totalFareIqd, i18n.language) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** The room screen's per-room trip caches (use-nafarat-room): ['nafarat', 'trips', roomId]. */
+const NAFARAT_TRIPS_KEY = ['nafarat', 'trips'] as const
+
+/**
+ * True when `tripId` is a seat of a Nafarat room whose screen is open: its
+ * trips query is in the cache AND observed (the room screen is mounted). A
+ * cache left behind by a room screen that has since closed does not count.
+ */
+function onRoomScreen(queryClient: QueryClient, tripId: string): boolean {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: NAFARAT_TRIPS_KEY })
+    .some(
+      (q) =>
+        q.getObserversCount() > 0 &&
+        (q.state.data as readonly Trip[] | undefined)?.some((trip) => trip.id === tripId) === true,
+    )
+}
+
+const HIDDEN = { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }
+
 // Foreground display policy: show banner + play sound EXCEPT for a chat message
 // on the thread the user is already viewing (the WS already rendered it).
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data
+    // The backend writes the room-offer push in English. In the foreground,
+    // swap it for the same offer in the captain's language, with the room's
+    // size and total ("3 riders · 7,500 IQD"). A backgrounded app shows the
+    // backend's copy; tapping either one opens the queue.
+    const roomOffer = roomOfferFromPush(data)
+    if (roomOffer) {
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: i18n.t('captain.queue.roomOfferTitle'),
+          body: roomOfferBody(roomOffer),
+          data: { ...data, [LOCAL_PUSH_FLAG]: true },
+          sound: true,
+        },
+        trigger: process.env.EXPO_OS === 'android' ? { channelId: 'trips' } : null,
+      }).catch(() => {
+        // Could not re-present; the offer still reaches the queue over the WS / poll.
+      })
+      return HIDDEN
+    }
     const suppress =
       isChatNotification(data) &&
       tripIdFromData(data) != null &&
@@ -145,14 +197,25 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
         return
       }
       if (type && TRIP_PUSH_TYPES.has(type)) {
+        // One rider of the Nafarat room on screen cancelled: the room screen marks
+        // that seat cancelled (refreshed here in case the socket missed the frame,
+        // whose arrival is what useRemoteTripCancel alerts on). Opening the seat's
+        // own screen on top of the room would add nothing but a detour.
+        if (type === 'trip_cancelled' && tripId && onRoomScreen(queryClient, tripId)) {
+          queryClient.invalidateQueries({ queryKey: NAFARAT_TRIPS_KEY })
+          return
+        }
         // Open the trip if we have its id; otherwise fall back to the home queue.
         if (tripId) router.push({ pathname: '/(trip)/[id]', params: { id: tripId } })
-        else router.push('/(tabs)')
+        else router.dismissTo('/(tabs)')
         return
       }
       if (type === 'new_trip_in_queue' || type === 'room_dispatched' || type === 'room_expired') {
         // A new offer or room event — send the captain to the queue to act on it.
-        router.push('/(tabs)')
+        // Back to the Home already in the stack, not a second one on top (a push
+        // stacks another (tabs): a second map, poll and launch resume). With no
+        // Home in the stack, POP_TO replaces the current screen with it.
+        router.dismissTo('/(tabs)')
         return
       }
       // Unknown/other (e.g. captain_approval_decision): no deep-link, just open the app.
@@ -166,7 +229,7 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => sub.remove()
-  }, [router])
+  }, [router, queryClient])
 
   // Arrival (as opposed to tap): a banner alone changes nothing on screen, so a
   // cancel that lands while the captain is driving would sit there until the next
@@ -175,6 +238,12 @@ export function PushProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data
+      // A new offer (trip or Nafarat room): pull the queue now so the card shows
+      // up with the push instead of on the next poll.
+      if (notificationType(data) === 'new_trip_in_queue') {
+        queryClient.invalidateQueries({ queryKey: TRIP_QUEUE_KEY })
+        return
+      }
       if (notificationType(data) !== 'trip_cancelled') return
       const tripId = tripIdFromData(data)
       queryClient.invalidateQueries({ queryKey: ACTIVE_TRIP_KEY })

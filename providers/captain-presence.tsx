@@ -5,6 +5,7 @@ import * as Location from 'expo-location'
 import i18n from '@/i18n'
 import { useAuthStore } from '@/store/auth-store'
 import { parseApiError } from '@/lib/api'
+import { roomDeadlineMs } from '@/lib/room-countdown'
 // Imported for its side effect as much as for the name: defining the background
 // task at module scope is what lets the OS deliver fixes after a relaunch.
 import { TRIP_LOCATION_TASK } from '@/lib/trip-location-task'
@@ -22,7 +23,17 @@ import { CaptainSocket, type CaptainSocketState } from '@/services/captain-socke
 export type ConnectionHealth = 'offline' | 'connecting' | 'live' | 'stale'
 
 export interface TripUpdate { id: string; status: string; cancelledBy?: CancelledBy }
-export interface Offer { tripId: string }
+export interface Offer {
+  tripId: string
+  /** Room offers only (see OfferFrame). */
+  roomId?: string
+  riderCount?: number
+  totalFareIqd?: number
+  /** Room offers: the room's deadline as sent (RFC3339). */
+  expiresAt?: string
+  /** Room offers: the local-clock instant (ms) the room expires, fixed when the frame arrived. */
+  deadlineMs?: number
+}
 
 interface CaptainPresence {
   online: boolean
@@ -200,7 +211,16 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
         // cancel), so the alert can say who quit instead of always blaming the rider.
         onTripUpdate: (t) =>
           setLastTripUpdate({ id: t.id, status: t.status, cancelledBy: toCancelledBy(t.cancelled_by) }),
-        onOffer: (o) => setLastOffer({ tripId: o.tripId }),
+        onOffer: (o) =>
+          setLastOffer({
+            tripId: o.tripId,
+            roomId: o.roomId,
+            riderCount: o.riderCount,
+            totalFareIqd: o.totalFareIqd,
+            expiresAt: o.expiresAt,
+            // The countdown runs from the moment the frame arrived, not from the phone clock.
+            deadlineMs: o.roomId ? roomDeadlineMs(o, Date.now()) : undefined,
+          }),
       })
       socket.current.connect()
     }

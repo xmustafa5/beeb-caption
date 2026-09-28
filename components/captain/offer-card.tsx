@@ -10,8 +10,11 @@ import { Icon } from '@/components/ui/icon'
 import { BoxPhotoThumb } from '@/components/captain/box-photo-thumb'
 import { BoxPhotoViewer } from '@/components/captain/box-photo-viewer'
 import { formatIqd } from '@/lib/format-currency'
+import { ltrIsolate } from '@/lib/bidi'
+import { countdownTone, formatCountdown } from '@/lib/room-countdown'
 import { haversineKm } from '@/hooks/use-distance'
 import { usePlaceName } from '@/hooks/use-place-name'
+import { useSecondsLeft } from '@/hooks/use-seconds-left'
 import type { LatLng } from '@/hooks/use-current-location'
 import type { CaptainOffer } from '@/services/captain-queue'
 
@@ -131,6 +134,49 @@ function ParcelRow({ offer }: ParcelRowProps) {
   )
 }
 
+interface RoomCountdownProps {
+  seconds: number
+}
+
+/**
+ * How long the room still waits for a captain: "3:12 left", in the warning
+ * colour under a minute, "Expired" at 0. The same deadline the riders count
+ * down to on their waiting screen.
+ */
+function RoomCountdown({ seconds }: RoomCountdownProps) {
+  const { t } = useTranslation()
+  const colors = useThemeColors()
+  const tone = countdownTone(seconds)
+  const color = tone === 'normal' ? colors.subtle : colors.destructive
+  const label =
+    tone === 'expired'
+      ? t('captain.queue.roomExpired')
+      : // The isolate keeps "3:12" in order inside Arabic/Kurdish text on Android too.
+        t('captain.queue.roomTimeLeft', { time: ltrIsolate(formatCountdown(seconds)) })
+  return (
+    // native forceRTL mirrors this row in AR — no manual flip
+    <View
+      accessible
+      accessibilityLabel={label}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}
+    >
+      <Icon name={tone === 'expired' ? 'alert-circle-outline' : 'time-outline'} size={14} color={color} />
+      <Text
+        style={{
+          ...Typography['caption-sm'],
+          fontFamily: tone === 'normal' ? 'Poppins_500Medium' : 'Poppins_600SemiBold',
+          color,
+          fontStyle: 'normal',
+          fontVariant: ['tabular-nums'],
+          textAlign: 'left',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  )
+}
+
 export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress }: OfferCardProps) {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
@@ -144,6 +190,28 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
 
   const awayKm = captainLocation ? haversineKm(captainLocation, pickup) : null
   const tripKm = haversineKm(pickup, dropoff)
+
+  // A room pays the captain every rider's fare. `fareIqd` on a room is one
+  // rider's share, so it is only the fallback for a backend without the total.
+  const roomTotal = isRoom ? offer.totalFareIqd : undefined
+  const headerFare = roomTotal ?? offer.fareIqd
+  // Seconds before the room stops waiting (undefined: no deadline from the
+  // backend, so no countdown). At 0 the room is about to be expired by the
+  // backend: Accept is off until the next queue refresh drops the card.
+  const roomSecondsLeft = useSecondsLeft(isRoom ? offer.deadlineMs : undefined)
+  const roomExpired = roomSecondsLeft === 0
+  // "3 riders · Mixed" / "3 riders · All riders are women". Women-only is about
+  // the riders only — any captain may take the room.
+  const roomSummary = isRoom
+    ? [
+        offer.riderCount != null
+          ? t('captain.queue.roomRiders', { count: offer.riderCount })
+          : null,
+        t(offer.roomType === 'women_only' ? 'captain.queue.roomAllWomen' : 'captain.queue.roomMixed'),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
 
   // The offer's own names win — they are what the rider chose (or the POI the
   // backend resolved), and reverse-geocoding these coordinates can only ever
@@ -192,9 +260,16 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
             </View>
           )}
         </View>
-        <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
-          {formatIqd(offer.fareIqd, i18n.language)}
-        </Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          {roomTotal != null && (
+            <Text style={{ ...Typography.micro, color: colors.subtle, fontStyle: 'normal' }}>
+              {t('captain.queue.roomTotal')}
+            </Text>
+          )}
+          <Text style={{ ...Typography['heading-sm'], color: colors.text, fontVariant: ['tabular-nums'], writingDirection: 'ltr' }}>
+            {formatIqd(headerFare, i18n.language)}
+          </Text>
+        </View>
       </View>
 
       {isBox && <ParcelRow offer={offer} />}
@@ -229,16 +304,31 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
             {t('captain.queue.tripDistance', { km: tripKm.toFixed(1) })}
           </Text>
         )}
-        {isRoom && offer.roomType !== 'women_only' && (
-          <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
-            {t('captain.queue.roomMixed')}
-          </Text>
+        {roomSummary && (
+          // native forceRTL mirrors this row in AR: the riders at the reading
+          // start, the countdown at the reading end
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm }}>
+            <Text
+              style={{
+                ...Typography['caption-sm'],
+                color: colors.subtle,
+                fontStyle: 'normal',
+                fontVariant: ['tabular-nums'],
+                textAlign: 'left',
+                flexShrink: 1,
+              }}
+            >
+              {roomSummary}
+            </Text>
+            {roomSecondsLeft != null && <RoomCountdown seconds={roomSecondsLeft} />}
+          </View>
         )}
       </View>
 
       <Button
         label={isRoom ? t('captain.queue.acceptRoom') : t('captain.queue.accept')}
         loading={accepting}
+        disabled={roomExpired}
         onPress={onAccept}
       />
     </Pressable>
