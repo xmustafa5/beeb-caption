@@ -1,5 +1,5 @@
 // Beep Captain brand palette — Burgundy edition (2026-10 identity, shared with the Beep rider app).
-// Burgundy #76033E (primary, matches the app icon), Rose #B8336A (accent),
+// Burgundy #64073C (primary), Rose #B8336A (accent),
 // warm-neutral greys, true-black dark mode (no burgundy bg), white light mode,
 // Success Green #22C55E, Danger Red #FF5A5F.
 //
@@ -9,11 +9,11 @@ export const Colors = {
   light: {
     text: '#120B0F',
     background: '#FFFFFF',
-    tint: '#76033E',
+    tint: '#64073C',
     tintDark: '#4A0026',
     tintBright: '#9E1A5E',
     tabIconDefault: '#A39AA0',
-    tabIconSelected: '#76033E',
+    tabIconSelected: '#64073C',
     card: '#FFFFFF',
     border: '#EDE6EA',
     secondary: '#3D353A',
