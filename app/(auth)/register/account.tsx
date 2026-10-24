@@ -150,6 +150,7 @@ export default function AccountStep() {
                   <OtpBoxes value={code} />
                 </TouchableOpacity>
                 <TextInput
+                  selectionColor={colors.tint}
                   ref={codeRef}
                   value={code}
                   onChangeText={(v) => setCode(toAsciiDigits(v).replace(/\D/g, '').slice(0, 6))}

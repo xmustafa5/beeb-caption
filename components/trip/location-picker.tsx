@@ -439,6 +439,7 @@ export function LocationPicker({
                 <Icon name={I18nManager.isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={colors.text} />
               </TouchableOpacity>
               <TextInput
+                selectionColor={colors.tint}
                 value={query}
                 onChangeText={setQuery}
                 autoFocus

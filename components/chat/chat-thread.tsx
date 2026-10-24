@@ -413,6 +413,7 @@ function Composer({
         }}
       >
         <TextInput
+          selectionColor={colors.tint}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}

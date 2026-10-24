@@ -48,6 +48,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       }}>
         {leading}
         <TextInput
+          selectionColor={colors.tint}
           ref={ref}
           placeholderTextColor={colors.subtle}
           {...props}

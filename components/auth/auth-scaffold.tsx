@@ -205,6 +205,7 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
       >
         {leading}
         <TextInput
+          selectionColor={colors.tint}
           ref={ref}
           placeholderTextColor={colors.subtle}
           onFocus={(e) => {
