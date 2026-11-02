@@ -1,6 +1,6 @@
 // app/(auth)/status.tsx
 import { useState, useCallback } from 'react'
-import { View, Text, ScrollView, AppState, Linking } from 'react-native'
+import { View, Text, ScrollView, AppState } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -13,11 +13,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { useRegistrationStore } from '@/store/registration-store'
 import { getCaptain } from '@/services/captain-auth'
 import { parseApiError } from '@/lib/api'
-
-// Ops support line. Set EXPO_PUBLIC_SUPPORT_WHATSAPP_URL in env; the fallback is a
-// placeholder until the real captain-support number is provided.
-const SUPPORT_URL =
-  process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP_URL ?? 'https://wa.me/9647500000000'
+import { contactSupport } from '@/lib/support'
 
 export default function StatusScreen() {
   const { t } = useTranslation()
@@ -150,8 +146,8 @@ export default function StatusScreen() {
           <Button
             label={t('captain.status.contactSupport')}
             variant="secondary"
-            onPress={() => Linking.openURL(SUPPORT_URL)}
-            leading={<Icon name="logo-whatsapp" size={18} color={colors.text} />}
+            onPress={contactSupport}
+            leading={<Icon name="headset-outline" size={18} color={colors.text} />}
           />
           {/* Always offer an escape hatch: drop the session/pending state AND the
               in-memory registration draft (a now-consumed ticket / stale details). */}

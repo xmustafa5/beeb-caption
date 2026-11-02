@@ -622,5 +622,12 @@
     "notEnabled": "Not enabled",
     "descEnabled": "You can see and accept Abriyah shared-ride rooms.",
     "descNotEnabled": "Your account is set to taxi orders only. Shared-ride access is set by Beep — contact support if you need it."
+  },
+  "support": {
+    "title": "Contact support",
+    "contact": "Contact support",
+    "message": "Call us or message us on WhatsApp at {{phone}}",
+    "call": "Call",
+    "whatsapp": "WhatsApp"
   }
 }

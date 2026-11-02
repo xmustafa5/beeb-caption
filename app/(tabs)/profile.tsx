@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
 import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
+import { contactSupport, SUPPORT_PHONE } from '@/lib/support'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
@@ -287,6 +288,42 @@ export default function ProfileScreen() {
               label={t('profile.theme')}
               colors={colors}
             />
+
+            {/* Support: asks call or WhatsApp, then opens that app. */}
+            <TouchableOpacity
+              onPress={contactSupport}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              style={{
+                // native forceRTL mirrors this row in AR — no manual flip
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.md,
+                backgroundColor: colors.card,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: Spacing.lg,
+              }}
+            >
+              <View style={{
+                width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+                backgroundColor: colors.surface,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="headset-outline" size={18} color={colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }}>
+                  {t('support.contact')}
+                </Text>
+                <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', fontVariant: ['tabular-nums'], writingDirection: 'ltr', textAlign: isRtlLanguage(lang) ? 'right' : 'left' }}>
+                  {SUPPORT_PHONE}
+                </Text>
+              </View>
+              <Icon name={isRtlLanguage(lang) ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+            </TouchableOpacity>
 
             {/* Navigates to the password-confirmation screen — never deletes inline. */}
             <TouchableOpacity
