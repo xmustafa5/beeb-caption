@@ -1,5 +1,6 @@
 // services/captain-queue.ts
 import { api } from '@/lib/api'
+import { toCarStar, type CarStar } from '@/lib/captain-mappers'
 import { toAsciiDigits } from '@/lib/digits'
 import { roomDeadlineMs } from '@/lib/room-countdown'
 import { toFiniteNumber } from '@/lib/to-number'
@@ -31,6 +32,11 @@ export interface CaptainOffer {
    * room this is ONE rider's fare (the oldest member's); see `totalFareIqd`.
    */
   fareIqd: number
+  /**
+   * Trip offers: the car class the rider booked and pays for, which can differ
+   * from this captain's own grade. Undefined for rooms (and older backends).
+   */
+  requestedStar?: CarStar
   /** Room offers: riders in the room right now. Undefined for trips (and older backends). */
   riderCount?: number
   /** Room offers: every rider's fare added up — what the captain earns for the room. */
@@ -76,6 +82,7 @@ interface BackendOffer {
   pickup_address?: string | null
   dropoff_address?: string | null
   fare_iqd: number
+  requested_star?: number | null
   rider_count?: number | null
   total_fare_iqd?: number | null
   expires_at?: string | null
@@ -117,6 +124,7 @@ function toOffer(b: BackendOffer, receivedAtMs: number): CaptainOffer {
     pickupAddress: b.pickup_address ? toAsciiDigits(b.pickup_address) : undefined,
     dropoffAddress: b.dropoff_address ? toAsciiDigits(b.dropoff_address) : undefined,
     fareIqd: b.fare_iqd,
+    requestedStar: !isRoom && typeof b.requested_star === 'number' ? toCarStar(b.requested_star) : undefined,
     riderCount: tripType === null && typeof b.rider_count === 'number' ? b.rider_count : undefined,
     totalFareIqd: tripType === null && typeof b.total_fare_iqd === 'number' ? b.total_fare_iqd : undefined,
     expiresAt,

@@ -16,6 +16,7 @@ import { haversineKm } from '@/hooks/use-distance'
 import { usePlaceName } from '@/hooks/use-place-name'
 import { useSecondsLeft } from '@/hooks/use-seconds-left'
 import type { LatLng } from '@/hooks/use-current-location'
+import type { CarStar } from '@/lib/captain-mappers'
 import type { CaptainOffer } from '@/services/captain-queue'
 
 interface OfferCardProps {
@@ -177,6 +178,33 @@ function RoomCountdown({ seconds }: RoomCountdownProps) {
   )
 }
 
+interface RequestedStarRowProps {
+  star: CarStar
+}
+
+/**
+ * The car class the rider booked, drawn like the captain's own grade on the
+ * profile screen. It can differ from the captain's grade, because a booking
+ * also reaches captains graded lower or higher than it.
+ */
+function RequestedStarRow({ star }: RequestedStarRowProps) {
+  const { t } = useTranslation()
+  const colors = useThemeColors()
+  return (
+    // native forceRTL mirrors this row in AR — no manual flip
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        {[1, 2, 3].map((i) => (
+          <Icon key={i} name={i <= star ? 'star' : 'star-outline'} size={14} color={colors.accent} />
+        ))}
+      </View>
+      <Text style={{ ...Typography['caption-sm'], fontFamily: 'Poppins_600SemiBold', color: colors.accent, fontStyle: 'normal', textAlign: 'left' }}>
+        {t(`profile.carClassStar${star}`)}
+      </Text>
+    </View>
+  )
+}
+
 export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress }: OfferCardProps) {
   const { t, i18n } = useTranslation()
   const colors = useThemeColors()
@@ -271,6 +299,9 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
           </Text>
         </View>
       </View>
+
+      {/* Only the upgraded classes: a 1-star booking is the ordinary ride. */}
+      {offer.requestedStar != null && offer.requestedStar > 1 && <RequestedStarRow star={offer.requestedStar} />}
 
       {isBox && <ParcelRow offer={offer} />}
 

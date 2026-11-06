@@ -23,6 +23,25 @@ afterEach(() => {
   get.mockReset()
 })
 
+describe('getTripQueue requested star', () => {
+  it('carries the booked class on a trip offer and none on a room or an older backend', async () => {
+    get.mockResolvedValue({
+      data: {
+        offers: [
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'star-3', requested_star: 3 },
+          { ...base, offer_type: 'trip', trip_type: 'box', id: 'box-2', requested_star: 2 },
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'older' },
+          { ...base, offer_type: 'room', id: 'room-1', requested_star: null },
+        ],
+      },
+    })
+
+    const offers = await getTripQueue()
+
+    expect(offers.map((o) => o.requestedStar)).toEqual([3, 2, undefined, undefined])
+  })
+})
+
 describe('getTripQueue room deadline', () => {
   it('counts a room down from the moment the queue arrived', async () => {
     get.mockResolvedValue({
