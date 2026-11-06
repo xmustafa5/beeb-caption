@@ -373,6 +373,7 @@
       "fromLabel": "من",
       "toLabel": "إلى",
       "kmAway": "على بُعد {{km}} كم",
+      "stopsLabel": "محطات بالطريق: {{n}}",
       "tripDistance": "رحلة {{km}} كم",
       "roomMixed": "مختلط",
       "roomWomenOnly": "رحلة نساء فقط",
@@ -398,6 +399,11 @@
     },
     "live": {
       "arrivedAtPickup": "وصلت إلى نقطة الانطلاق",
+      "nextPickup": "توجّه إلى نقطة الانطلاق",
+      "atPickup": "بانتظار الراكب",
+      "nextStop": "المحطة {{n}} من {{total}}",
+      "nextDropoff": "الوجهة النهائية",
+      "arrivedAtStop": "وصلت إلى المحطة {{n}}",
       "startTrip": "ابدأ الرحلة",
       "completeTrip": "أكمل الرحلة",
       "call": "اتصال",
@@ -572,9 +578,7 @@
     "stops": {
       "title": "المحطات",
       "stopLabel": "المحطة {{n}}",
-      "reached": "تم الوصول",
-      "markReached": "تحديد كمُنجَز",
-      "reaching": "جارٍ الحفظ…"
+      "reached": "تم الوصول"
     },
     "box": {
       "title": "تفاصيل البوكس",

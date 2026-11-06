@@ -63,7 +63,8 @@ interface TripMapProps {
   showsUserLocation?: boolean
   pickup?: LatLng
   pickups?: LatLng[]
-  stops?: LatLng[]
+  /** `n` is the stop's booked number; it defaults to its place in this list. */
+  stops?: (LatLng & { n?: number })[]
   dropoff?: LatLng
   driver?: LatLng
   zonePolygon?: LatLng[]
@@ -95,6 +96,27 @@ interface TripMapProps {
 }
 
 /** A round colored pin used for markers (MapLibre needs a child view per Marker). */
+/** A stop on the map, numbered in visit order. */
+function StopPin({ n }: { n: number }) {
+  const colors = useThemeColors()
+  return (
+    <View
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: colors.info,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF', fontVariant: ['tabular-nums'] }}>{n}</Text>
+    </View>
+  )
+}
+
 function PinDot({ color }: { color: string }) {
   return (
     <View
@@ -257,7 +279,7 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
           <Marker key={`pk-${i}`} lngLat={toLngLat(p)} anchor="center"><PinDot color={colors.tint} /></Marker>
         ))}
         {stops?.map((s, i) => (
-          <Marker key={`stop-${i}`} lngLat={toLngLat(s)} anchor="center"><PinDot color={colors.info} /></Marker>
+          <Marker key={`stop-${i}`} lngLat={toLngLat(s)} anchor="center"><StopPin n={s.n ?? i + 1} /></Marker>
         ))}
         {dropoff && (
           <Marker lngLat={toLngLat(dropoff)} anchor="center"><PinDot color={colors.destructive} /></Marker>

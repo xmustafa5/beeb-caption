@@ -100,6 +100,23 @@ export async function getRoute(a: LatLng, b: LatLng): Promise<RouteResult | null
 }
 
 /**
+ * Road route through `points` in order (origin, stops, destination), one cached section at a time.
+ * Null when any section has no route, so the caller draws its straight fallback for the whole line.
+ */
+export async function getRouteVia(points: LatLng[]): Promise<RouteResult | null> {
+  if (points.length === 2) return getRoute(points[0], points[1])
+  const sections = await Promise.all(points.slice(1).map((to, i) => getRoute(points[i], to)))
+  if (points.length < 2 || sections.some((s) => !s)) return null
+  const ok = sections as RouteResult[]
+  return {
+    // Each section starts where the last one ended: keep that point once.
+    coords: ok.flatMap((s, i) => (i === 0 ? s.coords : s.coords.slice(1))),
+    distanceM: ok.reduce((sum, s) => sum + s.distanceM, 0),
+    durationS: ok.reduce((sum, s) => sum + s.durationS, 0),
+  }
+}
+
+/**
  * Walk along a polyline by parameter t∈[0,1] using segment-length weighting.
  * Returns the lat/lng at the given fraction of total distance.
  */

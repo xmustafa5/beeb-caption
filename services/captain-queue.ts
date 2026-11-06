@@ -32,6 +32,8 @@ export interface CaptainOffer {
    * room this is ONE rider's fare (the oldest member's); see `totalFareIqd`.
    */
   fareIqd: number
+  /** Road km the fare was priced on. Absent on rooms and from an older backend. */
+  distanceKm?: number
   /**
    * Trip offers: the car class the rider booked and pays for, which can differ
    * from this captain's own grade. Undefined for rooms (and older backends).
@@ -68,6 +70,17 @@ export interface CaptainOffer {
   boxPhotoUrl?: string
   /** Number of item photos; 0 for everything that isn't a Box. */
   boxPhotoCount: number
+  /**
+   * Regular trip offers: the stops on the way, in visit order. `fareIqd` already
+   * covers them. Empty for a plain ride, Box, rooms (and older backends).
+   */
+  stops: OfferStop[]
+}
+
+export interface OfferStop {
+  latitude: number
+  longitude: number
+  address?: string
 }
 
 interface BackendOffer {
@@ -82,6 +95,7 @@ interface BackendOffer {
   pickup_address?: string | null
   dropoff_address?: string | null
   fare_iqd: number
+  distance_km?: number | null
   requested_star?: number | null
   rider_count?: number | null
   total_fare_iqd?: number | null
@@ -92,6 +106,7 @@ interface BackendOffer {
   box_description?: string | null
   box_photo_url?: string | null
   box_photo_count?: number | null
+  stops?: { lat: number; lng: number; address?: string | null }[] | null
 }
 
 /**
@@ -124,6 +139,7 @@ function toOffer(b: BackendOffer, receivedAtMs: number): CaptainOffer {
     pickupAddress: b.pickup_address ? toAsciiDigits(b.pickup_address) : undefined,
     dropoffAddress: b.dropoff_address ? toAsciiDigits(b.dropoff_address) : undefined,
     fareIqd: b.fare_iqd,
+    distanceKm: typeof b.distance_km === 'number' ? b.distance_km : undefined,
     requestedStar: !isRoom && typeof b.requested_star === 'number' ? toCarStar(b.requested_star) : undefined,
     riderCount: tripType === null && typeof b.rider_count === 'number' ? b.rider_count : undefined,
     totalFareIqd: tripType === null && typeof b.total_fare_iqd === 'number' ? b.total_fare_iqd : undefined,
@@ -136,6 +152,11 @@ function toOffer(b: BackendOffer, receivedAtMs: number): CaptainOffer {
     boxPhotoUrl: photoUrl,
     // A URL with a zero count would hide the "+N" math; trust the URL.
     boxPhotoCount: photoUrl ? Math.max(1, photoCount) : photoCount,
+    stops: (b.stops ?? []).map((s) => ({
+      latitude: s.lat,
+      longitude: s.lng,
+      address: s.address ? toAsciiDigits(s.address) : undefined,
+    })),
   }
 }
 

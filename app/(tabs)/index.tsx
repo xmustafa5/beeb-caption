@@ -14,7 +14,7 @@ import { OfferCarousel } from '@/components/captain/offer-carousel'
 import { useTripQueue } from '@/hooks/use-trip-queue'
 import { useCaptainPresence } from '@/providers/captain-presence'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
-import { getRoute } from '@/services/routing'
+import { getRouteVia } from '@/services/routing'
 import { useActiveTrip } from '@/hooks/use-active-trip'
 import { parseApiError } from '@/lib/api'
 import { offerScreenHref, tripScreenHref } from '@/lib/trip-route'
@@ -88,7 +88,7 @@ export default function HomeScreen() {
     // Frame the ROUTE when we have it, not just the two ends: a road route
     // regularly bulges outside the box its endpoints make, and framing the ends
     // alone leaves the line running off the edges.
-    const pts = o.id === active?.id && routeCoords.length >= 2 ? routeCoords : ends
+    const pts = o.id === active?.id && routeCoords.length >= 2 ? routeCoords : [ends[0], ...o.stops, ends[1]]
     mapRef.current?.fitToCoords(pts, {
       top: 96,
       right: 56,
@@ -111,9 +111,10 @@ export default function HomeScreen() {
     }
     const pickup = { latitude: active.pickupLat, longitude: active.pickupLng }
     const dropoff = { latitude: active.dropoffLat, longitude: active.dropoffLng }
+    const points = [pickup, ...active.stops, dropoff]
     let cancelled = false
-    setRouteCoords([pickup, dropoff])
-    getRoute(pickup, dropoff).then((r) => {
+    setRouteCoords(points)
+    getRouteVia(points).then((r) => {
       if (!cancelled && r?.coords?.length) setRouteCoords(r.coords)
     })
     return () => { cancelled = true }
@@ -121,7 +122,7 @@ export default function HomeScreen() {
     // and hands back a new object each time, which would refire the route request
     // for an unchanged offer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, active?.pickupLat, active?.pickupLng, active?.dropoffLat, active?.dropoffLng])
+  }, [active?.id, active?.pickupLat, active?.pickupLng, active?.dropoffLat, active?.dropoffLng, active?.stops.length])
 
   // Fly to the captain's real GPS fix the FIRST time one arrives after mount
   // (GPS resolves async, so the map opens on the Baghdad fallback). We fly exactly
@@ -175,6 +176,7 @@ export default function HomeScreen() {
         showsUserLocation
         showPois
         routeCoords={routeCoords}
+        stops={active?.stops}
       >
         {/* Both ends of the ACTIVE offer are drawn here (labelled), so TripMap's
             own unlabelled `pickup`/`dropoff` props stay unused — passing them too

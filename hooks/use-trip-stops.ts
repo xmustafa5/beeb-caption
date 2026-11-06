@@ -19,15 +19,14 @@ export function useTripStops(tripId: string | undefined, enabled: boolean) {
 
   const reach = useMutation({
     mutationFn: (stopId: string) => reachStop(tripId as string, stopId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['captain', 'trip-stops', tripId] })
-    },
+    // On failure too: a 409 means another device or tap already marked it.
+    onSettled: () => qc.invalidateQueries({ queryKey: ['captain', 'trip-stops', tripId] }),
   })
 
   return {
     stops: query.data ?? [],
     isLoading: query.isLoading,
-    reachStop: (stopId: string) => reach.mutate(stopId),
-    reachingId: reach.isPending ? reach.variables : undefined,
+    reachStop: (stopId: string) => reach.mutateAsync(stopId),
+    isReaching: reach.isPending,
   }
 }

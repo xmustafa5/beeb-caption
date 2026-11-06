@@ -373,6 +373,7 @@
       "fromLabel": "لە",
       "toLabel": "بۆ",
       "kmAway": "{{km}} کم دوورە",
+      "stopsLabel": "وەستگەکان لە ڕێگادا: {{n}}",
       "tripDistance": "گەشتی {{km}} کم",
       "roomMixed": "تێکەڵ",
       "roomWomenOnly": "گەشتی تەنها ئافرەتان",
@@ -394,6 +395,11 @@
     },
     "live": {
       "arrivedAtPickup": "گەیشتمە شوێنی سواربوون",
+      "nextPickup": "بڕۆ بۆ شوێنی سواربوون",
+      "atPickup": "چاوەڕوانی سەرنشین",
+      "nextStop": "وەستگەی {{n}} لە {{total}}",
+      "nextDropoff": "شوێنی کۆتایی",
+      "arrivedAtStop": "گەیشتمە وەستگەی {{n}}",
       "startTrip": "دەستپێکردنی گەشت",
       "completeTrip": "تەواوکردنی گەشت",
       "call": "پەیوەندی",
@@ -568,9 +574,7 @@
     "stops": {
       "title": "وەستگەکان",
       "stopLabel": "وەستگەی {{n}}",
-      "reached": "گەیشتین",
-      "markReached": "دیاریکردن وەک گەیشتوو",
-      "reaching": "پاشەکەوت دەکرێت…"
+      "reached": "گەیشتین"
     },
     "box": {
       "title": "وردەکاریی بۆکس",

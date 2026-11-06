@@ -373,6 +373,7 @@
       "fromLabel": "From",
       "toLabel": "To",
       "kmAway": "{{km}} km away",
+      "stopsLabel": "{{n}} stops on the way",
       "tripDistance": "{{km}} km trip",
       "roomMixed": "Mixed",
       "roomWomenOnly": "Women-only ride",
@@ -394,6 +395,11 @@
     },
     "live": {
       "arrivedAtPickup": "Arrived at pickup",
+      "nextPickup": "Head to the pickup",
+      "atPickup": "Waiting for the rider",
+      "nextStop": "Stop {{n}} of {{total}}",
+      "nextDropoff": "Final destination",
+      "arrivedAtStop": "Arrived at stop {{n}}",
       "startTrip": "Start trip",
       "completeTrip": "Complete trip",
       "call": "Call",
@@ -568,9 +574,7 @@
     "stops": {
       "title": "Stops",
       "stopLabel": "Stop {{n}}",
-      "reached": "Reached",
-      "markReached": "Mark reached",
-      "reaching": "Saving…"
+      "reached": "Reached"
     },
     "box": {
       "title": "Box details",

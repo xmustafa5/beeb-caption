@@ -93,3 +93,51 @@ describe('getTripQueue room deadline', () => {
     expect([room.expiresAt, room.expiresInSeconds, room.deadlineMs]).toEqual([undefined, undefined, undefined])
   })
 })
+
+describe('getTripQueue trip distance', () => {
+  it('carries the road km the fare was priced on, and nothing from an older backend', async () => {
+    get.mockResolvedValue({
+      data: {
+        offers: [
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'road', distance_km: 13.35 },
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'older' },
+        ],
+      },
+    })
+    const [road, older] = await getTripQueue()
+    expect(road.distanceKm).toBe(13.35)
+    expect(older.distanceKm).toBeUndefined()
+  })
+})
+
+describe('getTripQueue stops', () => {
+  it('carries the stops in order, and none on a plain ride or an older backend', async () => {
+    get.mockResolvedValue({
+      data: {
+        offers: [
+          {
+            ...base,
+            offer_type: 'trip',
+            trip_type: 'regular',
+            id: 'via',
+            stops: [
+              { lat: 33.32, lng: 44.37, address: 'مول' },
+              { lat: 33.33, lng: 44.38, address: null },
+            ],
+          },
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'plain', stops: [] },
+          { ...base, offer_type: 'trip', trip_type: 'regular', id: 'older' },
+        ],
+      },
+    })
+
+    const [via, plain, older] = await getTripQueue()
+
+    expect(via.stops).toEqual([
+      { latitude: 33.32, longitude: 44.37, address: 'مول' },
+      { latitude: 33.33, longitude: 44.38, address: undefined },
+    ])
+    expect(plain.stops).toEqual([])
+    expect(older.stops).toEqual([])
+  })
+})

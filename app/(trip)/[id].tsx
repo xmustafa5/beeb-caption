@@ -17,6 +17,7 @@ import { CancelSheet } from '@/components/captain/cancel-sheet'
 import { RatingStars } from '@/components/captain/rating-stars'
 import { MemberRoster } from '@/components/captain/member-roster'
 import { StopsPanel } from '@/components/captain/stops-panel'
+import { NextPointCard } from '@/components/captain/next-point-card'
 import { BoxDetailsCard } from '@/components/captain/box-details-card'
 import { BoxSummaryRow } from '@/components/captain/box-summary-row'
 import { useLiveTrip } from '@/hooks/use-live-trip'
@@ -29,7 +30,8 @@ import { getRoute } from '@/services/routing'
 import { useCurrentLocation, type LatLng } from '@/hooks/use-current-location'
 import { formatIqd } from '@/lib/format-currency'
 import { openDialer } from '@/lib/phone'
-import { distanceKm, nearestOf } from '@/lib/nav-links'
+import { distanceKm } from '@/lib/nav-links'
+import { legFrame, nextPoint } from '@/lib/trip-next-point'
 import { NavigateButtons } from '@/components/captain/navigate-buttons'
 import { parseApiError } from '@/lib/api'
 
@@ -43,6 +45,9 @@ import { parseApiError } from '@/lib/api'
  * line the same way; at 150 m a city drive re-routes roughly every half minute.
  */
 const ROUTE_ORIGIN_MIN_MOVE_M = 150
+
+/** How long after one step the main button ignores taps. */
+const PRIMARY_REPEAT_GUARD_MS = 1000
 
 /** One leg of the drawn route: from where the captain was to the current target. */
 interface RouteLeg {
@@ -95,7 +100,7 @@ export default function LiveTripScreen() {
   // Multi-stop: regular trips only, while the captain is on the trip (accepted/in_progress).
   const stopsEnabled =
     trip?.tripType === 'regular' && (status === 'accepted' || status === 'in_progress')
-  const { stops, reachStop, reachingId } = useTripStops(id, !!stopsEnabled)
+  const { stops, reachStop, isReaching } = useTripStops(id, !!stopsEnabled)
 
   // Box: the same live screen as a regular trip plus the parcel card. The
   // details (incl. the recipient's phone) are served to the assigned captain only
@@ -104,23 +109,15 @@ export default function LiveTripScreen() {
   const boxEnabled = isBox && (status === 'accepted' || status === 'in_progress')
   const box = useBoxDetails(id, boxEnabled)
 
-  // Un-reached intermediate stops as coordinates — the pending waypoints of a
-  // multi-stop trip. Empty for a plain point-to-point ride.
-  const pendingStops = stops
-    .filter((s) => s.status !== 'reached')
-    .map((s) => ({ latitude: s.lat, longitude: s.lng }))
-
-  // Where the captain drives next — for the drawn route AND the Google Maps /
-  // Waze buttons: the pickup until the rider is aboard, then any stops the rider
-  // added (nearest first), then the dropoff. Neither navigator takes more than
-  // one destination per link, so the target moves on as each stop is reached.
-  // (Stops used to be routed to while the captain was still on the way to the
-  // pickup, and skipped once the rider was aboard.)
+  // Where the captain drives next — for the card, the main button, the drawn route
+  // AND the Google Maps / Waze buttons. Neither navigator takes more than one
+  // destination per link, so the target moves on as each stop is reached.
+  const next = nextPoint(status === 'in_progress', stops)
   const target: LatLng | undefined =
-    status !== 'in_progress'
+    next.kind === 'pickup'
       ? pickup
-      : pendingStops.length > 0
-        ? (location && nearestOf(location, pendingStops)) || pendingStops[0]
+      : next.kind === 'stop'
+        ? { latitude: next.stop.lat, longitude: next.stop.lng }
         : dropoff
 
   // The leg the route line is drawn for: captain → target. Held in state rather
@@ -139,6 +136,18 @@ export default function LiveTripScreen() {
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, target?.latitude, target?.longitude])
+
+  // The camera frames the leg being driven, set once per target: it moves when the
+  // captain reaches a point, not on every GPS fix, so the map holds still to read.
+  const [legFit, setLegFit] = useState<{ targetKey: string; coords: LatLng[] } | null>(null)
+  useEffect(() => {
+    if (!routeLeg) return
+    setLegFit((prev) =>
+      prev?.targetKey === routeLeg.targetKey
+        ? prev
+        : { targetKey: routeLeg.targetKey, coords: legFrame(routeLeg.from, routeLeg.to) },
+    )
+  }, [routeLeg])
 
   // Route line from captain → target.
   const routeTargetRef = useRef<string | null>(null)
@@ -177,14 +186,21 @@ export default function LiveTripScreen() {
     return () => { cancelled = true }
   }, [routeLeg])
 
+  // The main button changes meaning after every step, so a second tap meant for the
+  // step just done must not land on the next one (which could be "complete trip").
+  const lastStepAt = useRef(0)
   async function onPrimary() {
+    if (Date.now() - lastStepAt.current < PRIMARY_REPEAT_GUARD_MS) return
     setError(null)
     try {
       if (status === 'accepted' && !arrived) await arrive()
       else if (status === 'accepted' && arrived) await start()
+      else if (status === 'in_progress' && next.kind === 'stop') await reachStop(next.stop.id)
       else if (status === 'in_progress') await complete()
     } catch (err) {
       setError(t(parseApiError(err).isNetwork ? 'common.networkError' : 'captain.live.legFailed'))
+    } finally {
+      lastStepAt.current = Date.now()
     }
   }
 
@@ -290,19 +306,22 @@ export default function LiveTripScreen() {
   const primaryLabel =
     status === 'accepted' && !arrived ? t('captain.live.arrivedAtPickup')
     : status === 'accepted' && arrived ? t(isBox ? 'captain.box.pickedUp' : 'captain.live.startTrip')
+    : status === 'in_progress' && next.kind === 'stop' ? t('captain.live.arrivedAtStop', { n: next.stop.seq })
     : status === 'in_progress' ? t(isBox ? 'captain.box.delivered' : 'captain.live.completeTrip')
     : t('captain.live.arrivedAtPickup') // 'requested' (transient) fallback — refetch clears it
 
-  const stopCoords = stops.map((s) => ({ latitude: s.lat, longitude: s.lng }))
-  // Frame the map to enclose the whole active leg (captain + pickup + dropoff +
-  // stops). Without this the camera has no initial region and MapLibre opens at
-  // world zoom — the "map is so far away" bug. `fitToCoords` needs ≥2 points; the
-  // pickup/dropoff pair guarantees that even before the first GPS fix lands.
-  const fitCoords = [
-    ...(location ? [location] : []),
+  // Only what is still ahead goes on the map; each stop keeps its booked number.
+  const stopPins = stops
+    .filter((s) => s.status === 'pending')
+    .map((s) => ({ latitude: s.lat, longitude: s.lng, n: s.seq }))
+  // Before the first GPS fix there is no leg yet, so frame the whole trip. Without
+  // this the camera has no initial region and MapLibre opens at world zoom — the
+  // "map is so far away" bug. `fitToCoords` needs ≥2 points; the pickup/dropoff
+  // pair guarantees that.
+  const fitCoords = legFit?.coords ?? [
     ...(pickup ? [pickup] : []),
     ...(dropoff ? [dropoff] : []),
-    ...stopCoords,
+    ...stopPins,
   ]
   // A single-point region as a floor, so the map is never at world zoom for the
   // one frame before fitToCoords runs (or if only one point exists).
@@ -322,10 +341,10 @@ export default function LiveTripScreen() {
           // The map runs up under the status bar: keep the top pin below it.
           fitPadding={{ top: insets.top + 48, right: 48, bottom: 56, left: 48 }}
           driver={location ?? undefined}
-          pickup={pickup}
+          pickup={next.kind === 'pickup' ? pickup : undefined}
           dropoff={dropoff}
           routeCoords={routeCoords}
-          stops={stopCoords}
+          stops={stopPins}
           showsUserLocation={false}
         />
         {location && (
@@ -346,6 +365,19 @@ export default function LiveTripScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, gap: Spacing.lg }}
       >
+        {trip.tripType !== 'abriyah' && pickup && dropoff && (
+          <NextPointCard
+            point={next}
+            arrived={arrived}
+            pickup={pickup}
+            dropoff={dropoff}
+            pickupAddress={trip.pickupAddress}
+            dropoffAddress={trip.dropoffAddress}
+          />
+        )}
+
+        {trip.tripType === 'regular' && <StopsPanel stops={stops} />}
+
         {/* native forceRTL mirrors this row in AR — no manual flip */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ ...Typography['body-md'], color: colors.subtle, fontStyle: 'normal' }}>{t('captain.live.fareLabel')}</Text>
@@ -365,13 +397,9 @@ export default function LiveTripScreen() {
           />
         )}
 
-        {trip.tripType === 'regular' && (
-          <StopsPanel stops={stops} reachingId={reachingId} onReach={reachStop} />
-        )}
-
         <FormError message={error} />
 
-        <Button label={primaryLabel} loading={busy} onPress={onPrimary} />
+        <Button label={primaryLabel} loading={busy || isReaching} onPress={onPrimary} />
 
         <NavigateButtons destination={target} />
 

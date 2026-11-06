@@ -13,7 +13,7 @@ import { formatIqd } from '@/lib/format-currency'
 import { ltrIsolate } from '@/lib/bidi'
 import { countdownTone, formatCountdown } from '@/lib/room-countdown'
 import { haversineKm } from '@/hooks/use-distance'
-import { usePlaceName } from '@/hooks/use-place-name'
+import { usePlaceName, usePlaceNames } from '@/hooks/use-place-name'
 import { useSecondsLeft } from '@/hooks/use-seconds-left'
 import type { LatLng } from '@/hooks/use-current-location'
 import type { CarStar } from '@/lib/captain-mappers'
@@ -217,7 +217,12 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
   const dropoff: LatLng = { latitude: offer.dropoffLat, longitude: offer.dropoffLng }
 
   const awayKm = captainLocation ? haversineKm(captainLocation, pickup) : null
-  const tripKm = haversineKm(pickup, dropoff)
+  // The road distance the fare was priced on, stops included. Straight lines are only
+  // a fallback for an older backend: they read about half the real length in a city.
+  const tripKm = offer.distanceKm ?? [pickup, ...offer.stops, dropoff].reduce(
+    (km, point, i, all) => (i === 0 ? 0 : km + haversineKm(all[i - 1], point)),
+    0,
+  )
 
   // A room pays the captain every rider's fare. `fareIqd` on a room is one
   // rider's share, so it is only the fallback for a backend without the total.
@@ -248,6 +253,9 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
   const pickupName = usePlaceName(offer.pickupAddress ? null : pickup)
   const dropName = usePlaceName(offer.dropoffAddress ? null : dropoff)
   const pickupLabel = offer.pickupAddress ?? pickupName.name
+  // A stop dragged on the map has no address, so it is looked up like the pickup above.
+  const stopLookups = usePlaceNames(offer.stops)
+  const stopNames = offer.stops.map((s, i) => s.address || stopLookups[i]).filter(Boolean).join(' · ')
   const dropoffLabel = offer.dropoffAddress ?? dropName.name
 
   return (
@@ -314,6 +322,15 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
           name={pickupLabel}
           loading={pickupName.isLoading}
         />
+        {offer.stops.length > 0 && (
+          <PlaceRow
+            icon="flag"
+            color={colors.info}
+            label={t('captain.queue.stopsLabel', { n: offer.stops.length })}
+            name={stopNames || null}
+            loading={false}
+          />
+        )}
         <PlaceRow
           icon="location"
           color={colors.destructive}
