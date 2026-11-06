@@ -18,8 +18,12 @@ import type { LngLat } from '@maplibre/maplibre-react-native'
 import type { LatLng } from '@/hooks/use-current-location'
 
 /** Fully keyless CARTO GL styles — tiles included, no token, no limits, works on-device. */
-const MAP_STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-const MAP_STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+// `v` only busts the map's on-device cache: phones hold the style from before CARTO moved to its
+// new source and tiles, with an expiry months out. `lib/map-labels.ts` needs the new source, so
+// bump this if CARTO changes the style again.
+const STYLE_VERSION = '2026-11'
+const MAP_STYLE_LIGHT = `https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?v=${STYLE_VERSION}`
+const MAP_STYLE_DARK = `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json?v=${STYLE_VERSION}`
 
 export function mapStyleFor(scheme: 'light' | 'dark'): string {
   return scheme === 'dark' ? MAP_STYLE_DARK : MAP_STYLE_LIGHT

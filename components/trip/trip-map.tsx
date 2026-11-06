@@ -25,6 +25,7 @@ import {
 } from '@/lib/map-style'
 import { useViewportPois } from '@/hooks/use-pois'
 import { PoiOverlay } from '@/components/trip/poi-overlay'
+import { MapLabels } from '@/components/trip/map-labels'
 
 /** react-native-maps-style region (kept so callers don't change). */
 export interface MapRegion {
@@ -241,6 +242,8 @@ export const TripMap = forwardRef<TripMapHandle, TripMapProps>(function TripMap(
             />
           </GeoJSONSource>
         )}
+
+        <MapLabels />
 
         {/* POI labels (visual-only) — before the markers so native <Marker> views render on top.
             Mounted whenever opted-in & we have pins; the layer minzoom hides them when zoomed out,

@@ -28,6 +28,7 @@ import {
 } from '@/lib/map-style'
 import { useCityPois, useViewportPois } from '@/hooks/use-pois'
 import { PoiOverlay } from '@/components/trip/poi-overlay'
+import { MapLabels } from '@/components/trip/map-labels'
 import { poiLabel, type Poi } from '@/services/places-nearby'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
@@ -274,6 +275,8 @@ export function LocationPicker({
               <Layer id="picker-zone-line" type="line" paint={{ 'line-color': colors.tint, 'line-width': 2 }} />
             </GeoJSONSource>
           )}
+          <MapLabels />
+
           {/* Mounted whenever we have pins — the layer's minzoom hides them when zoomed out, so the
               source never unmounts on a zoom wobble (no flicker). Empty pois → overlay renders null. */}
           <PoiOverlay pois={pois} onSelectPoi={onSelectPoi} />
