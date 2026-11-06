@@ -629,5 +629,32 @@
     "message": "Call us or message us on WhatsApp at {{phone}}",
     "call": "Call",
     "whatsapp": "WhatsApp"
+  },
+  "governorates": {
+    "label": "Governorate",
+    "placeholder": "Choose your governorate",
+    "required": "Please choose your governorate",
+    "notSet": "Not set",
+    "names": {
+      "baghdad": "Baghdad",
+      "basra": "Basra",
+      "anbar": "Anbar",
+      "erbil": "Erbil",
+      "babil": "Babil",
+      "halabja": "Halabja",
+      "duhok": "Duhok",
+      "diyala": "Diyala",
+      "dhi_qar": "Dhi Qar",
+      "sulaymaniyah": "Sulaymaniyah",
+      "salah_al_din": "Saladin",
+      "qadisiyah": "Al-Qadisiyah",
+      "karbala": "Karbala",
+      "kirkuk": "Kirkuk",
+      "muthanna": "Al-Muthanna",
+      "maysan": "Maysan",
+      "najaf": "Najaf",
+      "nineveh": "Nineveh",
+      "wasit": "Wasit"
+    }
   }
 }

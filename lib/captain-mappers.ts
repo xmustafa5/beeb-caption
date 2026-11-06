@@ -3,6 +3,7 @@
 // and the app's Captain shape (camelCase, gender male/female). No network here.
 
 import { toAsciiDigits } from '@/lib/digits'
+import { toGovernorate, type Governorate } from '@/lib/governorates'
 
 export type CaptainStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
 export type CaptainGender = 'male' | 'female'
@@ -35,6 +36,8 @@ export interface Captain {
   name: string
   nameAr: string
   gender: CaptainGender
+  /** Null until set; accounts from before it was collected fill it in from the profile. */
+  governorate: Governorate | null
   carMake: string
   carModel: string
   carColor?: string | null
@@ -63,6 +66,7 @@ export interface BackendCaptain {
   name: string
   name_ar: string
   gender: string
+  governorate?: string | null
   car_make: string
   car_model: string
   car_color?: string | null
@@ -105,6 +109,7 @@ export function toCaptain(b: BackendCaptain): Captain {
     name: b.name,
     nameAr: b.name_ar,
     gender: toCaptainGender(b.gender),
+    governorate: toGovernorate(b.governorate),
     carMake: b.car_make,
     carModel: b.car_model,
     carColor: b.car_color ?? null,

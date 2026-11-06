@@ -8,8 +8,11 @@ import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { OptionSheet, type Option, type OptionSheetRef } from '@/components/ui/option-sheet'
+import { GovernorateSheet } from '@/components/ui/governorate-sheet'
 import { AbriyahAccessCard } from '@/components/captain/abriyah-access-card'
+import type { Governorate } from '@/lib/governorates'
 import { contactSupport, SUPPORT_PHONE } from '@/lib/support'
+import { updateMyGovernorate } from '@/services/captain-auth'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { changeLanguage } from '@/i18n'
@@ -36,6 +39,7 @@ export default function ProfileScreen() {
   const themePref = useThemeStore((s) => s.preference)
   const setThemePref = useThemeStore((s) => s.setPreference)
   const langSheetRef = useRef<OptionSheetRef>(null)
+  const governorateSheetRef = useRef<OptionSheetRef>(null)
 
   if (!captain) return null
 
@@ -55,6 +59,16 @@ export default function ProfileScreen() {
   const onSelectLanguage = (next: AppLanguage) => {
     langSheetRef.current?.dismiss()
     if (next !== lang) changeLanguage(next)
+  }
+  // Optimistic: revert and alert if the backend refuses. The sheet dismisses itself.
+  const onSelectGovernorate = (next: Governorate) => {
+    const prev = captain.governorate
+    if (next === prev) return
+    useAuthStore.getState().updateCaptain({ governorate: next })
+    updateMyGovernorate(next).catch(() => {
+      useAuthStore.getState().updateCaptain({ governorate: prev })
+      Alert.alert(t('common.error'))
+    })
   }
   const car = [captain.carColor, `${captain.carMake} ${captain.carModel}`].filter(Boolean).join(' · ')
 
@@ -289,6 +303,41 @@ export default function ProfileScreen() {
               colors={colors}
             />
 
+            <TouchableOpacity
+              onPress={() => governorateSheetRef.current?.present()}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              style={{
+                // native forceRTL mirrors this row in AR — no manual flip
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.md,
+                backgroundColor: colors.card,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: Spacing.lg,
+              }}
+            >
+              <View style={{
+                width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous',
+                backgroundColor: colors.surface,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="location-outline" size={18} color={colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...Typography['body-md'], color: colors.text, textAlign: 'left' }}>
+                  {t('governorates.label')}
+                </Text>
+                <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>
+                  {captain.governorate ? t(`governorates.names.${captain.governorate}`) : t('governorates.notSet')}
+                </Text>
+              </View>
+              <Icon name={isRtlLanguage(lang) ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.subtle} />
+            </TouchableOpacity>
+
             {/* Support: asks call or WhatsApp, then opens that app. */}
             <TouchableOpacity
               onPress={contactSupport}
@@ -404,6 +453,8 @@ export default function ProfileScreen() {
         selected={lang}
         onSelect={onSelectLanguage}
       />
+
+      <GovernorateSheet ref={governorateSheetRef} selected={captain.governorate} onSelect={onSelectGovernorate} />
     </View>
   )
 }

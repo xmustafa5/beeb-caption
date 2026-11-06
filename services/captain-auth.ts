@@ -1,4 +1,5 @@
 // services/captain-auth.ts
+import type { Governorate } from '@/lib/governorates'
 import { api, parseApiError } from '@/lib/api'
 import {
   toCaptain,
@@ -20,6 +21,7 @@ export interface RegisterCaptainInput {
   ticket: string // register-purpose ticket from verifyOtp()
   name: string
   gender: CaptainGender
+  governorate?: Governorate
   carMake: string
   carModel: string
   carColor?: string | null
@@ -124,6 +126,7 @@ export async function registerCaptain(
     // ahead of the backend deploy keeps working against the older contract.
     name_ar: input.name,
     gender: toBackendGender(input.gender),
+    ...(input.governorate ? { governorate: input.governorate } : {}),
     car_make: input.carMake,
     car_model: input.carModel,
     car_plate: input.carPlate,
@@ -139,6 +142,12 @@ export async function registerCaptain(
     body,
   )
   return { captain: toCaptain(data), token: data.token }
+}
+
+/** The signed-in captain sets their own governorate. */
+export async function updateMyGovernorate(governorate: Governorate): Promise<Captain> {
+  const { data } = await api.patch<BackendCaptain>('/api/captain/me', { governorate })
+  return toCaptain(data)
 }
 
 /**

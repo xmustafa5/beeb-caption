@@ -10,18 +10,21 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
 import { Spacing } from '@/constants/Spacing'
 import { Input } from '@/components/forms/input'
+import { GovernorateField } from '@/components/forms/governorate-field'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { WizardProgress } from '@/components/captain/wizard-progress'
 import { useRegistrationStore } from '@/store/registration-store'
 import type { CaptainGender } from '@/lib/captain-mappers'
 import { toAsciiDigits } from '@/lib/digits'
+import { GOVERNORATES } from '@/lib/governorates'
 
 const isRTL = I18nManager.isRTL
 
 const schema = z.object({
   name: z.string().min(2, 'captain.register.nameInvalid'),
   gender: z.enum(['male', 'female']),
+  governorate: z.enum(GOVERNORATES, { message: 'governorates.required' }),
   nationalId: z.string().optional(),
 })
 type Form = z.infer<typeof schema>
@@ -35,13 +38,13 @@ export default function PersonalStep() {
 
   const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { name: draft.name, gender: draft.gender, nationalId: draft.nationalId },
+    defaultValues: { name: draft.name, gender: draft.gender, governorate: draft.governorate || undefined, nationalId: draft.nationalId },
     mode: 'onChange',
   })
   const gender = watch('gender')
 
   const onNext = (v: Form) => {
-    draft.setStep1({ name: v.name, gender: v.gender, nationalId: v.nationalId ?? '' })
+    draft.setStep1({ name: v.name, gender: v.gender, governorate: v.governorate, nationalId: v.nationalId ?? '' })
     router.push('/(auth)/register/vehicle')
   }
 
@@ -97,6 +100,10 @@ export default function PersonalStep() {
               </View>
               <Text style={{ ...Typography['caption-sm'], color: colors.subtle, fontStyle: 'normal', textAlign: 'left' }}>{t('captain.register.genderNote')}</Text>
             </View>
+            <Controller control={control} name="governorate" render={({ field: { onChange, value } }) => (
+              <GovernorateField value={value} onChange={onChange}
+                error={errors.governorate ? t(errors.governorate.message ?? '') : undefined} />
+            )} />
             {/* National ID is numeric: normalize Arabic-Indic/Persian digits to ASCII before the \D strip
                 (a bare \D strip would delete Arabic digits the AR keyboard produces). numeric keeps the ID LTR. */}
             <Controller control={control} name="nationalId" render={({ field: { onChange, value } }) => (

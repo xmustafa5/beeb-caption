@@ -184,6 +184,7 @@ export default function VehicleStep() {
         ticket: draft.ticket,
         name: draft.name,
         gender: draft.gender,
+        governorate: draft.governorate || undefined,
         nationalId: draft.nationalId || null,
         carMake: v.carMake,
         carModel: v.carModel,

@@ -1,6 +1,7 @@
 // store/registration-store.ts
 import { create } from 'zustand'
 import type { CaptainGender } from '@/lib/captain-mappers'
+import type { Governorate } from '@/lib/governorates'
 
 // In-memory only (NOT persisted) — holds the cross-step registration draft so
 // each wizard screen stays focused. Cleared on submit or abandon.
@@ -13,6 +14,8 @@ interface RegistrationDraft {
   password: string
   name: string
   gender: CaptainGender
+  /** '' until the personal step picks one. */
+  governorate: Governorate | ''
   nationalId: string
   carMake: string
   carModel: string
@@ -33,7 +36,7 @@ interface RegistrationDraft {
   carYear: string
   setPhone: (phone: string) => void
   setAccount: (v: Pick<RegistrationDraft, 'phone' | 'ticket' | 'password'>) => void
-  setStep1: (v: Pick<RegistrationDraft, 'name' | 'gender' | 'nationalId'>) => void
+  setStep1: (v: Pick<RegistrationDraft, 'name' | 'gender' | 'governorate' | 'nationalId'>) => void
   setStep2: (
     v: Pick<
       RegistrationDraft,
@@ -66,6 +69,7 @@ const EMPTY = {
   password: '',
   name: '',
   gender: 'male' as CaptainGender,
+  governorate: '' as Governorate | '',
   nationalId: '',
   carMake: '',
   carModel: '',

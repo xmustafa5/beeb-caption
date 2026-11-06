@@ -633,5 +633,32 @@
     "message": "اتصل بنا أو راسلنا على واتساب على الرقم {{phone}}",
     "call": "اتصال",
     "whatsapp": "واتساب"
+  },
+  "governorates": {
+    "label": "المحافظة",
+    "placeholder": "اختر محافظتك",
+    "required": "يرجى اختيار محافظتك",
+    "notSet": "غير محددة",
+    "names": {
+      "baghdad": "بغداد",
+      "basra": "البصرة",
+      "anbar": "الأنبار",
+      "erbil": "أربيل",
+      "babil": "بابل",
+      "halabja": "حلبجة",
+      "duhok": "دهوك",
+      "diyala": "ديالى",
+      "dhi_qar": "ذي قار",
+      "sulaymaniyah": "السليمانية",
+      "salah_al_din": "صلاح الدين",
+      "qadisiyah": "القادسية",
+      "karbala": "كربلاء",
+      "kirkuk": "كركوك",
+      "muthanna": "المثنى",
+      "maysan": "ميسان",
+      "najaf": "النجف",
+      "nineveh": "نينوى",
+      "wasit": "واسط"
+    }
   }
 }
