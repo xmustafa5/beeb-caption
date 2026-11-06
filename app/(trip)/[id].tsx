@@ -373,6 +373,7 @@ export default function LiveTripScreen() {
             dropoff={dropoff}
             pickupAddress={trip.pickupAddress}
             dropoffAddress={trip.dropoffAddress}
+            stopCount={stops.length}
           />
         )}
 

@@ -7,7 +7,7 @@ import { Spacing } from '@/constants/Spacing'
 import { Icon } from '@/components/ui/icon'
 import { usePlaceName } from '@/hooks/use-place-name'
 import type { LatLng } from '@/hooks/use-current-location'
-import type { NextPoint } from '@/lib/trip-next-point'
+import { isRoundTrip, type NextPoint } from '@/lib/trip-next-point'
 
 interface NextPointCardProps {
   point: NextPoint
@@ -17,10 +17,11 @@ interface NextPointCardProps {
   dropoff: LatLng
   pickupAddress?: string
   dropoffAddress?: string
+  stopCount: number
 }
 
 /** Says where the captain is heading right now, so nobody has to read it off the map. */
-export function NextPointCard({ point, arrived, pickup, dropoff, pickupAddress, dropoffAddress }: NextPointCardProps) {
+export function NextPointCard({ point, arrived, pickup, dropoff, pickupAddress, dropoffAddress, stopCount }: NextPointCardProps) {
   const { t } = useTranslation()
   const colors = useThemeColors()
 
@@ -29,7 +30,7 @@ export function NextPointCard({ point, arrived, pickup, dropoff, pickupAddress, 
     point.kind === 'stop'
       ? t('captain.live.nextStop', { n: point.stop.seq, total: point.total })
       : point.kind === 'dropoff'
-        ? t('captain.live.nextDropoff')
+        ? t(isRoundTrip(pickup, dropoff, stopCount) ? 'captain.live.nextReturn' : 'captain.live.nextDropoff')
         : arrived
           ? t('captain.live.atPickup')
           : t('captain.live.nextPickup')

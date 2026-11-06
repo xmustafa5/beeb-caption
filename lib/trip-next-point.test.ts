@@ -1,4 +1,4 @@
-import { legFrame, nextPoint } from './trip-next-point'
+import { isRoundTrip, legFrame, nextPoint } from './trip-next-point'
 import type { TripStop } from '@/services/captain-stops'
 
 const stop = (seq: number, status: TripStop['status'] = 'pending'): TripStop => ({
@@ -47,5 +47,18 @@ describe('legFrame', () => {
     expect(b.latitude - a.latitude).toBeCloseTo(0.004)
     expect(b.longitude - a.longitude).toBeCloseTo(0.004)
     expect((a.latitude + b.latitude) / 2).toBeCloseTo(33.3)
+  })
+})
+
+describe('isRoundTrip', () => {
+  const home = { latitude: 33.3, longitude: 44.3 }
+
+  it('is a ride with stops that ends where it began', () => {
+    expect(isRoundTrip(home, { latitude: 33.30001, longitude: 44.30001 }, 1)).toBe(true)
+  })
+
+  it('is not a one-way ride, or a ride with no stops', () => {
+    expect(isRoundTrip(home, { latitude: 33.35, longitude: 44.4 }, 2)).toBe(false)
+    expect(isRoundTrip(home, home, 0)).toBe(false)
   })
 })

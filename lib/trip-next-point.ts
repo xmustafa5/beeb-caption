@@ -37,3 +37,15 @@ export function legFrame(from: LatLng, to: LatLng): LatLng[] {
     { latitude: midLat + halfLat, longitude: midLng + halfLng },
   ]
 }
+
+/** About 33 m: a rider's pin rarely lands twice on the same spot, but this close it is one place. */
+const SAME_PLACE_DEG = 0.0003
+
+/** A ride that comes back to where it began. It has no flag of its own: stops are what make it. */
+export function isRoundTrip(pickup: LatLng, dropoff: LatLng, stopCount: number): boolean {
+  return (
+    stopCount > 0 &&
+    Math.abs(pickup.latitude - dropoff.latitude) < SAME_PLACE_DEG &&
+    Math.abs(pickup.longitude - dropoff.longitude) < SAME_PLACE_DEG
+  )
+}

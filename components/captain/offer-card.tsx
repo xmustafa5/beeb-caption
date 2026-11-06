@@ -14,6 +14,7 @@ import { ltrIsolate } from '@/lib/bidi'
 import { countdownTone, formatCountdown } from '@/lib/room-countdown'
 import { haversineKm } from '@/hooks/use-distance'
 import { usePlaceName, usePlaceNames } from '@/hooks/use-place-name'
+import { isRoundTrip } from '@/lib/trip-next-point'
 import { useSecondsLeft } from '@/hooks/use-seconds-left'
 import type { LatLng } from '@/hooks/use-current-location'
 import type { CarStar } from '@/lib/captain-mappers'
@@ -326,7 +327,11 @@ export function OfferCard({ offer, captainLocation, onAccept, accepting, onPress
           <PlaceRow
             icon="flag"
             color={colors.info}
-            label={t('captain.queue.stopsLabel', { n: offer.stops.length })}
+            label={
+              isRoundTrip(pickup, dropoff, offer.stops.length)
+                ? t('captain.queue.roundTrip')
+                : t('captain.queue.stopsLabel', { n: offer.stops.length })
+            }
             name={stopNames || null}
             loading={false}
           />
