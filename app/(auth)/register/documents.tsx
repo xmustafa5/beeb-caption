@@ -5,11 +5,11 @@
 //    after the 5 docs exist. Finishes on /(auth)/status. Authorized by the
 //    onboarding-scoped captain JWT that /api/captains/register now returns.
 //  - Profile (no flag): an approved/pending captain re-uploads; returns back.
-import { useState } from 'react'
-import { View, Text, ScrollView, ActionSheetIOS, Alert, Platform } from 'react-native'
+import { useCallback, useState } from 'react'
+import { View, Text, ScrollView, ActionSheetIOS, Alert, Platform, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { Typography } from '@/constants/Typography'
@@ -38,6 +38,18 @@ export default function DocumentsStep() {
   const onboarding = useLocalSearchParams<{ onboarding?: string }>().onboarding === '1'
   const captainId = useAuthStore((s) => s.captain?.id ?? s.pendingCaptainId)
   const [states, setStates] = useState<StateMap>(INITIAL)
+
+  // In onboarding the account already exists and the wizard draft (phone, ticket,
+  // password) was cleared on register success, so the personal/vehicle steps still
+  // in the stack can only re-submit an empty draft (422 → "couldn't submit").
+  // Going back is a dead end: block the iOS swipe and the Android back button.
+  useFocusEffect(
+    useCallback(() => {
+      if (!onboarding) return
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => true)
+      return () => sub.remove()
+    }, [onboarding]),
+  )
 
   const uploadedCount = DOC_TYPES.filter((d) => states[d] === 'uploaded').length
   const allDone = uploadedCount === DOC_TYPES.length
@@ -95,6 +107,7 @@ export default function DocumentsStep() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ gestureEnabled: !onboarding }} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
