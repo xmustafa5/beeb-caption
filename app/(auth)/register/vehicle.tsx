@@ -26,6 +26,7 @@ import { registerCaptain } from '@/services/captain-auth'
 import { getCities } from '@/services/cities'
 import { useAuthStore } from '@/store/auth-store'
 import { parseApiError } from '@/lib/api'
+import { toAsciiDigits } from '@/lib/digits'
 
 // Stable for the session — forceRTL changes require a restart anyway
 const isRTL = I18nManager.isRTL
@@ -90,7 +91,7 @@ export default function VehicleStep() {
 
   const cities = useQuery({ queryKey: ['cities'], queryFn: getCities, staleTime: 1000 * 60 * 10 })
 
-  const { control, handleSubmit, setValue, clearErrors, watch, formState: { errors, isValid } } = useForm<Form>({
+  const { control, handleSubmit, setValue, setError, clearErrors, watch, formState: { errors, isValid } } = useForm<Form>({
     resolver: zodResolver(schema),
     defaultValues: {
       carBrandId: draft.carBrandId,
@@ -198,26 +199,38 @@ export default function VehicleStep() {
     },
     onMutate: () => setApiError(null),
     onSuccess: ({ captain, token }) => {
-      // Register now returns a captain JWT (onboarding-scoped). Store the full
-      // session so the request interceptor authenticates the document uploads,
-      // then send the captain to the documents step to upload the 5 docs. The
-      // captain is still PENDING — the token only authorizes docs + self-read.
-      useAuthStore.getState().setSession(token, captain)
+      // Register returns a captain JWT (onboarding-scoped): it authorizes the
+      // document uploads + self-read while the captain is still PENDING. Store
+      // the session with documentsPending = true and do NOT navigate: that flag
+      // makes the documents screen the only (auth) screen (app/(auth)/_layout.tsx),
+      // so the wizard is dropped and the captain lands there now and on every
+      // later launch until the 5 documents are submitted.
+      useAuthStore.getState().setSession(token, captain, true)
       useRegistrationStore.getState().reset()
-      // onboarding=1 tells the documents step to finish on the status screen
-      // (waiting-for-approval), not router.back() — which is for the profile entry.
-      router.replace({ pathname: '/(auth)/register/documents', params: { onboarding: '1' } })
     },
     onError: (err) => {
       const info = parseApiError(err)
       if (info.status === 401) {
-        // Register-purpose ticket expired/used — restart the account step.
-        setApiError(t('captain.auth.ticketExpired'))
-        router.replace('/(auth)/register/account')
+        // Register-purpose ticket expired/used: verify the number again. The
+        // draft keeps everything typed so far, so it is one code, not a restart.
+        router.replace({ pathname: '/(auth)/register/account', params: { reverify: '1' } })
+        return
+      }
+      if (info.status === 409) {
+        // The server says which one: "phone already registered" or "car plate
+        // already registered". Say exactly that, on the field it is about.
+        const message = info.backendMessage ?? ''
+        if (/plate/i.test(message)) {
+          setError('carPlate', { type: 'server', message: 'captain.register.plateTaken' })
+          setApiError(t('captain.register.plateTaken'))
+        } else if (/phone/i.test(message)) {
+          setApiError(t('captain.register.phoneTaken'))
+        } else {
+          setApiError(t('captain.register.duplicate'))
+        }
         return
       }
       const key = info.isNetwork ? 'common.networkError'
-        : info.status === 409 ? 'captain.register.duplicate'
         : info.status === 400 ? 'captain.register.registerFailed'
         : info.status === 429 ? 'common.rateLimited'
         : 'captain.register.registerFailed'
@@ -233,8 +246,8 @@ export default function VehicleStep() {
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + Spacing.xl }}>
         <View style={{ paddingTop: insets.top + Spacing.xl, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg, gap: Spacing.lg }}>
-          {/* Still 3 of 3 — the car picker is a detour off this step, not a step. */}
-          <WizardProgress current={3} total={3} />
+          {/* Still step 3 — the car picker is a detour off this step, not a step. */}
+          <WizardProgress current={3} total={4} />
           <Text style={{ ...Typography['heading-lg'], color: colors.text, fontSize: 28, lineHeight: 34, textAlign: 'left' }}>
             {t('captain.register.vehicleTitle')}
           </Text>
@@ -337,7 +350,9 @@ export default function VehicleStep() {
                 clearLabel={t('captain.register.carColorClear')} />
             )} />
             <Controller control={control} name="carPlate" render={({ field: { onChange, value } }) => (
-              <Input label={t('captain.register.carPlate')} value={value} onChangeText={onChange} autoCapitalize="characters"
+              <Input label={t('captain.register.carPlate')} value={value}
+                // Arabic keyboards type ٠-٩; store 0-9 so the same plate always compares equal.
+                onChangeText={(v) => onChange(toAsciiDigits(v))} autoCapitalize="characters"
                 error={errors.carPlate ? t(errors.carPlate.message ?? '') : undefined} />
             )} />
           </View>
@@ -345,7 +360,7 @@ export default function VehicleStep() {
           <View style={{ flex: 1 }} />
           {noCity && <FormError message={t('captain.register.citiesFailed')} />}
           <FormError message={apiError} />
-          <Button label={t('captain.register.submit')} loading={mutation.isPending} disabled={submitDisabled}
+          <Button label={t('captain.register.next')} loading={mutation.isPending} disabled={submitDisabled}
             onPress={handleSubmit((v) => mutation.mutate(v))}
             trailing={<Icon name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color={colors.onTint} />} />
         </View>

@@ -63,10 +63,11 @@ function CaptainLoginForm() {
     onSuccess: (res) => {
       if (res.kind === 'authed') {
         // Storing the session is the navigation: the guards in app/_layout.tsx and
-        // app/(auth)/_layout.tsx swap this screen for (tabs) when approved, or for
+        // app/(auth)/_layout.tsx swap this screen for (tabs) when approved, for the
+        // documents screen when a pending captain still owes documents, or for
         // the status screen otherwise. Don't router.replace() as well. It runs after
         // the guards have already landed and mounts a second copy of the destination.
-        useAuthStore.getState().setSession(res.token, res.captain)
+        useAuthStore.getState().setSession(res.token, res.captain, res.documentsPending)
       } else if (res.kind === 'forbidden') {
         // 403 — registered but rejected or blocked (no token, no captain record).
         // Pass forbidden=1 so the status screen shows the "not approved — contact

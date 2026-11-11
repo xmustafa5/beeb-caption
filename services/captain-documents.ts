@@ -50,10 +50,15 @@ export async function uploadDocument(
   })
 }
 
-/** Which of the 5 required docs are present. */
-export async function getCompleteness(captainId: string): Promise<Completeness> {
+/**
+ * Which of the 5 required docs are on file for this captain. Pass an explicit
+ * token during the login round-trip, before the session is stored (the request
+ * interceptor only fills Authorization when it is absent).
+ */
+export async function getCompleteness(captainId: string, token?: string): Promise<Completeness> {
   const { data } = await api.get<Completeness>(
     `/api/captains/${captainId}/documents/completeness`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
   )
   return data
 }

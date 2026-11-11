@@ -1,17 +1,26 @@
 import { Stack } from 'expo-router'
 import { useThemeColors } from '@/hooks/use-theme-colors'
-import { selectIsPendingLike, useAuthStore } from '@/store/auth-store'
+import { selectIsPendingLike, selectNeedsDocuments, useAuthStore } from '@/store/auth-store'
 
 export default function AuthLayout() {
   const colors = useThemeColors()
-  // The second half of AuthGate (app/_layout.tsx). A registered captain who isn't
-  // approved yet belongs on the status screen, so for them login doesn't exist: a
-  // pending login swaps login for status, and a cold launch opens on status. The
-  // stack lands on its first available screen, so the order below matters. Status
-  // and the register wizard stay reachable for everyone: a 403 login (no session)
-  // shows status with ?forbidden=1, and the vehicle step stores a pending session
-  // mid-wizard, which must not pull the captain out before the documents step.
+  // The second half of AuthGate (app/_layout.tsx): the session decides which
+  // (auth) screens EXIST, and the stack lands on the first one that does, so the
+  // order below matters. Nobody calls router.replace() for these moves: storing
+  // the session is the navigation.
+  //
+  //   no session              login, status (a 403 login shows it with
+  //                           ?forbidden=1) and the register wizard
+  //   pending, documents owed documents ONLY. The vehicle step creates the
+  //                           account and stores this session, which drops the
+  //                           wizard and lands here; so does every later launch,
+  //                           until the captain submits. Before this guard a
+  //                           captain who left the app mid-upload came back to
+  //                           "waiting for approval" with nothing uploaded.
+  //   pending / rejected /    status (login is gone: they are already signed in)
+  //   blocked
   const isPendingLike = useAuthStore(selectIsPendingLike)
+  const needsDocuments = useAuthStore(selectNeedsDocuments)
   return (
     <Stack
       screenOptions={{
@@ -23,8 +32,14 @@ export default function AuthLayout() {
       <Stack.Protected guard={!isPendingLike}>
         <Stack.Screen name="login" />
       </Stack.Protected>
-      <Stack.Screen name="status" />
-      <Stack.Screen name="register" />
+      <Stack.Protected guard={needsDocuments}>
+        {/* Nothing to go back to: the wizard behind it is gone with its draft. */}
+        <Stack.Screen name="documents" options={{ gestureEnabled: false }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!needsDocuments}>
+        <Stack.Screen name="status" />
+        <Stack.Screen name="register" />
+      </Stack.Protected>
     </Stack>
   )
 }

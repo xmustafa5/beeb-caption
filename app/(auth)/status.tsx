@@ -1,6 +1,6 @@
 // app/(auth)/status.tsx
 import { useState, useCallback } from 'react'
-import { View, Text, ScrollView, AppState } from 'react-native'
+import { View, Text, ScrollView, AppState, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon'
 import { useAuthStore } from '@/store/auth-store'
 import { useRegistrationStore } from '@/store/registration-store'
 import { getCaptain } from '@/services/captain-auth'
+import { getCompleteness } from '@/services/captain-documents'
 import { parseApiError } from '@/lib/api'
 import { contactSupport } from '@/lib/support'
 
@@ -31,6 +32,9 @@ export default function StatusScreen() {
   const status = captainStatus ?? 'pending'
   const isForbiddenUnknown = !captainStatus && !!forbidden
   const rejectionReason = useAuthStore((s) => s.captain?.rejectionReason)
+  const documentsPending = useAuthStore((s) => s.documentsPending)
+  // The documents check could not be read (offline): show the status as-is.
+  const [docsCheckFailed, setDocsCheckFailed] = useState(false)
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState<string | null>(null)
 
@@ -46,8 +50,18 @@ export default function StatusScreen() {
     try {
       const captain = await getCaptain(captainId)
       useAuthStore.getState().updateCaptain(captain)
-      if (captain.status !== 'approved') setNote(t('captain.status.stillPending'))
       // AuthGate routes to (tabs) automatically once status === 'approved'.
+      if (captain.status === 'pending') {
+        // "Waiting for approval" is only true once all 5 documents are on file.
+        // A captain who still owes some (a login, a session from an older build,
+        // a document removed since) is sent to the upload screen: setting the
+        // flag is the navigation, see app/(auth)/_layout.tsx.
+        const { complete } = await getCompleteness(captainId)
+        setDocsCheckFailed(false)
+        useAuthStore.getState().setDocumentsPending(!complete)
+        if (!complete) return
+      }
+      if (captain.status !== 'approved') setNote(t('captain.status.stillPending'))
     } catch (err) {
       // A 404 means the captain record is gone (e.g. a staging DB reset) and a
       // 403 means access was revoked: the session is dead, so clear it and let
@@ -58,6 +72,7 @@ export default function StatusScreen() {
         useAuthStore.getState().clear()
         return
       }
+      setDocsCheckFailed(true)
       setNote(t(info.isNetwork ? 'common.networkError' : 'captain.status.stillPending'))
     } finally {
       setChecking(false)
@@ -73,6 +88,16 @@ export default function StatusScreen() {
       return () => sub.remove()
     }, [refresh]),
   )
+
+  // Until the first check answers, a pending captain may still owe documents:
+  // don't claim "waiting for approval" yet, or it flashes before the upload screen.
+  if (token && captainStatus === 'pending' && documentsPending === null && !docsCheckFailed) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.tint} />
+      </View>
+    )
+  }
 
   const isRejected = status === 'rejected'
   const isBlocked = status === 'blocked'

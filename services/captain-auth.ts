@@ -1,6 +1,7 @@
 // services/captain-auth.ts
 import type { Governorate } from '@/lib/governorates'
 import { api, parseApiError } from '@/lib/api'
+import { getCompleteness } from '@/services/captain-documents'
 import {
   toCaptain,
   toBackendGender,
@@ -11,7 +12,9 @@ import {
 } from '@/lib/captain-mappers'
 
 export type LoginResult =
-  | { kind: 'authed'; token: string; captain: Captain }
+  // documentsPending: for a PENDING captain, whether any of the 5 documents is
+  // still missing (null when that could not be read; the status screen retries).
+  | { kind: 'authed'; token: string; captain: Captain; documentsPending: boolean | null }
   | { kind: 'forbidden' } // 403 — registered but not approved / blocked (no token issued)
   | { kind: 'unregistered' } // 404 — no captain for this phone
 
@@ -55,6 +58,20 @@ export async function sendOtp(phone: string): Promise<{ ok: true }> {
 }
 
 /**
+ * Does this phone already belong to a captain? Asked BEFORE any OTP is sent, so
+ * a registered captain is told on the first screen and pointed at login instead
+ * of finding out from a 409 on the last wizard step. Public and free: it sends
+ * no SMS and is not rate limited. Only `captain_exists` matters here: a rider
+ * account on the same number does not stop someone registering as a captain.
+ */
+export async function isCaptainPhoneRegistered(phone: string): Promise<boolean> {
+  const { data } = await api.post<{ captain_exists: boolean }>('/api/auth/phone-status', {
+    phone: normalizePhone(phone),
+  })
+  return data.captain_exists === true
+}
+
+/**
  * Verify the 6-digit code and exchange it for a single-use UUID ticket. Captains
  * only ever register (there's no captain self-service password reset), so the
  * purpose is fixed to "register". 401 = wrong/expired code; 400 = bad purpose/phone.
@@ -81,7 +98,18 @@ export async function loginCaptain(phone: string, password: string): Promise<Log
       password,
     })
     const captain = await getCaptain(data.user_id, data.token)
-    return { kind: 'authed', token: data.token, captain }
+    // A pending captain who still owes documents belongs on the upload screen,
+    // not on "waiting for approval". Best effort: a failure here must not fail a
+    // login that already succeeded.
+    let documentsPending: boolean | null = null
+    if (captain.status === 'pending') {
+      try {
+        documentsPending = !(await getCompleteness(captain.id, data.token)).complete
+      } catch {
+        documentsPending = null
+      }
+    }
+    return { kind: 'authed', token: data.token, captain, documentsPending }
   } catch (err) {
     const info = parseApiError(err)
     if (info.status === 403) return { kind: 'forbidden' }

@@ -322,9 +322,12 @@
       "confirmPasswordPlaceholder": "Re-enter your password",
       "passwordMismatch": "Passwords don't match",
       "accountTitle": "Create your captain account",
-      "accountSubtitle": "Enter your phone number to get started.",
-      "setPasswordTitle": "Set a password",
-      "setPasswordSubtitle": "Choose a password you'll use to sign in.",
+      "accountSubtitle": "Enter your phone number and choose a password.",
+      "phoneRegistered": "This number already has a captain account.",
+      "loginInstead": "Log in with this number",
+      "changeNumber": "Change number",
+      "reverify": "Please verify your number again. Your details are saved.",
+      "newPasswordPlaceholder": "At least 8 characters",
       "ticketExpired": "That verification expired. Please start again."
     },
     "activate": {
@@ -526,6 +529,8 @@
       "city": "City",
       "next": "Next",
       "submit": "Submit registration",
+      "plateTaken": "This plate number is already registered. Check the number.",
+      "phoneTaken": "This phone number is already registered. Log in instead.",
       "duplicate": "This phone or plate is already registered.",
       "registerFailed": "Couldn't submit your registration. Please try again.",
       "citiesFailed": "Couldn't load cities. Please try again."
@@ -547,6 +552,10 @@
       "captain_selfie": "Selfie",
       "national_id_front": "National ID — front",
       "national_id_back": "National ID — back",
+      "intro": "Add a clear photo of each document. Your progress is saved, so you can close the app and finish later.",
+      "loadFailed": "Couldn't load your uploaded documents. Tap to retry.",
+      "notComplete": "Some documents are still missing. Add them, then submit.",
+      "logoutConfirm": "Your account and uploaded documents are saved. Log in with your number and password to finish registering.",
       "verifyToContinue": "Verify your number to upload documents",
       "verify": "Verify"
     },
