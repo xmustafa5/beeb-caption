@@ -1,5 +1,5 @@
 // components/captain/activate-sheet.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Modal, View, Text, TouchableOpacity, ActivityIndicator, I18nManager } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +11,7 @@ import { Icon } from '@/components/ui/icon'
 import { FormError } from '@/components/forms/form-error'
 import { TopUpSheet } from '@/components/captain/top-up-sheet'
 import { useActivation } from '@/hooks/use-activation'
+import { useCaptainPresence } from '@/providers/captain-presence'
 import { DEFAULT_DAILY_FEE_IQD, getTodayActivation } from '@/services/activation'
 import { getWallet } from '@/services/wallet'
 import { useQiCardCheckout } from '@/hooks/use-qicard-checkout'
@@ -27,10 +28,11 @@ interface ActivateSheetProps {
  * Paying the daily activation fee — wallet, top-up, or card. That is all this
  * sheet does now.
  *
- * Going online is NOT here: once the fee is paid the tab bar's center button is
- * itself the on/off switch, so a captain flipping status between rides never
- * opens a sheet. This one closes the moment the day is paid for, handing the
- * captain straight back to the map.
+ * Once the fee is paid the tab bar's center button is itself the on/off switch,
+ * so a captain flipping status between rides never opens a sheet. This one
+ * closes the moment the day is paid for and puts the captain online, since
+ * paying is how they say they want to work; they stay online until they turn
+ * the switch off.
  */
 export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   const { t, i18n } = useTranslation()
@@ -38,7 +40,11 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { query, activate } = useActivation()
+  const { setOnline } = useCaptainPresence()
   const { checkout } = useQiCardCheckout()
+  // Set once this open of the sheet has seen the day unpaid, so going online
+  // follows a payment made here, not a sheet opened on an already-paid day.
+  const sawUnpaid = useRef(false)
 
   const [error, setError] = useState<string | null>(null)
   const [showTopUp, setShowTopUp] = useState(false)
@@ -54,8 +60,17 @@ export function ActivateSheet({ visible, onClose }: ActivateSheetProps) {
   // nothing left to show. Watching `activated` covers the wallet charge, the
   // top-up retry and the card checkout without each having to close by hand.
   useEffect(() => {
-    if (visible && activated) onClose()
-  }, [visible, activated, onClose])
+    if (!visible) { sawUnpaid.current = false; return }
+    if (query.data && !activated) { sawUnpaid.current = true; return }
+    if (!activated) return
+    onClose()
+    if (sawUnpaid.current) {
+      sawUnpaid.current = false
+      // Same path as the switch: asks for location, and a refusal shows above
+      // the tab bar, leaving the captain paid but offline to retry by hand.
+      void setOnline(true)
+    }
+  }, [visible, activated, query.data, onClose, setOnline])
 
   async function runActivate() {
     setError(null)
