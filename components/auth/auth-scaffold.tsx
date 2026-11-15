@@ -283,7 +283,8 @@ export const PhoneField = forwardRef<TextInput, Omit<AuthFieldProps, 'leading' |
         keyboardType="phone-pad"
         numeric
         pinLtrRow
-        maxLength={11}
+        // Room for a pasted `+964 770 123 4567` / `00964…`; callers fold it to `07…`.
+        maxLength={20}
         {...props}
         leading={
           <View

@@ -29,6 +29,8 @@ import { useRegistrationStore } from '@/store/registration-store'
 import { parseApiError } from '@/lib/api'
 import { normalizePhone } from '@/lib/captain-mappers'
 import { toAsciiDigits } from '@/lib/digits'
+import { toLocalPhoneInput } from '@/lib/phone'
+import { otpSendErrorKey, otpVerifyErrorKey } from '@/lib/otp-errors'
 
 const isRTL = I18nManager.isRTL
 type Step = 'details' | 'otp'
@@ -141,11 +143,8 @@ export default function AccountStep() {
       setSecondsLeft(RESEND_SECONDS)
       setStep('otp')
     },
-    onError: (err) => {
-      // otp/send: 429 = rate-limited; 400 ambiguous (invalid phone / limit) → generic.
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 429 ? 'auth.otpRateLimited' : 'auth.otpSendFailed'))
-    },
+    // otp/send: 400 = invalid phone or the send limit (told apart by the body).
+    onError: (err) => setApiError(t(otpSendErrorKey(err))),
   })
 
   const verifyMutation = useMutation({
@@ -159,8 +158,10 @@ export default function AccountStep() {
       goToPersonal({ phone, ticket, password: getValues('password') })
     },
     onError: (err) => {
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 401 ? 'captain.auth.otpWrong' : info.status === 429 ? 'common.rateLimited' : 'captain.auth.otpVerifyFailed'))
+      const key = otpVerifyErrorKey(err)
+      setApiError(t(key))
+      // Five wrong tries kill the code: clear it and let them resend at once.
+      if (key === 'captain.auth.otpTooManyTries') { setCode(''); autoSubmitted.current = ''; setSecondsLeft(0) }
     },
   })
   const { mutate: verify, isPending: verifying } = verifyMutation
@@ -176,10 +177,7 @@ export default function AccountStep() {
     mutationFn: () => sendOtp(phone),
     onMutate: () => setApiError(null),
     onSuccess: () => { setCode(''); autoSubmitted.current = ''; setSecondsLeft(RESEND_SECONDS) },
-    onError: (err) => {
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 429 ? 'auth.otpRateLimited' : 'auth.otpSendFailed'))
-    },
+    onError: (err) => setApiError(t(otpSendErrorKey(err))),
   })
 
   const onBack = () => {
@@ -222,7 +220,7 @@ export default function AccountStep() {
                       <PhoneField
                         label={t('auth.phone')}
                         value={value}
-                        onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))}
+                        onChangeText={(v) => onChange(toLocalPhoneInput(v))}
                         placeholder={t('auth.phonePlaceholder')}
                         autoFocus={!draft.phone}
                         returnKeyType="next"

@@ -27,6 +27,8 @@ import { isCaptainPhoneRegistered, resetCaptainPassword, sendOtp, verifyOtp } fr
 import { parseApiError } from '@/lib/api'
 import { contactSupport } from '@/lib/support'
 import { toAsciiDigits } from '@/lib/digits'
+import { toLocalPhoneInput } from '@/lib/phone'
+import { otpSendErrorKey, otpVerifyErrorKey } from '@/lib/otp-errors'
 import { useAuthStore } from '@/store/auth-store'
 
 type Step = 'phone' | 'otp' | 'password'
@@ -46,10 +48,7 @@ type PasswordForm = z.infer<typeof passwordSchema>
 
 /** The phone login hands over (`9647…` or `07…`) as the local `07…` the field shows. */
 function localPhone(p: string | undefined): string {
-  const digits = toAsciiDigits(p ?? '').replace(/\D/g, '')
-  if (!digits) return ''
-  const local = digits.startsWith('964') ? digits.slice(3) : digits
-  return local.startsWith('0') ? local : `0${local}`
+  return toLocalPhoneInput(p ?? '')
 }
 
 // Same light-only art as the login screen it is opened from.
@@ -131,10 +130,7 @@ function ForgotPasswordForm() {
       if (outcome === 'no-captain') setApiError(t('captain.auth.noCaptainForPhone'))
       else startCode(p)
     },
-    onError: (err) => {
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 429 ? 'auth.otpRateLimited' : 'auth.otpSendFailed'))
-    },
+    onError: (err) => setApiError(t(otpSendErrorKey(err))),
   })
 
   const verifyMutation = useMutation({
@@ -146,8 +142,10 @@ function ForgotPasswordForm() {
       setStep('password')
     },
     onError: (err) => {
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 401 ? 'captain.auth.otpWrong' : info.status === 429 ? 'common.rateLimited' : 'captain.auth.otpVerifyFailed'))
+      const key = otpVerifyErrorKey(err)
+      setApiError(t(key))
+      // Five wrong tries kill the code: clear it and let them resend at once.
+      if (key === 'captain.auth.otpTooManyTries') { setCode(''); autoSubmitted.current = ''; setSecondsLeft(0) }
     },
   })
   const { mutate: verify, isPending: verifying } = verifyMutation
@@ -163,10 +161,7 @@ function ForgotPasswordForm() {
     mutationFn: () => sendOtp(phone),
     onMutate: () => setApiError(null),
     onSuccess: () => { setCode(''); autoSubmitted.current = ''; setSecondsLeft(RESEND_SECONDS) },
-    onError: (err) => {
-      const info = parseApiError(err)
-      setApiError(t(info.isNetwork ? 'common.networkError' : info.status === 429 ? 'auth.otpRateLimited' : 'auth.otpSendFailed'))
-    },
+    onError: (err) => setApiError(t(otpSendErrorKey(err))),
   })
 
   const resetMutation = useMutation({
@@ -222,7 +217,7 @@ function ForgotPasswordForm() {
               <PhoneField
                 label={t('auth.phone')}
                 value={value}
-                onChangeText={(v) => { setApiError(null); onChange(toAsciiDigits(v).replace(/\D/g, '')) }}
+                onChangeText={(v) => { setApiError(null); onChange(toLocalPhoneInput(v)) }}
                 placeholder={t('auth.phonePlaceholder')}
                 autoFocus
                 returnKeyType="done"

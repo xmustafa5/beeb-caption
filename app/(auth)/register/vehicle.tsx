@@ -230,8 +230,33 @@ export default function VehicleStep() {
         }
         return
       }
+      const message = info.backendMessage ?? ''
+      if (info.status === 400) {
+        // The server keeps the ticket on these, so a fix + resubmit is enough.
+        if (/invalid car year/i.test(message)) {
+          setError('carYear', { type: 'server', message: 'captain.register.carYearInvalid' })
+          setApiError(t('captain.register.carYearInvalid'))
+          return
+        }
+        if (/car_brand_id|car_model_id/.test(message)) {
+          // The picked catalog entry is gone or mismatched: make them pick again.
+          onClearPicked()
+          setApiError(t('captain.register.carNotInCatalog'))
+          return
+        }
+        if (/password must be at least/i.test(message)) {
+          setApiError(t('captain.register.passwordTooShortGoBack'))
+          return
+        }
+      }
+      if (info.status === 404) {
+        // The city sent is gone: drop it and reload the list so a retry picks a live one.
+        useRegistrationStore.setState({ cityId: '' })
+        void cities.refetch()
+        setApiError(t('captain.register.cityUnavailable'))
+        return
+      }
       const key = info.isNetwork ? 'common.networkError'
-        : info.status === 400 ? 'captain.register.registerFailed'
         : info.status === 429 ? 'common.rateLimited'
         : 'captain.register.registerFailed'
       setApiError(t(key))

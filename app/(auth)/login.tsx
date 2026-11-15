@@ -16,7 +16,7 @@ import { FormError } from '@/components/forms/form-error'
 import { AuthScaffold, PasswordField, PhoneField, authIsRTL as isRTL } from '@/components/auth/auth-scaffold'
 import { loginCaptain } from '@/services/captain-auth'
 import { parseApiError } from '@/lib/api'
-import { toAsciiDigits } from '@/lib/digits'
+import { toLocalPhoneInput } from '@/lib/phone'
 import { useAuthStore } from '@/store/auth-store'
 import { useRegistrationStore } from '@/store/registration-store'
 
@@ -102,7 +102,7 @@ function CaptainLoginForm() {
           <PhoneField
             label={t('auth.phone')}
             value={value}
-            onChangeText={(v) => onChange(toAsciiDigits(v).replace(/\D/g, ''))}
+            onChangeText={(v) => onChange(toLocalPhoneInput(v))}
             placeholder={t('auth.phonePlaceholder')}
             autoFocus
             error={errors.phone ? t(errors.phone.message ?? '') : undefined}

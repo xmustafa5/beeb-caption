@@ -339,7 +339,9 @@
       "noCaptainForPhone": "No captain account uses this number.",
       "resetRefused": "This account can't sign in. Please contact support.",
       "resetFailed": "Couldn't reset your password. Please try again.",
-      "codeExpiredResend": "That code has expired. Send a new one."
+      "codeExpiredResend": "That code has expired. Send a new one.",
+      "otpTooManyTries": "Too many wrong tries. Tap Resend for a new code.",
+      "otpCheckUnavailable": "Couldn't check the code right now. Try again."
     },
     "activate": {
       "homeTitle": "Today",
@@ -547,7 +549,10 @@
       "phoneTaken": "This phone number is already registered. Log in instead.",
       "duplicate": "This phone or plate is already registered.",
       "registerFailed": "Couldn't submit your registration. Please try again.",
-      "citiesFailed": "Couldn't load cities. Please try again."
+      "citiesFailed": "Couldn't load cities. Please try again.",
+      "carNotInCatalog": "That car isn't in our list any more. Choose your car again.",
+      "passwordTooShortGoBack": "Your password must be at least 8 characters. Go back to the account step to change it.",
+      "cityUnavailable": "Your city couldn't be confirmed. Please try again."
     },
     "documents": {
       "subtitle": "{{uploaded}} of {{total}} uploaded",

@@ -65,3 +65,16 @@ export async function openDialer(phone: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * What a phone field should hold after an edit or a paste: ASCII digits in the local
+ * `07…` form, at most 11 of them. A pasted `+964 770 123 4567` or `00964…` becomes
+ * `07701234567` instead of being cut off at the field's length cap, and so does the
+ * common `+964 0770 …`, where the local 0 was kept after the country code.
+ */
+export function toLocalPhoneInput(raw: string): string {
+  let digits = toAsciiDigits(raw).replace(/\D/g, '')
+  digits = digits.replace(/^00964/, '964')
+  if (digits.startsWith('964')) digits = `0${digits.slice(3).replace(/^0+/, '')}`
+  return digits.slice(0, 11)
+}
