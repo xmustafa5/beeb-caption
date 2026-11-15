@@ -328,7 +328,18 @@
       "changeNumber": "Change number",
       "reverify": "Please verify your number again. Your details are saved.",
       "newPasswordPlaceholder": "At least 8 characters",
-      "ticketExpired": "That verification expired. Please start again."
+      "ticketExpired": "That verification expired. Please start again.",
+      "forgotPassword": "Forgot password?",
+      "forgotTitle": "Reset your password",
+      "forgotSubtitle": "Enter your captain phone number and we'll send you a code.",
+      "newPasswordTitle": "Choose a new password",
+      "newPasswordSubtitle": "You'll be signed in with it straight away.",
+      "newPassword": "New password",
+      "savePassword": "Save and sign in",
+      "noCaptainForPhone": "No captain account uses this number.",
+      "resetRefused": "This account can't sign in. Please contact support.",
+      "resetFailed": "Couldn't reset your password. Please try again.",
+      "codeExpiredResend": "That code has expired. Send a new one."
     },
     "activate": {
       "homeTitle": "Today",

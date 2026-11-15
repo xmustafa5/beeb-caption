@@ -328,7 +328,18 @@
       "changeNumber": "تغيير الرقم",
       "reverify": "يرجى التحقق من رقمك مرة أخرى. بياناتك محفوظة.",
       "newPasswordPlaceholder": "8 أحرف على الأقل",
-      "ticketExpired": "انتهت صلاحية التحقق. ابدأ من جديد."
+      "ticketExpired": "انتهت صلاحية التحقق. ابدأ من جديد.",
+      "forgotPassword": "نسيت كلمة المرور؟",
+      "forgotTitle": "إعادة تعيين كلمة المرور",
+      "forgotSubtitle": "أدخل رقم هاتف حساب الكابتن وسنرسل لك رمزًا.",
+      "newPasswordTitle": "اختر كلمة مرور جديدة",
+      "newPasswordSubtitle": "سيتم تسجيل دخولك بها مباشرة.",
+      "newPassword": "كلمة المرور الجديدة",
+      "savePassword": "حفظ وتسجيل الدخول",
+      "noCaptainForPhone": "لا يوجد حساب كابتن بهذا الرقم.",
+      "resetRefused": "لا يمكن لهذا الحساب تسجيل الدخول. يرجى التواصل مع الدعم.",
+      "resetFailed": "تعذّر إعادة تعيين كلمة المرور. حاول مرة أخرى.",
+      "codeExpiredResend": "انتهت صلاحية الرمز. أرسل رمزًا جديدًا."
     },
     "activate": {
       "homeTitle": "اليوم",

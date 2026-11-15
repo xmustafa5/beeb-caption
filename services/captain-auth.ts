@@ -72,16 +72,63 @@ export async function isCaptainPhoneRegistered(phone: string): Promise<boolean> 
 }
 
 /**
- * Verify the 6-digit code and exchange it for a single-use UUID ticket. Captains
- * only ever register (there's no captain self-service password reset), so the
- * purpose is fixed to "register". 401 = wrong/expired code; 400 = bad purpose/phone.
+ * Verify the 6-digit code and exchange it for a single-use UUID ticket, good only
+ * for `purpose`: "register" (the sign-up wizard) or "reset" (forgot password).
+ * 401 = wrong/expired code; 400 = bad purpose/phone; 429 = too many tries.
  */
-export async function verifyOtp(phone: string, code: string): Promise<{ ticket: string }> {
+export async function verifyOtp(
+  phone: string,
+  code: string,
+  purpose: 'register' | 'reset' = 'register',
+): Promise<{ ticket: string }> {
   const { data } = await api.post<{ ticket: string; purpose: string }>(
     '/api/auth/otp/verify',
-    { phone: normalizePhone(phone), code, purpose: 'register' },
+    { phone: normalizePhone(phone), code, purpose },
   )
   return { ticket: data.ticket }
+}
+
+/**
+ * A freshly issued captain token as a session: the captain record, and for a
+ * PENDING captain whether any of the 5 documents is still missing (null when that
+ * could not be read; the status screen retries). The document check is best
+ * effort: a failure there must not fail a sign-in that already succeeded.
+ */
+async function captainSession(token: string, captainId: string) {
+  const captain = await getCaptain(captainId, token)
+  let documentsPending: boolean | null = null
+  if (captain.status === 'pending') {
+    try {
+      documentsPending = !(await getCompleteness(captain.id, token)).complete
+    } catch {
+      documentsPending = null
+    }
+  }
+  return { token, captain, documentsPending }
+}
+
+/**
+ * Set a new password on the CAPTAIN account for this phone, authorized by a
+ * "reset" ticket, and sign in with it (every other device is signed out).
+ * `account: 'captain'` matters: without it the backend picks the rider account
+ * when the phone has both.
+ *   401 → ticket expired/used (a new code is needed)
+ *   403 → a captain login refuses (rejected/blocked); ticket NOT spent
+ *   404 → no captain account for this phone; ticket NOT spent
+ *   400 → password under 8 characters
+ */
+export async function resetCaptainPassword(
+  phone: string,
+  newPassword: string,
+  ticket: string,
+): Promise<{ token: string; captain: Captain; documentsPending: boolean | null }> {
+  const { data } = await api.post<AuthTokenResponse>('/api/auth/password/reset', {
+    phone: normalizePhone(phone),
+    new_password: newPassword,
+    ticket,
+    account: 'captain',
+  })
+  return captainSession(data.token, data.user_id)
 }
 
 /**
@@ -97,19 +144,9 @@ export async function loginCaptain(phone: string, password: string): Promise<Log
       phone: normalizePhone(phone),
       password,
     })
-    const captain = await getCaptain(data.user_id, data.token)
     // A pending captain who still owes documents belongs on the upload screen,
-    // not on "waiting for approval". Best effort: a failure here must not fail a
-    // login that already succeeded.
-    let documentsPending: boolean | null = null
-    if (captain.status === 'pending') {
-      try {
-        documentsPending = !(await getCompleteness(captain.id, data.token)).complete
-      } catch {
-        documentsPending = null
-      }
-    }
-    return { kind: 'authed', token: data.token, captain, documentsPending }
+    // not on "waiting for approval": the session says which.
+    return { kind: 'authed', ...(await captainSession(data.token, data.user_id)) }
   } catch (err) {
     const info = parseApiError(err)
     if (info.status === 403) return { kind: 'forbidden' }

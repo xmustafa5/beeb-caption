@@ -123,6 +123,19 @@ function CaptainLoginForm() {
         )}
       />
 
+      {/* Hands over whatever number is typed, so it is not typed twice. */}
+      <TouchableOpacity
+        onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: { phone: getValues('phone') } })}
+        activeOpacity={0.7}
+        hitSlop={8}
+        accessibilityRole="button"
+        style={{ alignSelf: 'flex-start' }}
+      >
+        <Text style={{ ...Typography['caption-sm'], color: colors.tint, fontStyle: 'normal', fontFamily: 'Poppins_600SemiBold', textAlign: 'left' }}>
+          {t('captain.auth.forgotPassword')}
+        </Text>
+      </TouchableOpacity>
+
       <FormError message={apiError} />
 
       <Button

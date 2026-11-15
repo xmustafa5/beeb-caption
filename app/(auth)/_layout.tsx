@@ -9,7 +9,7 @@ export default function AuthLayout() {
   // order below matters. Nobody calls router.replace() for these moves: storing
   // the session is the navigation.
   //
-  //   no session              login, status (a 403 login shows it with
+  //   no session              login, forgot-password, status (a 403 login shows it with
   //                           ?forbidden=1) and the register wizard
   //   pending, documents owed documents ONLY. The vehicle step creates the
   //                           account and stores this session, which drops the
@@ -31,6 +31,8 @@ export default function AuthLayout() {
     >
       <Stack.Protected guard={!isPendingLike}>
         <Stack.Screen name="login" />
+        {/* Like login: a reset signs in, and the session then picks the next screen. */}
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
       <Stack.Protected guard={needsDocuments}>
         {/* Nothing to go back to: the wizard behind it is gone with its draft. */}
