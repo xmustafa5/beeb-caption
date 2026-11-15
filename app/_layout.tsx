@@ -28,6 +28,7 @@ import { useThemeStore } from '@/store/theme-store'
 import { CaptainPresenceProvider } from '@/providers/captain-presence'
 import { PushProvider } from '@/providers/push-provider'
 import { useClearCacheOnSessionEnd } from '@/hooks/use-clear-cache-on-session-end'
+import { UpdateGate } from '@/components/update-gate'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -93,6 +94,7 @@ export default function RootLayout() {
                 </PushProvider>
               </CaptainPresenceProvider>
               <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+              <UpdateGate />
             </BottomSheetModalProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>

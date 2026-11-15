@@ -682,5 +682,10 @@
       "nineveh": "Nineveh",
       "wasit": "Wasit"
     }
+  },
+  "forceUpdate": {
+    "title": "Update required",
+    "body": "A new version of the app is available. Update the app to continue.",
+    "button": "Update now"
   }
 }
