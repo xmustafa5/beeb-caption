@@ -61,8 +61,8 @@ export interface Trip {
 }
 
 export interface ProxySession {
-  riderProxyNumber: string
-  captainProxyNumber: string
+  /** The number to dial to reach the rider, as `+9647XXXXXXXXX`. */
+  dialNumber: string
   expiresAt: string
 }
 
@@ -180,16 +180,20 @@ export async function cancelTrip(id: string, reason: CancelReason, comment?: str
   await api.post(`/api/trips/${id}/cancel`, { reason, ...(comment ? { comment } : {}) })
 }
 
-/** Masked call session (lazily allocated; trip must be accepted/in_progress + have a captain). */
+/**
+ * The number the captain dials to reach the rider. The backend has no call-masking
+ * provider, so this is the rider's real number, and it is only given out while the
+ * trip is accepted/in_progress.
+ */
 export async function getProxy(id: string): Promise<ProxySession> {
   const { data } = await api.get<{
-    rider_proxy_number: string
+    /** Missing on a backend from before 2026-11; it sent the number in the field below. */
+    dial_number?: string
     captain_proxy_number: string
     expires_at: string
   }>(`/api/captain/trips/${id}/proxy`)
   return {
-    riderProxyNumber: data.rider_proxy_number,
-    captainProxyNumber: data.captain_proxy_number,
+    dialNumber: data.dial_number ?? data.captain_proxy_number,
     expiresAt: data.expires_at,
   }
 }

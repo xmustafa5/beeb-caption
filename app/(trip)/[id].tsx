@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, Linking } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -208,14 +208,14 @@ export default function LiveTripScreen() {
     setError(null)
     try {
       const proxy = await getProxy(id)
-      Linking.openURL(`tel:${proxy.captainProxyNumber}`)
+      if (!(await openDialer(proxy.dialNumber))) setError(t('captain.live.callUnavailable'))
     } catch {
       setError(t('captain.live.callUnavailable'))
     }
   }
 
-  // The recipient is not in the masked-call session (that reaches the sender), so
-  // this dials their real number. Errors land in the FormError right above the
+  // The trip's call number reaches the sender, not the recipient, so this dials
+  // the recipient's own number. Errors land in the FormError right above the
   // step button, next to the summary row that triggered the call.
   async function onCallRecipient() {
     setError(null)
