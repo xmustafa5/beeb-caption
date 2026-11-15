@@ -8,7 +8,12 @@ import { parseApiError } from '@/lib/api'
 import { roomDeadlineMs } from '@/lib/room-countdown'
 // Imported for its side effect as much as for the name: defining the background
 // task at module scope is what lets the OS deliver fixes after a relaunch.
-import { TRIP_LOCATION_TASK } from '@/lib/trip-location-task'
+import {
+  TRIP_LOCATION_TASK,
+  notePingSent,
+  setBackgroundPingMode,
+  type BackgroundPingMode,
+} from '@/lib/trip-location-task'
 import {
   setOnline as apiSetOnline,
   pingLocation,
@@ -61,7 +66,6 @@ const PING_INTERVAL_MS = 10_000
 /** A rider watching the car move needs finer granularity than idle presence does. */
 const TRIP_PING_INTERVAL_MS = 4_000
 const STALE_AFTER_MS = 60_000
-const RESUME_WINDOW_MS = 5 * 60_000
 
 const Ctx = createContext<CaptainPresence | null>(null)
 
@@ -105,6 +109,9 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
   // watch instead of blocking the trip, and re-prompting on every status change
   // would just be noise.
   const bgPermission = useRef<'unknown' | 'granted' | 'denied'>('unknown')
+  // The mode the OS task was last started in, so a repeat call (every trip
+  // status change reaches here) does not restart location updates for nothing.
+  const bgMode = useRef<BackgroundPingMode | null>(null)
 
   const markFreshEcho = useCallback(() => {
     setConnection('live')
@@ -119,6 +126,7 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
    * process never started it.
    */
   const stopBackgroundUpdates = useCallback(async () => {
+    bgMode.current = null
     try {
       if (await Location.hasStartedLocationUpdatesAsync(TRIP_LOCATION_TASK)) {
         await Location.stopLocationUpdatesAsync(TRIP_LOCATION_TASK)
@@ -130,6 +138,7 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
   const sendPing = useCallback(async () => {
     const c = lastCoords.current
     if (!c) return
+    notePingSent()
     if (queue.current.length > 0) {
       const queued = [...queue.current]
       queue.current = []
@@ -159,9 +168,16 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       onTrip.current
         ? { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 3000 }
         : { accuracy: Location.Accuracy.Balanced, distanceInterval: 10, timeInterval: 5000 },
-      (pos) => { lastCoords.current = toPingCoords(pos.coords) },
+      (pos) => {
+        const first = lastCoords.current === null
+        lastCoords.current = toPingCoords(pos.coords)
+        // Ping on the first fix instead of waiting for the interval: the backend
+        // judges "near enough to accept" from the last ping, and after a reopen
+        // that ping can be from wherever the app was closed.
+        if (first) void sendPing()
+      },
     )
-  }, [])
+  }, [sendPing])
 
   const startPingLoop = useCallback(() => {
     if (pingTimer.current) clearInterval(pingTimer.current)
@@ -229,12 +245,89 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
   }, [token, markFreshEcho, startWatch, startPingLoop])
 
   /**
-   * Keep feeding the rider's map once the captain leaves the app. This is the fix
-   * for the complaint that the car freezes the moment Waze opens: the JS timers
-   * above are suspended in the background, so an OS-owned task has to take over.
-   * Scoped to the trip rather than the whole shift — battery, and it keeps the
-   * store-review story ("only while carrying a rider") honest.
+   * Only iOS needs an "Always" grant. On Android the foreground service IS the
+   * authorisation (expo-location skips the background check whenever a
+   * `foregroundService` is given), and ACCESS_BACKGROUND_LOCATION is
+   * deliberately absent from the manifest -- asking for it there would THROW
+   * (NoPermissionInManifestException) and it would drag Play's
+   * background-location declaration review in for nothing.
    */
+  const ensureBackgroundPermission = useCallback(async (): Promise<boolean> => {
+    if (process.env.EXPO_OS !== 'ios') return true
+    if (bgPermission.current === 'unknown') {
+      try {
+        const res = await Location.requestBackgroundPermissionsAsync()
+        bgPermission.current = res.status === 'granted' ? 'granted' : 'denied'
+      } catch {
+        bgPermission.current = 'denied'
+      }
+      if (bgPermission.current === 'denied') {
+        // Not fatal: the foreground watch still works while the app is open,
+        // and the backend keeps an idle captain online for a while anyway.
+        Alert.alert(
+          i18n.t('captain.live.backgroundLocationTitle'),
+          i18n.t('captain.live.backgroundLocationBody'),
+        )
+      }
+    }
+    return bgPermission.current === 'granted'
+  }, [])
+
+  /**
+   * Hand pinging to an OS-owned task so it carries on once the captain leaves
+   * the app: the JS timers above are suspended in the background. Runs for the
+   * whole time the captain is online -- idle, so going to the home screen does
+   * not end the shift and offers keep matching where the car really is, and at
+   * trip cadence, so the rider's car keeps moving while Waze is open.
+   */
+  const startBackgroundUpdates = useCallback(async (mode: BackgroundPingMode) => {
+    setBackgroundPingMode(mode)
+    if (!(await ensureBackgroundPermission())) return
+    try {
+      if (bgMode.current === mode && (await Location.hasStartedLocationUpdatesAsync(TRIP_LOCATION_TASK))) {
+        return
+      }
+      // Starting an already-running task replaces its options in place, so a
+      // mode switch needs no stop first (Android cannot restart a foreground
+      // service from the background).
+      await Location.startLocationUpdatesAsync(
+        TRIP_LOCATION_TASK,
+        mode === 'trip'
+          ? {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5000,
+              distanceInterval: 10,
+              // The rider's car must not stall because the captain waited at a light.
+              pausesUpdatesAutomatically: false,
+              showsBackgroundLocationIndicator: true,
+              foregroundService: {
+                notificationTitle: 'Beep Captain',
+                notificationBody: i18n.t('captain.live.sharingLocation'),
+              },
+            }
+          : {
+              // GPS, not Balanced: on Android Balanced means wifi/cell fixes,
+              // which are hundreds of metres off on Iraqi roads, and a captain
+              // waiting for work is usually driving, not parked. Dispatch ranks
+              // by distance to pickup, so a wrong position offers the trip to
+              // the wrong car.
+              accuracy: Location.Accuracy.High,
+              timeInterval: 10_000,
+              distanceInterval: 30,
+              // A captain parked waiting for work must not be paused out of
+              // updates: iOS would then let the app be suspended.
+              pausesUpdatesAutomatically: false,
+              showsBackgroundLocationIndicator: false,
+              foregroundService: {
+                notificationTitle: 'Beep Captain',
+                notificationBody: i18n.t('captain.live.onlineInBackground'),
+              },
+            },
+      )
+      bgMode.current = mode
+    } catch { /* degrade to the foreground watch */ }
+  }, [ensureBackgroundPermission])
+
   const startTripTracking = useCallback(async () => {
     if (!onTrip.current) {
       onTrip.current = true
@@ -242,48 +335,8 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       // Re-arm the foreground watch and timer at trip cadence.
       if (sessionActive.current) { await startWatch(); startPingLoop() }
     }
-
-    // Only iOS needs an "Always" grant. On Android the foreground service IS the
-    // authorisation (expo-location skips the background check whenever a
-    // `foregroundService` is given), and ACCESS_BACKGROUND_LOCATION is
-    // deliberately absent from the manifest — asking for it there would THROW
-    // (NoPermissionInManifestException) and it would drag Play's
-    // background-location declaration review in for nothing.
-    if (process.env.EXPO_OS === 'ios') {
-      if (bgPermission.current === 'unknown') {
-        try {
-          const res = await Location.requestBackgroundPermissionsAsync()
-          bgPermission.current = res.status === 'granted' ? 'granted' : 'denied'
-        } catch {
-          bgPermission.current = 'denied'
-        }
-        if (bgPermission.current === 'denied') {
-          // Not fatal: the foreground watch still works while the app is open.
-          Alert.alert(
-            i18n.t('captain.live.backgroundLocationTitle'),
-            i18n.t('captain.live.backgroundLocationBody'),
-          )
-        }
-      }
-      if (bgPermission.current !== 'granted') return
-    }
-
-    try {
-      if (await Location.hasStartedLocationUpdatesAsync(TRIP_LOCATION_TASK)) return
-      await Location.startLocationUpdatesAsync(TRIP_LOCATION_TASK, {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-        distanceInterval: 10,
-        // The rider's car must not stall because the captain waited at a light.
-        pausesUpdatesAutomatically: false,
-        showsBackgroundLocationIndicator: true,
-        foregroundService: {
-          notificationTitle: 'Beep Captain',
-          notificationBody: i18n.t('captain.live.sharingLocation'),
-        },
-      })
-    } catch { /* degrade to the foreground watch */ }
-  }, [startWatch, startPingLoop])
+    await startBackgroundUpdates('trip')
+  }, [startWatch, startPingLoop, startBackgroundUpdates])
 
   const stopTripTracking = useCallback(async () => {
     if (onTrip.current) {
@@ -292,8 +345,12 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       // Back to idle cadence; the captain may well still be online and waiting.
       if (sessionActive.current) { await startWatch(); startPingLoop() }
     }
-    await stopBackgroundUpdates()
-  }, [startWatch, startPingLoop, stopBackgroundUpdates])
+    // Still online: keep the idle background task so leaving the app does not
+    // end the shift. Offline: an Android foreground service outlives the JS
+    // that started it, so hand it back even if this process never started it.
+    if (sessionActive.current) await startBackgroundUpdates('idle')
+    else await stopBackgroundUpdates()
+  }, [startWatch, startPingLoop, startBackgroundUpdates, stopBackgroundUpdates])
 
   const ensureTracking = useCallback(async (tripStatus?: string | null) => {
     if (isActiveStatus(tripStatus)) {
@@ -322,6 +379,8 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
         await startSession()
         setOnlineState(true)
         setConnection('connecting')
+        // Not awaited: the iOS "Always" prompt must not hold the toggle spinner.
+        void startBackgroundUpdates(onTrip.current ? 'trip' : 'idle')
       } catch (err) {
         setError(parseApiError(err).status === 403 ? 'notActivated' : 'onlineFailed')
         stopSession()
@@ -357,9 +416,9 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       setOnlineState(false)
       setConnection('offline')
     }
-  }, [startSession, stopSession])
+  }, [startSession, stopSession, startBackgroundUpdates])
 
-  // On launch: resume if a trip is running, or if we were recently online.
+  // On launch: resume if a trip is running, or if the backend still has us online.
   useEffect(() => {
     if (!token || !isApproved) return
     let cancelled = false
@@ -375,10 +434,12 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
       ])
       if (cancelled) return
 
+      // The backend's flag is the truth: it keeps an idle captain online for a
+      // long grace window after the app is closed (and switches them off past
+      // it), so reopening the app picks the shift up where it was.
       const onTripNow = isActiveStatus(trip?.status)
-      const recentlyOnline =
-        !!loc?.online && Date.now() - new Date(loc.lastPingAt).getTime() < RESUME_WINDOW_MS
-      if (!onTripNow && !recentlyOnline) return
+      const stillOnline = !!loc?.online
+      if (!onTripNow && !stillOnline) return
 
       try {
         await startSession()
@@ -386,10 +447,11 @@ export function CaptainPresenceProvider({ children }: { children: React.ReactNod
         setOnlineState(true)
         setConnection('connecting')
         if (onTripNow) await startTripTracking()
+        else await startBackgroundUpdates('idle')
       } catch { /* start offline */ }
     })()
     return () => { cancelled = true }
-  }, [token, isApproved, captainId, startSession, stopSession, startTripTracking])
+  }, [token, isApproved, captainId, startSession, stopSession, startTripTracking, startBackgroundUpdates])
 
   // Tear down when the session ends. The provider now lives at the app root
   // (so the live-trip screen shares it), so it no longer unmounts on logout —

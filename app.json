@@ -63,7 +63,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Beep Captain shares your live position with the rider during a trip, even when you switch to a navigation app.",
+          "locationAlwaysAndWhenInUsePermission": "While you are online, Beep Captain uses your location in the background so you keep receiving nearby trip requests after you leave the app, and during a trip it shares your live position with the rider, even when you switch to a navigation app.",
           "locationAlwaysPermission": false,
           "isIosBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true

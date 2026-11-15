@@ -146,7 +146,13 @@ export default function HomeScreen() {
       router.push(offerScreenHref(offer))
     } catch (err) {
       const info = parseApiError(err)
-      if (info.status === 409) setError(t('captain.queue.taken'))
+      // `too_far`: the backend measured this captain more than the offer
+      // radius (at most 5 km) from the pickup. Say so; "taken" would be a lie.
+      if (info.status === 409 && info.backendMessage === 'too_far') setError(t('captain.queue.tooFar'))
+      // `captain_offline`: the backend has this captain offline (switched off
+      // or timed out), and offline captains don't take trips.
+      else if (info.status === 409 && info.backendMessage === 'captain_offline') setError(t('captain.queue.offline'))
+      else if (info.status === 409) setError(t('captain.queue.taken'))
       else if (info.status === 429) {
         // The gateway told us to back off. "Try again" would be actively wrong
         // advice here — retrying is what extends the limit — and refetching now
